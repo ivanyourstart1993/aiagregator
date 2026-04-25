@@ -18,4 +18,3 @@ node_modules
 .DS_Store
 *.log
 infra/docker-compose.yml
-README.md
