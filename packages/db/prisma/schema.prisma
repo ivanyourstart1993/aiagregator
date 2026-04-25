@@ -1,0 +1,767 @@
+// AI API Aggregator — единый источник Prisma-схемы.
+// Stage 1 — User/Account/Session/VerificationToken/ApiKey/AdminAction.
+// Дальнейшие этапы расширят схему (Wallet, Transaction, Reservation, Deposit,
+// Bundle, Tariff, Coupon, Provider/Model/Method, ApiRequest, Task и т.д.).
+
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = []
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  USER
+  ADMIN
+  SUPER_ADMIN
+}
+
+enum UserStatus {
+  ACTIVE
+  SUSPENDED
+  DELETED
+}
+
+enum ApiKeyStatus {
+  ACTIVE
+  DISABLED
+  REVOKED
+}
+
+enum VerificationTokenType {
+  EMAIL_VERIFY
+  PASSWORD_RESET
+}
+
+model User {
+  id            String     @id @default(cuid())
+  email         String     @unique
+  emailVerified DateTime?
+  passwordHash  String? // null for OAuth-only
+  name          String?
+  locale        String     @default("en")
+  role          UserRole   @default(USER)
+  status        UserStatus @default(ACTIVE)
+  lastLoginAt   DateTime?
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+
+  accounts            Account[]
+  sessions            Session[]
+  apiKeys             ApiKey[]
+  adminActionsAsActor AdminAction[]      @relation("AdminActionsActor")
+  wallets             Wallet[]
+  reservations        Reservation[]
+  deposits            Deposit[]
+  transactionsAsAdmin Transaction[]      @relation("TransactionAdmin")
+  userTariff          UserTariff?
+  userBundlePrices    UserBundlePrice[]
+  assignedUserTariffs UserTariff[]       @relation("UserTariffAssignedBy")
+  setUserBundlePrices UserBundlePrice[]  @relation("UserBundlePriceSetBy")
+  tariffChanges       TariffChangeLog[]  @relation("TariffChangedBy")
+  couponRedemptions   CouponRedemption[]
+  apiRequests         ApiRequest[]
+  tasks               Task[]
+
+  @@index([role])
+  @@index([status])
+  @@map("user")
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@index([userId])
+  @@map("account")
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("session")
+}
+
+model VerificationToken {
+  identifier String
+  token      String                @unique
+  expires    DateTime
+  type       VerificationTokenType @default(EMAIL_VERIFY)
+
+  @@unique([identifier, token])
+  @@index([identifier])
+  @@map("verification_token")
+}
+
+model ApiKey {
+  id           String       @id @default(cuid())
+  userId       String
+  name         String
+  prefix       String       @unique // first 12 base62 chars of secret part
+  hashedSecret String // argon2id hash of full secret + pepper
+  last4        String // for masked display
+  status       ApiKeyStatus @default(ACTIVE)
+  lastUsedAt   DateTime?
+  lastUsedIp   String?
+  scopes       String[]     @default([])
+  expiresAt    DateTime?
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([status])
+  @@map("api_key")
+}
+
+model AdminAction {
+  id         String   @id @default(cuid())
+  actorId    String
+  action     String
+  targetType String
+  targetId   String
+  payload    Json?
+  ipAddress  String?
+  userAgent  String?
+  createdAt  DateTime @default(now())
+
+  actor User @relation("AdminActionsActor", fields: [actorId], references: [id], onDelete: Restrict)
+
+  @@index([actorId, createdAt])
+  @@index([targetType, targetId])
+  @@index([createdAt])
+  @@map("admin_action")
+}
+
+// =============================================================================
+// STAGE 2 — BILLING
+// =============================================================================
+
+enum Currency {
+  USD
+}
+
+enum WalletKind {
+  MAIN
+  BONUS
+}
+
+enum TransactionType {
+  DEPOSIT
+  DEBIT
+  REFUND
+  CORRECTION
+  BONUS_GRANT
+  BONUS_CORRECTION
+  COUPON_DISCOUNT
+  RESERVATION_HOLD
+  RESERVATION_RELEASE
+  RESERVATION_CAPTURE
+}
+
+enum TransactionStatus {
+  PENDING
+  POSTED
+  REVERSED
+}
+
+enum ReservationStatus {
+  PENDING
+  CAPTURED
+  RELEASED
+  EXPIRED
+}
+
+enum DepositStatus {
+  CREATED
+  PENDING_PAYMENT
+  PAID
+  FAILED
+  EXPIRED
+  REFUNDED
+}
+
+enum PaymentProvider {
+  CRYPTOMUS
+}
+
+model Wallet {
+  id             String     @id @default(cuid())
+  userId         String
+  currency       Currency   @default(USD)
+  kind           WalletKind @default(MAIN)
+  // canonical units = cents × 1_000_000 (нано-USD)
+  availableUnits BigInt     @default(0)
+  reservedUnits  BigInt     @default(0)
+  version        Int        @default(0)
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
+
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  transactions Transaction[]
+  reservations Reservation[]
+
+  @@unique([userId, currency, kind])
+  @@index([userId])
+  @@map("wallet")
+}
+
+model Transaction {
+  id                  String            @id @default(cuid())
+  walletId            String
+  userId              String
+  type                TransactionType
+  status              TransactionStatus @default(POSTED)
+  currency            Currency          @default(USD)
+  amountUnits         BigInt
+  balanceAfterUnits   BigInt
+  reservedAfterUnits  BigInt
+  reservationId       String?
+  depositId           String?
+  parentTransactionId String?
+  taskId              String?
+  bundleKey           String?
+  pricingSnapshotId   String?
+  adminId             String?
+  description         String?
+  metadata            Json?
+  idempotencyKey      String
+  idempotencyScope    String
+  createdAt           DateTime          @default(now())
+
+  wallet          Wallet           @relation(fields: [walletId], references: [id])
+  reservation     Reservation?     @relation(fields: [reservationId], references: [id])
+  deposit         Deposit?         @relation(fields: [depositId], references: [id])
+  parent          Transaction?     @relation("TxnRefund", fields: [parentTransactionId], references: [id])
+  reverses        Transaction[]    @relation("TxnRefund")
+  admin           User?            @relation("TransactionAdmin", fields: [adminId], references: [id])
+  pricingSnapshot PricingSnapshot? @relation(fields: [pricingSnapshotId], references: [id])
+
+  @@unique([idempotencyScope, idempotencyKey])
+  @@index([userId, createdAt])
+  @@index([walletId, createdAt])
+  @@index([type, createdAt])
+  @@index([taskId])
+  @@index([depositId])
+  @@index([reservationId])
+  @@map("transaction")
+}
+
+model Reservation {
+  id                String            @id @default(cuid())
+  userId            String
+  walletId          String
+  currency          Currency          @default(USD)
+  amountUnits       BigInt
+  capturedUnits     BigInt?
+  status            ReservationStatus @default(PENDING)
+  taskId            String?
+  bundleKey         String?
+  pricingSnapshotId String?
+  expiresAt         DateTime
+  idempotencyKey    String            @unique
+  metadata          Json?
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+  capturedAt        DateTime?
+  releasedAt        DateTime?
+
+  wallet          Wallet           @relation(fields: [walletId], references: [id])
+  user            User             @relation(fields: [userId], references: [id])
+  transactions    Transaction[]
+  pricingSnapshot PricingSnapshot? @relation(fields: [pricingSnapshotId], references: [id])
+
+  @@index([userId, status])
+  @@index([taskId])
+  @@index([expiresAt, status])
+  @@map("reservation")
+}
+
+model Deposit {
+  id                 String          @id @default(cuid())
+  userId             String
+  provider           PaymentProvider
+  externalInvoiceId  String
+  externalOrderId    String
+  status             DepositStatus   @default(CREATED)
+  currency           Currency        @default(USD)
+  amountUnits        BigInt
+  amountAsked        Decimal         @db.Decimal(20, 8)
+  paidAmount         Decimal?        @db.Decimal(20, 8)
+  paidCurrency       String?
+  txid               String?
+  payUrl             String?
+  expiresAt          DateTime?
+  paidAt             DateTime?
+  failedAt           DateTime?
+  rawCreatePayload   Json
+  rawWebhookPayloads Json[]          @default([])
+  couponCode         String?
+  createdAt          DateTime        @default(now())
+  updatedAt          DateTime        @updatedAt
+
+  user              User               @relation(fields: [userId], references: [id])
+  transactions      Transaction[]
+  couponRedemptions CouponRedemption[]
+
+  @@unique([provider, externalInvoiceId])
+  @@unique([provider, externalOrderId])
+  @@index([userId, createdAt])
+  @@index([status])
+  @@map("deposit")
+}
+
+model IdempotencyRecord {
+  id             String   @id @default(cuid())
+  scope          String
+  key            String
+  responseJson   Json
+  responseStatus Int      @default(200)
+  createdAt      DateTime @default(now())
+
+  @@unique([scope, key])
+  @@index([createdAt])
+  @@map("idempotency_record")
+}
+
+// =============================================================================
+// STAGE 3 — PRICING (Bundle, Tariff, UserBundlePrice, PricingSnapshot)
+// =============================================================================
+
+enum BundleMethod {
+  TEXT_GENERATION
+  IMAGE_GENERATION
+  IMAGE_EDIT
+  VIDEO_GENERATION
+  AUDIO_TRANSCRIPTION
+  AUDIO_GENERATION
+  EMBEDDING
+  OTHER
+}
+
+enum BundleUnit {
+  PER_REQUEST
+  PER_TOKEN_INPUT
+  PER_TOKEN_OUTPUT
+  PER_SECOND
+  PER_IMAGE
+}
+
+enum PriceSource {
+  USER_BUNDLE_OVERRIDE
+  USER_TARIFF
+  DEFAULT_TARIFF
+}
+
+model Bundle {
+  id              String       @id @default(cuid())
+  providerSlug    String
+  modelSlug       String
+  method          BundleMethod
+  mode            String?
+  resolution      String?
+  durationSeconds Int?
+  aspectRatio     String?
+  bundleKey       String       @unique
+  unit            BundleUnit   @default(PER_REQUEST)
+  isActive        Boolean      @default(true)
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  tariffPrices     TariffBundlePrice[]
+  userOverrides    UserBundlePrice[]
+  pricingSnapshots PricingSnapshot[]
+
+  @@index([providerSlug, modelSlug])
+  @@index([method, isActive])
+  @@map("bundle")
+}
+
+model Tariff {
+  id          String   @id @default(cuid())
+  slug        String   @unique
+  name        String
+  description String?
+  isDefault   Boolean  @default(false)
+  isActive    Boolean  @default(true)
+  currency    Currency @default(USD)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  prices      TariffBundlePrice[]
+  userTariffs UserTariff[]
+  changeLogs  TariffChangeLog[]
+
+  @@index([isDefault])
+  @@index([isActive])
+  @@map("tariff")
+}
+
+model TariffBundlePrice {
+  id                  String   @id @default(cuid())
+  tariffId            String
+  bundleId            String
+  basePriceUnits      BigInt?
+  inputPerTokenUnits  BigInt?
+  outputPerTokenUnits BigInt?
+  perSecondUnits      BigInt?
+  perImageUnits       BigInt?
+  providerCostUnits   BigInt?
+  marginBps           Int?
+  currency            Currency @default(USD)
+  effectiveFrom       DateTime @default(now())
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  tariff Tariff @relation(fields: [tariffId], references: [id], onDelete: Cascade)
+  bundle Bundle @relation(fields: [bundleId], references: [id])
+
+  @@unique([tariffId, bundleId])
+  @@index([bundleId])
+  @@map("tariff_bundle_price")
+}
+
+model UserTariff {
+  id           String   @id @default(cuid())
+  userId       String   @unique
+  tariffId     String
+  assignedById String?
+  reason       String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  user       User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tariff     Tariff @relation(fields: [tariffId], references: [id])
+  assignedBy User?  @relation("UserTariffAssignedBy", fields: [assignedById], references: [id])
+
+  @@index([tariffId])
+  @@map("user_tariff")
+}
+
+model UserBundlePrice {
+  id                  String   @id @default(cuid())
+  userId              String
+  bundleId            String
+  basePriceUnits      BigInt?
+  inputPerTokenUnits  BigInt?
+  outputPerTokenUnits BigInt?
+  perSecondUnits      BigInt?
+  perImageUnits       BigInt?
+  currency            Currency @default(USD)
+  reason              String?
+  setById             String?
+  effectiveFrom       DateTime @default(now())
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  bundle Bundle @relation(fields: [bundleId], references: [id])
+  setBy  User?  @relation("UserBundlePriceSetBy", fields: [setById], references: [id])
+
+  @@unique([userId, bundleId])
+  @@index([bundleId])
+  @@map("user_bundle_price")
+}
+
+model PricingSnapshot {
+  id                  String      @id @default(cuid())
+  userId              String
+  bundleId            String
+  bundleKey           String
+  source              PriceSource
+  sourceRefId         String
+  currency            Currency    @default(USD)
+  basePriceUnits      BigInt?
+  inputPerTokenUnits  BigInt?
+  outputPerTokenUnits BigInt?
+  perSecondUnits      BigInt?
+  perImageUnits       BigInt?
+  computedAt          DateTime    @default(now())
+
+  bundle       Bundle        @relation(fields: [bundleId], references: [id])
+  reservations Reservation[]
+  transactions Transaction[]
+
+  @@index([userId, bundleKey])
+  @@index([computedAt])
+  @@map("pricing_snapshot")
+}
+
+model TariffChangeLog {
+  id          String   @id @default(cuid())
+  tariffId    String?
+  userId      String?
+  bundleId    String?
+  action      String
+  before      Json?
+  after       Json?
+  changedById String?
+  reason      String?
+  createdAt   DateTime @default(now())
+
+  tariff    Tariff? @relation(fields: [tariffId], references: [id])
+  changedBy User?   @relation("TariffChangedBy", fields: [changedById], references: [id])
+
+  @@index([tariffId, createdAt])
+  @@index([userId, createdAt])
+  @@index([bundleId, createdAt])
+  @@map("tariff_change_log")
+}
+
+// =============================================================================
+// STAGE 4 — COUPONS
+// =============================================================================
+
+enum CouponType {
+  FIXED_AMOUNT             // credit on MAIN balance
+  BONUS_MONEY              // credit on BONUS balance
+  DISCOUNT_METHOD_PERCENT  // % discount on a specific method (value in basis points)
+  DISCOUNT_BUNDLE_AMOUNT   // fixed nano-USD discount on a specific bundle
+  DISCOUNT_TOPUP           // % bonus on top-up paid amount (value in basis points)
+}
+
+enum CouponStatus {
+  DRAFT
+  ACTIVE
+  PAUSED
+  EXPIRED
+  EXHAUSTED
+}
+
+model Coupon {
+  id                String       @id @default(cuid())
+  code              String       @unique // stored uppercase
+  type              CouponType
+  // Value semantics depends on type:
+  //   FIXED_AMOUNT, BONUS_MONEY, DISCOUNT_BUNDLE_AMOUNT → nano-USD units (BigInt as string)
+  //   DISCOUNT_METHOD_PERCENT, DISCOUNT_TOPUP → basis points (e.g. 2000 = 20%)
+  value             BigInt
+  currency          Currency     @default(USD)
+  // Targeting
+  methodCode        String? // for DISCOUNT_METHOD_PERCENT (uses Method.code from Stage 5)
+  bundleId          String? // for DISCOUNT_BUNDLE_AMOUNT
+  minTopupUnits     BigInt? // for DISCOUNT_TOPUP gating
+  // Limits
+  maxUses           Int? // null = unlimited (global cap)
+  maxUsesPerUser    Int          @default(1)
+  validFrom         DateTime     @default(now())
+  validTo           DateTime?
+  status            CouponStatus @default(ACTIVE)
+  comment           String?
+  createdById       String?
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
+
+  redemptions CouponRedemption[]
+
+  @@index([status, validFrom, validTo])
+  @@map("coupon")
+}
+
+model CouponRedemption {
+  id            String   @id @default(cuid())
+  couponId      String
+  userId        String
+  // Context — at most one of these is non-null:
+  apiRequestId  String?  // for request-discounts (FK in Stage 6)
+  depositId     String?  // for top-up bonus
+  // Snapshot of effect:
+  amountUnits   BigInt   // for FIXED_AMOUNT/BONUS_MONEY: credited; for discounts: discount applied
+  meta          Json?
+  createdAt     DateTime @default(now())
+
+  coupon  Coupon   @relation(fields: [couponId], references: [id], onDelete: Cascade)
+  user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  deposit Deposit? @relation(fields: [depositId], references: [id])
+
+  @@index([couponId, createdAt])
+  @@index([userId, createdAt])
+  @@index([depositId])
+  @@map("coupon_redemption")
+}
+
+// =============================================================================
+// STAGE 5 — CATALOG (Provider / Model / Method)
+// =============================================================================
+
+enum CatalogStatus {
+  ACTIVE
+  DISABLED
+  DEPRECATED
+}
+
+enum AvailabilityScope {
+  ALL_USERS
+  WHITELIST
+}
+
+model Provider {
+  id          String        @id @default(cuid())
+  code        String        @unique // "google_banana", "google_veo", "kling_ai"
+  publicName  String
+  description String?
+  status      CatalogStatus @default(ACTIVE)
+  sortOrder   Int           @default(0)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  models  Model[]
+  methods Method[]
+
+  @@index([status])
+  @@map("provider")
+}
+
+model Model {
+  id          String        @id @default(cuid())
+  providerId  String
+  code        String // "gemini-3.1-flash-image-preview", "veo-3.0-generate-001"
+  publicName  String
+  description String?
+  status      CatalogStatus @default(ACTIVE)
+  sortOrder   Int           @default(0)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  provider Provider @relation(fields: [providerId], references: [id], onDelete: Cascade)
+  methods  Method[]
+
+  @@unique([providerId, code])
+  @@index([status])
+  @@map("model")
+}
+
+model Method {
+  id                  String            @id @default(cuid())
+  providerId          String
+  modelId             String
+  code                String // "text_to_image", "image_to_video"
+  publicName          String
+  description         String?
+  // JSON Schema (draft-07) describing accepted params; fields with `x-bundle-dim: true`
+  // contribute to the BundleKey hash (e.g. mode, resolution, durationSeconds, aspectRatio)
+  parametersSchema    Json
+  exampleRequest      Json?
+  exampleResponse     Json?
+  supportsSync        Boolean           @default(false)
+  supportsAsync       Boolean           @default(true)
+  availability        AvailabilityScope @default(ALL_USERS)
+  // When availability=WHITELIST, only users whose id is in this array can call the method
+  availabilityUserIds String[]          @default([])
+  status              CatalogStatus     @default(ACTIVE)
+  sortOrder           Int               @default(0)
+  createdAt           DateTime          @default(now())
+  updatedAt           DateTime          @updatedAt
+
+  provider Provider @relation(fields: [providerId], references: [id], onDelete: Cascade)
+  model    Model    @relation(fields: [modelId], references: [id], onDelete: Cascade)
+
+  @@unique([providerId, modelId, code])
+  @@index([status, availability])
+  @@map("method")
+}
+
+// =============================================================================
+// STAGE 6 — PUBLIC API (ApiRequest + Task)
+// =============================================================================
+
+enum ApiRequestStatus {
+  ACCEPTED
+  REJECTED
+  FINALIZED
+}
+
+enum TaskStatus {
+  PENDING
+  PROCESSING
+  SUCCEEDED
+  FAILED
+  CANCELLED
+}
+
+enum TaskMode {
+  SYNC
+  ASYNC
+}
+
+model ApiRequest {
+  id                String           @id @default(cuid())
+  userId            String
+  apiKeyId          String?
+  idempotencyKey    String?
+  methodId          String
+  bundleId          String
+  bundleKey         String
+  paramsRaw         Json
+  status            ApiRequestStatus @default(ACCEPTED)
+  basePriceUnits    BigInt
+  discountUnits     BigInt           @default(0)
+  clientPriceUnits  BigInt
+  pricingSnapshotId String?
+  reservationId     String?
+  couponId          String?
+  callbackUrl       String?
+  ipAddress         String?
+  userAgent         String?
+  errorCode         String?
+  errorMessage      String?
+  createdAt         DateTime         @default(now())
+  finalizedAt       DateTime?
+
+  user User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  task Task?
+
+  @@index([userId, createdAt])
+  @@index([methodId, createdAt])
+  @@index([apiKeyId, createdAt])
+  @@map("api_request")
+}
+
+model Task {
+  id            String     @id @default(cuid())
+  apiRequestId  String     @unique
+  userId        String
+  methodId      String
+  status        TaskStatus @default(PENDING)
+  mode          TaskMode   @default(ASYNC)
+  providerJobId String?
+  resultData    Json?
+  resultFiles   Json?
+  errorCode     String?
+  errorMessage  String?
+  attempts      Int        @default(0)
+  startedAt     DateTime?
+  finishedAt    DateTime?
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+
+  apiRequest ApiRequest @relation(fields: [apiRequestId], references: [id], onDelete: Cascade)
+  user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, status, createdAt])
+  @@index([status, createdAt])
+  @@map("task")
+}

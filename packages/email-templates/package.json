@@ -1,0 +1,38 @@
+{
+  "name": "@aiagg/email-templates",
+  "version": "0.0.0",
+  "private": true,
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./verify-email": {
+      "types": "./dist/verify-email.d.ts",
+      "default": "./dist/verify-email.js"
+    },
+    "./welcome": {
+      "types": "./dist/welcome.d.ts",
+      "default": "./dist/welcome.js"
+    }
+  },
+  "scripts": {
+    "lint": "eslint src --max-warnings=0",
+    "typecheck": "tsc --noEmit",
+    "build": "tsc -p tsconfig.build.json",
+    "clean": "rm -rf dist .turbo *.tsbuildinfo"
+  },
+  "dependencies": {
+    "@react-email/components": "^0.0.32",
+    "react": "^18.3.1"
+  },
+  "devDependencies": {
+    "@aiagg/eslint-config": "workspace:*",
+    "@aiagg/tsconfig": "workspace:*",
+    "@types/react": "^18.3.18",
+    "eslint": "^9.17.0",
+    "typescript": "^5.7.2"
+  }
+}

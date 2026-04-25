@@ -1,0 +1,33 @@
+{
+  "name": "aiagregator",
+  "version": "0.0.0",
+  "private": true,
+  "description": "AI API Aggregator — единый API-фасад над внешними AI-провайдерами",
+  "packageManager": "pnpm@9.15.0",
+  "engines": {
+    "node": ">=20.0.0",
+    "pnpm": ">=9.0.0"
+  },
+  "scripts": {
+    "build": "turbo run build",
+    "dev": "turbo run dev --parallel",
+    "lint": "turbo run lint",
+    "typecheck": "turbo run typecheck",
+    "test": "turbo run test",
+    "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,md,yaml,yml}\"",
+    "format:check": "prettier --check \"**/*.{ts,tsx,js,jsx,json,md,yaml,yml}\"",
+    "clean": "turbo run clean && rm -rf node_modules .turbo",
+    "db:generate": "pnpm --filter @aiagg/db prisma:generate",
+    "db:migrate": "pnpm --filter @aiagg/db prisma:migrate:dev",
+    "db:migrate:deploy": "pnpm --filter @aiagg/db prisma:migrate:deploy",
+    "db:seed": "pnpm --filter @aiagg/db seed",
+    "db:studio": "pnpm --filter @aiagg/db prisma:studio"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.30",
+    "prettier": "^3.4.2",
+    "prettier-plugin-tailwindcss": "^0.6.9",
+    "turbo": "^2.3.3",
+    "typescript": "^5.7.2"
+  }
+}
