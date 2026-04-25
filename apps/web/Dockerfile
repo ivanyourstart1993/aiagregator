@@ -5,6 +5,12 @@ FROM node:${NODE_VERSION} AS builder
 RUN corepack enable && corepack prepare pnpm@9.15.0 --activate
 WORKDIR /repo
 ENV NEXT_TELEMETRY_DISABLED=1
+ENV NODE_OPTIONS="--max-old-space-size=4096"
+# Stub env vars required at next build time (NextAuth env validation, etc.)
+ENV AUTH_JWT_SECRET="build-stub-secret-do-not-use-in-runtime-min-32-bytes"
+ENV NEXTAUTH_SECRET="build-stub-secret-do-not-use-in-runtime-min-32-bytes"
+ENV NEXTAUTH_URL="http://localhost:3000"
+ENV API_URL="http://localhost:4000"
 COPY . .
 RUN pnpm install --frozen-lockfile
 RUN pnpm --filter @aiagg/db prisma:generate \

@@ -15,6 +15,10 @@ const nextConfig = {
   // Required so Next.js standalone tracing pulls in monorepo workspace deps.
   outputFileTracingRoot: path.join(__dirname, '../..'),
   transpilePackages: ['@aiagg/shared'],
+  // We run eslint + typecheck separately in CI; skip them in `next build`
+  // to avoid duplication and reduce build memory pressure.
+  eslint: { ignoreDuringBuilds: true },
+  typescript: { ignoreBuildErrors: false },
   experimental: {
     serverActions: {
       bodySizeLimit: '2mb',
