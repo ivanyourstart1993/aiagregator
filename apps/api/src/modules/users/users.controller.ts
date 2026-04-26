@@ -39,20 +39,18 @@ export class UsersController {
   }
 
   @Patch('me')
-  @UsePipes(new ZodValidationPipe(updateMeSchema))
   updateMe(
     @CurrentUser() user: CurrentUserPayload,
-    @Body() body: z.infer<typeof updateMeSchema>,
+    @Body(new ZodValidationPipe(updateMeSchema)) body: z.infer<typeof updateMeSchema>,
   ) {
     return this.users.updateMe(user.id, body);
   }
 
   @Post('me/change-password')
   @HttpCode(HttpStatus.OK)
-  @UsePipes(new ZodValidationPipe(changePasswordSchema))
   changePassword(
     @CurrentUser() user: CurrentUserPayload,
-    @Body() body: z.infer<typeof changePasswordSchema>,
+    @Body(new ZodValidationPipe(changePasswordSchema)) body: z.infer<typeof changePasswordSchema>,
   ) {
     return this.users.changePassword(user.id, body);
   }

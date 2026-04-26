@@ -42,10 +42,9 @@ export class ApiKeysController {
   @Post()
   @UseGuards(EmailVerifiedGuard)
   @HttpCode(HttpStatus.CREATED)
-  @UsePipes(new ZodValidationPipe(createSchema))
   create(
     @CurrentUser() user: CurrentUserPayload,
-    @Body() body: z.infer<typeof createSchema>,
+    @Body(new ZodValidationPipe(createSchema)) body: z.infer<typeof createSchema>,
   ) {
     return this.keys.generate(user.id, body.name);
   }
