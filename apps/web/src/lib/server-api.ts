@@ -222,6 +222,49 @@ export interface EffectivePriceView {
   computedAt: string;
 }
 
+/** Wire-shape returned by backend (`{bundle: {...}, source, components}`). */
+interface NestedEffectivePrice {
+  bundle: {
+    id: string;
+    bundleKey: string;
+    providerSlug: string;
+    modelSlug: string;
+    method: BundleMethod | string;
+    mode: string | null;
+    resolution: string | null;
+    durationSeconds: number | null;
+    aspectRatio: string | null;
+    unit: PricingUnit;
+    isActive: boolean;
+  };
+  source: PriceSource;
+  sourceRefId: string;
+  currency: 'USD';
+  components: PriceComponents;
+  marginBps?: number | null;
+  computedAt?: string;
+}
+
+function flattenEffectivePrice(p: NestedEffectivePrice): EffectivePriceView {
+  return {
+    bundleKey: p.bundle.bundleKey,
+    bundleId: p.bundle.id,
+    provider: p.bundle.providerSlug,
+    model: p.bundle.modelSlug,
+    method: p.bundle.method,
+    mode: p.bundle.mode,
+    resolution: p.bundle.resolution,
+    durationSeconds: p.bundle.durationSeconds,
+    aspectRatio: p.bundle.aspectRatio,
+    unit: p.bundle.unit,
+    currency: p.currency,
+    source: p.source,
+    sourceRefId: p.sourceRefId,
+    components: p.components,
+    computedAt: p.computedAt ?? new Date().toISOString(),
+  };
+}
+
 export interface TariffSummary {
   id: string;
   slug: string;
@@ -434,9 +477,18 @@ export const serverApi = {
   adminGetUser: (id: string) => apiGet<AdminUserSummary>(`/internal/admin/users/${id}`),
 
   // Stage 3 — Pricing (user)
-  getPricing: () => apiGet<EffectivePriceView[]>('/internal/pricing'),
-  getPricingForBundle: (bundleKey: string) =>
-    apiGet<EffectivePriceView>(`/internal/pricing/bundle/${encodeURIComponent(bundleKey)}`),
+  // Backend returns rows with nested `bundle` object; flatten so UI keeps the
+  // legacy `provider/model/method/...` shape from EffectivePriceView.
+  getPricing: async (): Promise<EffectivePriceView[]> => {
+    const raw = await apiGet<NestedEffectivePrice[]>('/internal/pricing');
+    return raw.map(flattenEffectivePrice);
+  },
+  getPricingForBundle: async (bundleKey: string): Promise<EffectivePriceView> => {
+    const raw = await apiGet<NestedEffectivePrice>(
+      `/internal/pricing/bundle/${encodeURIComponent(bundleKey)}`,
+    );
+    return flattenEffectivePrice(raw);
+  },
   getMyTariff: () => apiGet<TariffSummary>('/internal/pricing/tariff'),
 
   // Stage 3 — Admin tariffs CRUD
