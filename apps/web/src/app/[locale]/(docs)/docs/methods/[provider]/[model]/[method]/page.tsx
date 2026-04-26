@@ -13,9 +13,16 @@ export default async function MethodDocsPage({ params }: { params: Params }) {
   try {
     method = await serverApi.catalogGetMethod(params.provider, params.model, params.method);
   } catch (err) {
-    if (err instanceof ApiError) {
-      if (err.status === 404) notFound();
+    if (err instanceof ApiError && err.status === 404) {
+      notFound();
     }
+    // eslint-disable-next-line no-console
+    console.error('[docs/method] failed to fetch method', {
+      provider: params.provider,
+      model: params.model,
+      method: params.method,
+      err: err instanceof Error ? `${err.name}: ${err.message}` : String(err),
+    });
     notFound();
   }
   if (!method) notFound();
