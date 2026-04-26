@@ -3,6 +3,7 @@
 import {
   Coins,
   CreditCard,
+  Download,
   Gauge,
   Headphones,
   KeyRound,
@@ -29,6 +30,7 @@ type NavLabel =
   | 'apiExplorer'
   | 'charges'
   | 'requests'
+  | 'exports'
   | 'profile'
   | 'support'
   | 'docs';
@@ -49,6 +51,7 @@ const ITEMS: NavItem[] = [
   { href: '/api-explorer', icon: TerminalSquare, labelKey: 'apiExplorer' },
   { href: '/charges', icon: ScrollText, labelKey: 'charges' },
   { href: '/requests', icon: ListChecks, labelKey: 'requests' },
+  { href: '/exports', icon: Download, labelKey: 'exports' },
   { href: '/profile', icon: User, labelKey: 'profile' },
   { href: '/support', icon: Headphones, labelKey: 'support' },
   { href: '/docs/getting-started', icon: Gauge, labelKey: 'docs' },

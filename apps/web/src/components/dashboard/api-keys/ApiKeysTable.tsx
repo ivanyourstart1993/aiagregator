@@ -10,6 +10,7 @@ import {
 } from '@/components/ui/table';
 import type { ApiKeyView } from '@/lib/server-api';
 import { RevokeKeyButton } from './RevokeKeyButton';
+import { RotateWebhookButton } from './RotateWebhookButton';
 
 interface ApiKeysTableProps {
   keys: ApiKeyView[];
@@ -56,7 +57,10 @@ export function ApiKeysTable({ keys }: ApiKeysTableProps) {
               {format.dateTime(new Date(key.createdAt), 'short')}
             </TableCell>
             <TableCell className="text-right">
-              <RevokeKeyButton id={key.id} disabled={key.status !== 'ACTIVE'} />
+              <div className="flex justify-end gap-1">
+                <RotateWebhookButton id={key.id} disabled={key.status !== 'ACTIVE'} />
+                <RevokeKeyButton id={key.id} disabled={key.status !== 'ACTIVE'} />
+              </div>
             </TableCell>
           </TableRow>
         ))}

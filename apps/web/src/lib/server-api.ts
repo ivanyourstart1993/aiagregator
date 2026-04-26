@@ -587,7 +587,511 @@ export const serverApi = {
   listTasks: (filters?: { status?: TaskStatus; page?: number; pageSize?: number }) =>
     apiGet<TasksPage>(`/internal/tasks${qs({ ...filters })}`),
   getTask: (id: string) => apiGet<TaskView>(`/internal/tasks/${id}`),
+
+  // ---- Stage 7+11: Provider accounts ----
+  adminListProviderAccounts: (filters?: ProviderAccountFilters) =>
+    apiGet<ProviderAccountsPage>(`/internal/admin/providers/accounts${qs({ ...filters })}`),
+  adminGetProviderAccount: (id: string) =>
+    apiGet<ProviderAccountView>(`/internal/admin/providers/accounts/${id}`),
+  adminCreateProviderAccount: (body: CreateProviderAccountInput) =>
+    apiPost<ProviderAccountView>('/internal/admin/providers/accounts', body),
+  adminUpdateProviderAccount: (id: string, body: UpdateProviderAccountInput) =>
+    apiPatch<ProviderAccountView>(`/internal/admin/providers/accounts/${id}`, body),
+  adminDeleteProviderAccount: (id: string) =>
+    apiDelete<void>(`/internal/admin/providers/accounts/${id}`),
+  adminEnableProviderAccount: (id: string) =>
+    apiPost<{ ok: true }>(`/internal/admin/providers/accounts/${id}/enable`, {}),
+  adminDisableProviderAccount: (id: string) =>
+    apiPost<{ ok: true }>(`/internal/admin/providers/accounts/${id}/disable`, {}),
+  adminGetProviderAccountStats: (id: string, filters?: { from?: string; to?: string }) =>
+    apiGet<ProviderAccountStats>(
+      `/internal/admin/providers/accounts/${id}/stats${qs({ ...filters })}`,
+    ),
+
+  // ---- Stage 7+11: Proxies ----
+  adminListProxies: () => apiGet<ProxyView[] | { items: ProxyView[] }>('/internal/admin/providers/proxies'),
+  adminGetProxy: (id: string) => apiGet<ProxyView>(`/internal/admin/providers/proxies/${id}`),
+  adminCreateProxy: (body: CreateProxyInput) =>
+    apiPost<ProxyView>('/internal/admin/providers/proxies', body),
+  adminUpdateProxy: (id: string, body: UpdateProxyInput) =>
+    apiPatch<ProxyView>(`/internal/admin/providers/proxies/${id}`, body),
+  adminDeleteProxy: (id: string) =>
+    apiDelete<void>(`/internal/admin/providers/proxies/${id}`),
+  adminGetProxyStats: (id: string) =>
+    apiGet<ProxyStats>(`/internal/admin/providers/proxies/${id}/stats`),
+
+  // ---- Stage 12: Rate cards ----
+  adminListRateCards: (filters?: RateCardFilters) =>
+    apiGet<RateCardsPage>(`/internal/admin/rate-cards${qs({ ...filters })}`),
+  adminGetRateCard: (id: string) => apiGet<RateCardView>(`/internal/admin/rate-cards/${id}`),
+  adminCreateRateCard: (body: CreateRateCardInput) =>
+    apiPost<RateCardView>('/internal/admin/rate-cards', body),
+  adminUpdateRateCard: (id: string, body: UpdateRateCardInput) =>
+    apiPatch<RateCardView>(`/internal/admin/rate-cards/${id}`, body),
+  adminDeleteRateCard: (id: string) =>
+    apiDelete<void>(`/internal/admin/rate-cards/${id}`),
+
+  // ---- Stage 12: Analytics ----
+  adminAnalyticsSummary: (filters?: { from?: string; to?: string }) =>
+    apiGet<AnalyticsSummary>(`/internal/admin/analytics/summary${qs({ ...filters })}`),
+  adminAnalyticsRevenueDaily: (filters?: { from?: string; to?: string }) =>
+    apiGet<DailyPoint[]>(`/internal/admin/analytics/revenue/daily${qs({ ...filters })}`),
+  adminAnalyticsCostByProvider: (filters?: { from?: string; to?: string }) =>
+    apiGet<CostByProviderRow[]>(`/internal/admin/analytics/cost/by-provider${qs({ ...filters })}`),
+  adminAnalyticsMargin: (filters?: { from?: string; to?: string }) =>
+    apiGet<MarginRow>(`/internal/admin/analytics/margin${qs({ ...filters })}`),
+  adminAnalyticsTopUsers: (filters?: { from?: string; to?: string; limit?: number }) =>
+    apiGet<TopUserRow[]>(`/internal/admin/analytics/top-users${qs({ ...filters })}`),
+  adminAnalyticsTopMethods: (filters?: { from?: string; to?: string; limit?: number }) =>
+    apiGet<TopMethodRow[]>(`/internal/admin/analytics/top-methods${qs({ ...filters })}`),
+  adminAnalyticsPerBundle: (filters?: { from?: string; to?: string }) =>
+    apiGet<PerBundleRow[]>(`/internal/admin/analytics/per-bundle${qs({ ...filters })}`),
+
+  // ---- Stage 10: DLQ ----
+  adminListDlq: (queue: 'generation' | 'callback', filters?: { page?: number; pageSize?: number }) =>
+    apiGet<DlqPage>(`/internal/admin/dlq/${queue}${qs({ ...filters })}`),
+  adminRetryDlq: (queue: 'generation' | 'callback', jobId: string) =>
+    apiPost<{ ok: true }>(`/internal/admin/dlq/${queue}/${jobId}/retry`, {}),
+  adminDeleteDlq: (queue: 'generation' | 'callback', jobId: string) =>
+    apiDelete<void>(`/internal/admin/dlq/${queue}/${jobId}`),
+
+  // ---- Stage 13: Alerts ----
+  adminListAlerts: (filters?: AlertFilters) =>
+    apiGet<AlertsPage>(`/internal/admin/alerts${qs({ ...filters })}`),
+  adminGetAlert: (id: string) => apiGet<AlertView>(`/internal/admin/alerts/${id}`),
+  adminAcknowledgeAlert: (id: string) =>
+    apiPost<{ ok: true }>(`/internal/admin/alerts/${id}/acknowledge`, {}),
+  adminResolveAlert: (id: string) =>
+    apiPost<{ ok: true }>(`/internal/admin/alerts/${id}/resolve`, {}),
+
+  // ---- Stage 14: System settings + Load ----
+  adminListSettings: () => apiGet<SystemSettingView[] | { items: SystemSettingView[] }>(
+    '/internal/admin/settings',
+  ),
+  adminGetSetting: (key: string) =>
+    apiGet<SystemSettingView>(`/internal/admin/settings/${encodeURIComponent(key)}`),
+  adminUpdateSetting: (key: string, body: { value: unknown; comment?: string }) =>
+    apiFetch<SystemSettingView>(`/internal/admin/settings/${encodeURIComponent(key)}`, {
+      method: 'PUT',
+      body,
+    }),
+  adminPauseGeneration: (paused: boolean) =>
+    apiPost<{ ok: true }>(`/internal/admin/settings/pause/generation`, { paused }),
+  adminPauseProvider: (code: string, paused: boolean) =>
+    apiPost<{ ok: true }>(`/internal/admin/settings/pause/provider/${code}`, { paused }),
+  adminPauseBundle: (key: string, paused: boolean) =>
+    apiPost<{ ok: true }>(`/internal/admin/settings/pause/bundle/${encodeURIComponent(key)}`, {
+      paused,
+    }),
+  adminLoadQueues: () => apiGet<QueuesLoad>(`/internal/admin/load/queues`),
+  adminLoadRedis: () => apiGet<RedisLoad>(`/internal/admin/load/redis`),
+  adminLoadDb: () => apiGet<DbLoad>(`/internal/admin/load/db`),
+
+  // ---- Stage 15: Files ----
+  adminListFiles: (filters?: FilesFilters) =>
+    apiGet<FilesPage>(`/internal/admin/files${qs({ ...filters })}`),
+  adminGetFile: (id: string) => apiGet<FileView>(`/internal/admin/files/${id}`),
+  adminDeleteFileNow: (id: string) =>
+    apiPost<{ ok: true }>(`/internal/admin/files/${id}/delete-now`, {}),
+
+  // ---- Stage 16: Sandbox ----
+  adminEnableSandbox: (userId: string) =>
+    apiPost<{ ok: true }>(`/internal/admin/users/${userId}/sandbox/enable`, {}),
+  adminDisableSandbox: (userId: string) =>
+    apiPost<{ ok: true }>(`/internal/admin/users/${userId}/sandbox/disable`, {}),
+
+  // ---- Stage 16: Exports (user-facing) ----
+  listExports: () => apiGet<ExportView[] | { items: ExportView[] }>('/internal/exports'),
+  getExport: (id: string) => apiGet<ExportView>(`/internal/exports/${id}`),
+  createExport: (body: CreateExportInput) =>
+    apiPost<ExportView>('/internal/exports', body),
+
+  // ---- Stage 16: API key webhook secret ----
+  rotateWebhookSecret: (id: string) =>
+    apiPost<{ webhookSecret: string }>(`/internal/api-keys/${id}/rotate-webhook-secret`, {}),
 };
+
+// ---- Stage 7+11 types ----
+export type ProxyProtocol = 'HTTP' | 'HTTPS' | 'SOCKS5';
+export type ProxyStatus = 'ACTIVE' | 'DISABLED' | 'BROKEN';
+
+export interface ProxyView {
+  id: string;
+  name: string;
+  host: string;
+  port: number;
+  protocol: ProxyProtocol;
+  login?: string | null;
+  passwordLast4?: string | null;
+  country?: string | null;
+  region?: string | null;
+  status: ProxyStatus;
+  latencyMs?: number | null;
+  lastCheckedAt?: string | null;
+  createdAt?: string;
+}
+
+export interface CreateProxyInput {
+  name: string;
+  host: string;
+  port: number;
+  protocol: ProxyProtocol;
+  login?: string;
+  password?: string;
+  country?: string;
+  region?: string;
+  status?: ProxyStatus;
+}
+export type UpdateProxyInput = Partial<CreateProxyInput>;
+
+export interface ProxyStats {
+  requestsToday?: number;
+  failuresToday?: number;
+  successRate?: number;
+  avgLatencyMs?: number | null;
+}
+
+export type ProviderAccountStatus = 'ACTIVE' | 'DISABLED' | 'BROKEN' | 'EXHAUSTED';
+
+export interface ProviderAccountView {
+  id: string;
+  providerId: string;
+  providerCode?: string;
+  name: string;
+  description?: string | null;
+  status: ProviderAccountStatus;
+  proxyId?: string | null;
+  proxy?: ProxyView | null;
+  supportedModelIds?: string[];
+  supportedMethodIds?: string[];
+  dailyLimit?: number | null;
+  monthlyLimit?: number | null;
+  maxConcurrentTasks?: number | null;
+  todayUsed?: number | null;
+  monthUsed?: number | null;
+  lastErrorCode?: string | null;
+  lastErrorAt?: string | null;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface ProviderAccountsPage {
+  items: ProviderAccountView[];
+  total: number;
+  page: number;
+  pageSize: number;
+}
+
+export interface ProviderAccountFilters {
+  providerId?: string;
+  status?: ProviderAccountStatus;
+  page?: number;
+  pageSize?: number;
+}
+
+export interface CreateProviderAccountInput {
+  providerId: string;
+  name: string;
+  description?: string;
+  credentials: Record<string, unknown>;
+  proxyId?: string | null;
+  supportedModelIds?: string[];
+  supportedMethodIds?: string[];
+  dailyLimit?: number | null;
+  monthlyLimit?: number | null;
+  maxConcurrentTasks?: number | null;
+}
+export interface UpdateProviderAccountInput {
+  name?: string;
+  description?: string;
+  credentials?: Record<string, unknown>;
+  proxyId?: string | null;
+  supportedModelIds?: string[];
+  supportedMethodIds?: string[];
+  dailyLimit?: number | null;
+  monthlyLimit?: number | null;
+  maxConcurrentTasks?: number | null;
+}
+
+export interface ProviderAccountStats {
+  requestsToday?: number;
+  successToday?: number;
+  failuresToday?: number;
+  avgLatencyMs?: number | null;
+  costToday?: string | null;
+  byDay?: Array<{ date: string; requests: number; failures: number }>;
+}
+
+// ---- Stage 12: Rate cards ----
+export type PriceType =
+  | 'PER_REQUEST'
+  | 'PER_SECOND'
+  | 'PER_TOKEN_INPUT'
+  | 'PER_TOKEN_OUTPUT'
+  | 'PER_IMAGE'
+  | 'CUSTOM';
+
+export interface RateCardView {
+  id: string;
+  providerId: string;
+  providerCode?: string;
+  modelId?: string | null;
+  modelCode?: string | null;
+  methodId?: string | null;
+  methodCode?: string | null;
+  mode?: string | null;
+  resolution?: string | null;
+  durationSeconds?: number | null;
+  aspectRatio?: string | null;
+  priceType: PriceType;
+  providerCostUnits?: string | null;
+  pricePerSecond?: string | null;
+  pricePerImage?: string | null;
+  pricePerTokenInput?: string | null;
+  pricePerTokenOutput?: string | null;
+  isActive: boolean;
+  effectiveFrom?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface RateCardsPage {
+  items: RateCardView[];
+  total: number;
+  page: number;
+  pageSize: number;
+}
+
+export interface RateCardFilters {
+  providerId?: string;
+  active?: boolean;
+  page?: number;
+  pageSize?: number;
+}
+
+export interface CreateRateCardInput {
+  providerId: string;
+  modelId?: string;
+  methodId?: string;
+  mode?: string;
+  resolution?: string;
+  durationSeconds?: number;
+  aspectRatio?: string;
+  priceType: PriceType;
+  providerCostUnits?: string;
+  pricePerSecond?: string;
+  pricePerImage?: string;
+  pricePerTokenInput?: string;
+  pricePerTokenOutput?: string;
+  isActive?: boolean;
+}
+export type UpdateRateCardInput = Partial<CreateRateCardInput>;
+
+// ---- Stage 12: Analytics ----
+export interface AnalyticsSummary {
+  revenueUnits: string;
+  costUnits: string;
+  marginUnits: string;
+  marginBps?: number;
+  requestsCount: number;
+  tasksCount?: number;
+  successRate?: number;
+  from: string;
+  to: string;
+}
+
+export interface DailyPoint {
+  date: string;
+  revenueUnits: string;
+  costUnits?: string;
+  marginUnits?: string;
+  requestsCount?: number;
+}
+
+export interface CostByProviderRow {
+  providerCode: string;
+  costUnits: string;
+  requestsCount: number;
+}
+
+export interface MarginRow {
+  marginUnits: string;
+  marginBps: number;
+  revenueUnits: string;
+  costUnits: string;
+}
+
+export interface TopUserRow {
+  userId: string;
+  email?: string | null;
+  revenueUnits: string;
+  requestsCount: number;
+}
+
+export interface TopMethodRow {
+  methodCode: string;
+  providerCode?: string;
+  modelCode?: string;
+  revenueUnits: string;
+  requestsCount: number;
+}
+
+export interface PerBundleRow {
+  bundleKey: string;
+  providerCode?: string;
+  modelCode?: string;
+  methodCode?: string;
+  revenueUnits: string;
+  costUnits?: string;
+  marginUnits?: string;
+  requestsCount: number;
+}
+
+// ---- Stage 10: DLQ ----
+export interface DlqJob {
+  id: string;
+  jobId: string;
+  failedAt: string;
+  reason?: string | null;
+  attempts?: number;
+  data?: unknown;
+}
+export interface DlqPage {
+  items: DlqJob[];
+  total: number;
+  page: number;
+  pageSize: number;
+}
+
+// ---- Stage 13: Alerts ----
+export type AlertSeverity = 'INFO' | 'WARNING' | 'CRITICAL';
+export type AlertCategory =
+  | 'PROVIDER_FAILURE'
+  | 'PROXY_FAILURE'
+  | 'BALANCE_LOW'
+  | 'QUEUE_OVERLOAD'
+  | 'COST_SPIKE'
+  | 'OTHER';
+export type AlertStatus = 'OPEN' | 'ACKNOWLEDGED' | 'RESOLVED';
+
+export interface AlertView {
+  id: string;
+  severity: AlertSeverity;
+  category: AlertCategory;
+  status: AlertStatus;
+  title: string;
+  message?: string | null;
+  source?: string | null;
+  context?: Record<string, unknown> | null;
+  createdAt: string;
+  acknowledgedAt?: string | null;
+  resolvedAt?: string | null;
+}
+
+export interface AlertsPage {
+  items: AlertView[];
+  total: number;
+  page: number;
+  pageSize: number;
+}
+
+export interface AlertFilters {
+  status?: AlertStatus;
+  severity?: AlertSeverity;
+  category?: AlertCategory;
+  page?: number;
+  pageSize?: number;
+}
+
+// ---- Stage 14 ----
+export interface SystemSettingView {
+  key: string;
+  value: unknown;
+  comment?: string | null;
+  updatedAt?: string;
+  updatedById?: string | null;
+}
+
+export interface QueueCounters {
+  waiting: number;
+  active: number;
+  completed: number;
+  failed: number;
+  delayed: number;
+  paused?: number;
+}
+export interface QueuesLoad {
+  generation?: QueueCounters;
+  callback?: QueueCounters;
+  [key: string]: QueueCounters | undefined;
+}
+
+export interface RedisLoad {
+  connected: boolean;
+  usedMemoryBytes?: number;
+  ops?: number;
+  clients?: number;
+  uptimeSeconds?: number;
+}
+
+export interface DbLoad {
+  taskCounts?: Record<string, number>;
+  reservationCount?: number;
+  pendingDeposits?: number;
+}
+
+// ---- Stage 15 ----
+export type ResultFileStatus = 'PENDING' | 'STORED' | 'EXPIRED' | 'DELETED';
+
+export interface FileView {
+  id: string;
+  userId: string;
+  userEmail?: string | null;
+  taskId?: string | null;
+  url?: string | null;
+  status: ResultFileStatus;
+  sizeBytes?: number | null;
+  contentType?: string | null;
+  expiresAt?: string | null;
+  createdAt: string;
+}
+export interface FilesPage {
+  items: FileView[];
+  total: number;
+  page: number;
+  pageSize: number;
+}
+export interface FilesFilters {
+  userId?: string;
+  status?: ResultFileStatus;
+  page?: number;
+  pageSize?: number;
+}
+
+// ---- Stage 16: Exports ----
+export type ExportType = 'TRANSACTIONS' | 'REQUESTS' | 'TASKS' | 'DEPOSITS';
+export type ExportFormat = 'csv' | 'json';
+export type ExportStatus = 'PENDING' | 'PROCESSING' | 'DONE' | 'FAILED' | 'EXPIRED';
+
+export interface ExportView {
+  id: string;
+  type: ExportType;
+  format: ExportFormat;
+  status: ExportStatus;
+  fileUrl?: string | null;
+  rowsCount?: number | null;
+  errorMessage?: string | null;
+  filter?: { from?: string | null; to?: string | null } | null;
+  createdAt: string;
+  finishedAt?: string | null;
+  expiresAt?: string | null;
+}
+
+export interface CreateExportInput {
+  type: ExportType;
+  format: ExportFormat;
+  filter?: { from?: string; to?: string };
+}
 
 // ---- Stage 5 types ----
 

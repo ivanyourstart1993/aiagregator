@@ -21,6 +21,7 @@ import { TransactionsTable } from '@/components/dashboard/billing/TransactionsTa
 import { DepositsTable } from '@/components/admin/billing/DepositsTable';
 import { AssignTariffPanel } from '@/components/admin/pricing/AssignTariffPanel';
 import { UserBundlePricesTable } from '@/components/admin/pricing/UserBundlePricesTable';
+import { SandboxToggle } from '@/components/admin/users/SandboxToggle';
 
 interface Props {
   params: Promise<{ userId: string }>;
@@ -195,6 +196,8 @@ export default async function AdminUserPage({ params }: Props) {
           />
         </TabsContent>
       </Tabs>
+
+      <SandboxToggle userId={userId} initialEnabled={false} />
     </div>
   );
 }

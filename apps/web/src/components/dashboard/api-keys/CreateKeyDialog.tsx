@@ -25,6 +25,7 @@ export function CreateKeyDialog() {
   const [name, setName] = useState('');
   const [pending, startTransition] = useTransition();
   const [plaintext, setPlaintext] = useState<string | null>(null);
+  const [webhookSecret, setWebhookSecret] = useState<string | null>(null);
 
   function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -37,6 +38,7 @@ export function CreateKeyDialog() {
       }
       toast.success(t('createdToast'));
       setPlaintext(res.plaintext);
+      setWebhookSecret(res.webhookSecret ?? null);
     });
   }
 
@@ -50,10 +52,17 @@ export function CreateKeyDialog() {
     if (!next) {
       setOpen(false);
       setPlaintext(null);
+      setWebhookSecret(null);
       setName('');
     } else {
       setOpen(true);
     }
+  }
+
+  function handleCopyWebhook() {
+    if (!webhookSecret) return;
+    void navigator.clipboard.writeText(webhookSecret);
+    toast.success(t('copied'));
   }
 
   return (
@@ -71,14 +80,32 @@ export function CreateKeyDialog() {
               <DialogTitle>{t('secretWarningTitle')}</DialogTitle>
               <DialogDescription>{t('secretWarningDescription')}</DialogDescription>
             </DialogHeader>
-            <div className="rounded-md border bg-muted px-3 py-2 font-mono text-sm break-all">
-              {plaintext}
+            <div className="space-y-1">
+              <Label>{t('name')}</Label>
+              <div className="rounded-md border bg-muted px-3 py-2 font-mono text-sm break-all">
+                {plaintext}
+              </div>
             </div>
+            {webhookSecret ? (
+              <div className="space-y-1">
+                <Label>{t('webhookSecretLabel')}</Label>
+                <div className="rounded-md border bg-muted px-3 py-2 font-mono text-sm break-all">
+                  {webhookSecret}
+                </div>
+                <p className="text-xs text-muted-foreground">{t('webhookSecretHint')}</p>
+              </div>
+            ) : null}
             <DialogFooter className="gap-2">
               <Button type="button" variant="outline" onClick={handleCopy}>
                 <Copy className="h-4 w-4" />
                 {t('copy')}
               </Button>
+              {webhookSecret ? (
+                <Button type="button" variant="outline" onClick={handleCopyWebhook}>
+                  <Copy className="h-4 w-4" />
+                  {t('webhookSecretLabel')}
+                </Button>
+              ) : null}
               <Button type="button" onClick={() => handleClose(false)}>
                 {t('savedKey')}
               </Button>
