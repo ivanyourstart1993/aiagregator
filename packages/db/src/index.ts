@@ -29,6 +29,10 @@ export {
   ApiRequestStatus,
   TaskStatus,
   TaskMode,
+  ProviderAccountStatus,
+  ProxyStatus,
+  ProxyProtocol,
+  ResultFileStatus,
 } from '@prisma/client';
 
 export type * from '@prisma/client';

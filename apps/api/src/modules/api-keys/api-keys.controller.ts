@@ -8,7 +8,6 @@ import {
   Param,
   Post,
   UseGuards,
-  UsePipes,
 } from '@nestjs/common';
 import { z } from 'zod';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';

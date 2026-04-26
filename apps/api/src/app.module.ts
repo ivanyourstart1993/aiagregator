@@ -26,7 +26,9 @@ import { PricingModule } from './modules/pricing/pricing.module';
 import { CouponsModule } from './modules/coupons/coupons.module';
 import { CatalogModule } from './modules/catalog/catalog.module';
 import { PublicApiModule } from './modules/public-api/public-api.module';
+import { ProvidersModule } from './modules/providers/providers.module';
 import { RedisModule } from './common/redis/redis.module';
+import { StorageModule } from './common/storage/storage.module';
 
 @Module({
   imports: [
@@ -59,6 +61,7 @@ import { RedisModule } from './common/redis/redis.module';
     EventEmitterModule.forRoot(),
     PrismaModule,
     RedisModule,
+    StorageModule,
     IdempotencyModule,
     BullMqModule,
     MailModule,
@@ -73,6 +76,7 @@ import { RedisModule } from './common/redis/redis.module';
     CouponsModule,
     CatalogModule,
     PublicApiModule,
+    ProvidersModule,
   ],
   providers: [
     { provide: APP_FILTER, useClass: PublicErrorFilter },

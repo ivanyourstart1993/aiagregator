@@ -64,6 +64,18 @@ CREATE TYPE "TaskStatus" AS ENUM ('PENDING', 'PROCESSING', 'SUCCEEDED', 'FAILED'
 -- CreateEnum
 CREATE TYPE "TaskMode" AS ENUM ('SYNC', 'ASYNC');
 
+-- CreateEnum
+CREATE TYPE "ProviderAccountStatus" AS ENUM ('ACTIVE', 'INACTIVE', 'MANUALLY_DISABLED', 'EXCLUDED_BY_BILLING', 'QUOTA_EXHAUSTED', 'LIMIT_REACHED', 'INVALID_CREDENTIALS', 'PROXY_ERROR', 'COOLDOWN', 'BLOCKED');
+
+-- CreateEnum
+CREATE TYPE "ProxyStatus" AS ENUM ('ACTIVE', 'INACTIVE', 'ERROR', 'COOLDOWN', 'MANUALLY_DISABLED');
+
+-- CreateEnum
+CREATE TYPE "ProxyProtocol" AS ENUM ('HTTP', 'HTTPS', 'SOCKS5');
+
+-- CreateEnum
+CREATE TYPE "ResultFileStatus" AS ENUM ('AVAILABLE', 'EXPIRED', 'DELETED', 'DELETION_FAILED');
+
 -- CreateTable
 CREATE TABLE "user" (
     "id" TEXT NOT NULL,
@@ -516,6 +528,116 @@ CREATE TABLE "task" (
     CONSTRAINT "task_pkey" PRIMARY KEY ("id")
 );
 
+-- CreateTable
+CREATE TABLE "proxy" (
+    "id" TEXT NOT NULL,
+    "name" TEXT NOT NULL,
+    "host" TEXT NOT NULL,
+    "port" INTEGER NOT NULL,
+    "protocol" "ProxyProtocol" NOT NULL DEFAULT 'HTTP',
+    "login" TEXT,
+    "passwordHash" TEXT,
+    "country" TEXT,
+    "region" TEXT,
+    "status" "ProxyStatus" NOT NULL DEFAULT 'ACTIVE',
+    "comment" TEXT,
+    "lastCheckAt" TIMESTAMP(3),
+    "lastSuccessAt" TIMESTAMP(3),
+    "lastErrorAt" TIMESTAMP(3),
+    "lastErrorMessage" TEXT,
+    "externalIp" TEXT,
+    "latencyMs" INTEGER,
+    "maxConcurrentTasks" INTEGER,
+    "maxRequestsPerMinute" INTEGER,
+    "maxRequestsPerHour" INTEGER,
+    "cooldownAfterErrors" INTEGER,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "proxy_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "provider_account" (
+    "id" TEXT NOT NULL,
+    "providerId" TEXT NOT NULL,
+    "name" TEXT NOT NULL,
+    "description" TEXT,
+    "credentials" JSONB NOT NULL,
+    "proxyId" TEXT,
+    "status" "ProviderAccountStatus" NOT NULL DEFAULT 'ACTIVE',
+    "rotationEnabled" BOOLEAN NOT NULL DEFAULT true,
+    "dailyLimit" INTEGER,
+    "monthlyLimit" INTEGER,
+    "maxConcurrentTasks" INTEGER DEFAULT 3,
+    "maxRequestsPerMinute" INTEGER,
+    "maxRequestsPerHour" INTEGER,
+    "maxRequestsPerDay" INTEGER,
+    "maxCostPerDayUnits" BIGINT,
+    "maxCostPerMonthUnits" BIGINT,
+    "supportedModelIds" TEXT[] DEFAULT ARRAY[]::TEXT[],
+    "supportedMethodIds" TEXT[] DEFAULT ARRAY[]::TEXT[],
+    "lastSuccessAt" TIMESTAMP(3),
+    "lastErrorAt" TIMESTAMP(3),
+    "lastErrorMessage" TEXT,
+    "excludedReason" TEXT,
+    "todayRequestsCount" INTEGER NOT NULL DEFAULT 0,
+    "todayCostUnits" BIGINT NOT NULL DEFAULT 0,
+    "monthRequestsCount" INTEGER NOT NULL DEFAULT 0,
+    "monthCostUnits" BIGINT NOT NULL DEFAULT 0,
+    "countersResetAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "provider_account_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "provider_attempt" (
+    "id" TEXT NOT NULL,
+    "taskId" TEXT NOT NULL,
+    "attemptNumber" INTEGER NOT NULL DEFAULT 1,
+    "providerId" TEXT NOT NULL,
+    "providerAccountId" TEXT,
+    "proxyId" TEXT,
+    "status" TEXT NOT NULL,
+    "errorType" TEXT,
+    "errorCode" TEXT,
+    "errorMessage" TEXT,
+    "providerJobId" TEXT,
+    "startedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "finishedAt" TIMESTAMP(3),
+    "durationMs" INTEGER,
+
+    CONSTRAINT "provider_attempt_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "result_file" (
+    "id" TEXT NOT NULL,
+    "taskId" TEXT NOT NULL,
+    "apiRequestId" TEXT,
+    "userId" TEXT NOT NULL,
+    "providerSlug" TEXT NOT NULL,
+    "modelSlug" TEXT NOT NULL,
+    "methodCode" TEXT NOT NULL,
+    "fileUrl" TEXT NOT NULL,
+    "storageBucket" TEXT NOT NULL,
+    "storageKey" TEXT NOT NULL,
+    "mimeType" TEXT NOT NULL,
+    "fileSize" BIGINT NOT NULL,
+    "fileType" TEXT NOT NULL,
+    "width" INTEGER,
+    "height" INTEGER,
+    "durationSeconds" DECIMAL(10,3),
+    "status" "ResultFileStatus" NOT NULL DEFAULT 'AVAILABLE',
+    "expiresAt" TIMESTAMP(3) NOT NULL,
+    "deletedAt" TIMESTAMP(3),
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "result_file_pkey" PRIMARY KEY ("id")
+);
+
 -- CreateIndex
 CREATE UNIQUE INDEX "user_email_key" ON "user"("email");
 
@@ -723,6 +845,33 @@ CREATE INDEX "task_userId_status_createdAt_idx" ON "task"("userId", "status", "c
 -- CreateIndex
 CREATE INDEX "task_status_createdAt_idx" ON "task"("status", "createdAt");
 
+-- CreateIndex
+CREATE INDEX "proxy_status_idx" ON "proxy"("status");
+
+-- CreateIndex
+CREATE INDEX "provider_account_providerId_status_idx" ON "provider_account"("providerId", "status");
+
+-- CreateIndex
+CREATE INDEX "provider_account_status_rotationEnabled_idx" ON "provider_account"("status", "rotationEnabled");
+
+-- CreateIndex
+CREATE INDEX "provider_attempt_taskId_attemptNumber_idx" ON "provider_attempt"("taskId", "attemptNumber");
+
+-- CreateIndex
+CREATE INDEX "provider_attempt_providerAccountId_startedAt_idx" ON "provider_attempt"("providerAccountId", "startedAt");
+
+-- CreateIndex
+CREATE INDEX "provider_attempt_status_idx" ON "provider_attempt"("status");
+
+-- CreateIndex
+CREATE INDEX "result_file_userId_createdAt_idx" ON "result_file"("userId", "createdAt");
+
+-- CreateIndex
+CREATE INDEX "result_file_taskId_idx" ON "result_file"("taskId");
+
+-- CreateIndex
+CREATE INDEX "result_file_status_expiresAt_idx" ON "result_file"("status", "expiresAt");
+
 -- AddForeignKey
 ALTER TABLE "account" ADD CONSTRAINT "account_userId_fkey" FOREIGN KEY ("userId") REFERENCES "user"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
@@ -828,6 +977,15 @@ ALTER TABLE "task" ADD CONSTRAINT "task_apiRequestId_fkey" FOREIGN KEY ("apiRequ
 -- AddForeignKey
 ALTER TABLE "task" ADD CONSTRAINT "task_userId_fkey" FOREIGN KEY ("userId") REFERENCES "user"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
+-- AddForeignKey
+ALTER TABLE "provider_account" ADD CONSTRAINT "provider_account_providerId_fkey" FOREIGN KEY ("providerId") REFERENCES "provider"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "provider_account" ADD CONSTRAINT "provider_account_proxyId_fkey" FOREIGN KEY ("proxyId") REFERENCES "proxy"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "provider_attempt" ADD CONSTRAINT "provider_attempt_providerAccountId_fkey" FOREIGN KEY ("providerAccountId") REFERENCES "provider_account"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
 
 
 -- =============================================================================
@@ -837,10 +995,6 @@ ALTER TABLE "task" ADD CONSTRAINT "task_userId_fkey" FOREIGN KEY ("userId") REFE
 ALTER TABLE "wallet" ADD CONSTRAINT "wallet_available_units_nonneg" CHECK ("availableUnits" >= 0);
 ALTER TABLE "wallet" ADD CONSTRAINT "wallet_reserved_units_nonneg" CHECK ("reservedUnits" >= 0);
 CREATE UNIQUE INDEX "tariff_only_one_default" ON "tariff"("isDefault") WHERE "isDefault" = TRUE;
--- Coupon redemption uniqueness:
--- one redemption per (coupon,user,apiRequestId) when apiRequestId IS NOT NULL
 CREATE UNIQUE INDEX "coupon_redemption_request_unique" ON "coupon_redemption"("couponId","userId","apiRequestId") WHERE "apiRequestId" IS NOT NULL;
--- one redemption per (coupon,user,depositId) when depositId IS NOT NULL
 CREATE UNIQUE INDEX "coupon_redemption_deposit_unique" ON "coupon_redemption"("couponId","userId","depositId") WHERE "depositId" IS NOT NULL;
--- standalone redemption uniqueness when both context fields are NULL (FIXED_AMOUNT/BONUS_MONEY)
 CREATE UNIQUE INDEX "coupon_redemption_standalone_unique" ON "coupon_redemption"("couponId","userId") WHERE "apiRequestId" IS NULL AND "depositId" IS NULL;

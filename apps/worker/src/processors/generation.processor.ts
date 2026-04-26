@@ -1,0 +1,645 @@
+// Real provider-dispatching generation worker (Stage 7).
+// Replaces stub-generation.processor.ts. Uses the worker-local adapter
+// registry to call Google Banana; falls back to provider_not_implemented
+// for providers without an adapter (Veo / Kling — Stages 8+9).
+import { Worker, type ConnectionOptions } from 'bullmq';
+import {
+  ApiRequestStatus,
+  ProviderAccountStatus,
+  ProxyStatus,
+  ReservationStatus,
+  ResultFileStatus,
+  TaskStatus,
+  TransactionType,
+} from '@aiagg/db';
+import type { PrismaClient } from '@aiagg/db';
+import type { WorkerAdapterRegistry } from '../adapters/registry';
+import {
+  AdapterError,
+  type AdapterContext,
+  type AdapterFile,
+} from '../adapters/types';
+import type { WorkerStorage } from '../storage/storage';
+
+const QUEUE = 'generation';
+const NOT_IMPLEMENTED = 'provider_not_implemented';
+const RESULT_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
+
+interface JobData {
+  taskId: string;
+}
+
+function parseRedisUrl(url: string): ConnectionOptions {
+  const u = new URL(url);
+  return {
+    host: u.hostname,
+    port: Number(u.port || 6379),
+    username: u.username || undefined,
+    password: u.password || undefined,
+    db: u.pathname && u.pathname.length > 1 ? Number(u.pathname.slice(1)) : 0,
+  };
+}
+
+export interface GenerationProcessorHandle {
+  worker: Worker<JobData>;
+  close: () => Promise<void>;
+}
+
+interface PublicError {
+  code: string;
+  message: string;
+}
+
+function classifyError(err: unknown): {
+  isAdapter: boolean;
+  kind: AdapterError['kind'] | 'unknown';
+  message: string;
+  retryable: boolean;
+  failAccount: boolean;
+  publicCode: string;
+} {
+  if (err instanceof AdapterError) {
+    const retryable = err.kind === 'rate_limit' || err.kind === 'temporary';
+    const failAccount =
+      err.kind === 'billing' ||
+      err.kind === 'quota' ||
+      err.kind === 'invalid_credentials';
+    const publicCode =
+      err.kind === 'validation'
+        ? 'invalid_parameter'
+        : err.kind === 'content_rejected'
+          ? 'content_rejected'
+          : err.kind === 'rate_limit'
+            ? 'provider_rate_limited'
+            : err.kind === 'quota'
+              ? 'provider_quota_exhausted'
+              : err.kind === 'invalid_credentials'
+                ? 'provider_invalid_credentials'
+                : err.kind === 'billing'
+                  ? 'provider_billing_error'
+                  : err.kind === 'temporary'
+                    ? 'provider_temporary_error'
+                    : 'provider_error';
+    return {
+      isAdapter: true,
+      kind: err.kind,
+      message: err.message,
+      retryable,
+      failAccount,
+      publicCode,
+    };
+  }
+  return {
+    isAdapter: false,
+    kind: 'unknown',
+    message: err instanceof Error ? err.message : String(err),
+    retryable: false,
+    failAccount: false,
+    publicCode: 'internal_error',
+  };
+}
+
+function reasonFromKind(kind: AdapterError['kind']): string {
+  switch (kind) {
+    case 'billing':
+      return 'provider_billing_error';
+    case 'quota':
+      return 'provider_quota_exhausted';
+    case 'invalid_credentials':
+      return 'invalid_credentials';
+    case 'rate_limit':
+      return 'rate_limit';
+    case 'temporary':
+      return 'temporary_error';
+    case 'validation':
+      return 'validation';
+    case 'content_rejected':
+      return 'content_rejected';
+    default:
+      return 'unknown';
+  }
+}
+
+async function pickAccount(
+  prisma: PrismaClient,
+  providerId: string,
+  modelId: string,
+  methodId: string,
+  excludeIds: string[],
+): Promise<{
+  id: string;
+  credentials: Record<string, unknown>;
+  proxyId: string | null;
+} | null> {
+  const candidates = await prisma.providerAccount.findMany({
+    where: {
+      providerId,
+      status: ProviderAccountStatus.ACTIVE,
+      rotationEnabled: true,
+      ...(excludeIds.length > 0 ? { id: { notIn: excludeIds } } : {}),
+    },
+    orderBy: { createdAt: 'asc' },
+  });
+  for (const a of candidates) {
+    if (
+      a.supportedModelIds.length > 0 &&
+      !a.supportedModelIds.includes(modelId)
+    ) {
+      continue;
+    }
+    if (
+      a.supportedMethodIds.length > 0 &&
+      !a.supportedMethodIds.includes(methodId)
+    ) {
+      continue;
+    }
+    return {
+      id: a.id,
+      credentials: (a.credentials ?? {}) as Record<string, unknown>,
+      proxyId: a.proxyId,
+    };
+  }
+  return null;
+}
+
+async function captureReservation(
+  prisma: PrismaClient,
+  taskId: string,
+): Promise<void> {
+  const reservation = await prisma.reservation.findFirst({
+    where: { taskId, status: ReservationStatus.PENDING },
+  });
+  if (!reservation) return;
+  const idemKey = `reservation:${reservation.id}:capture`;
+  await prisma.$transaction(async (tx) => {
+    const existing = await tx.idempotencyRecord.findUnique({
+      where: { scope_key: { scope: 'reservation.capture', key: idemKey } },
+    });
+    if (existing && existing.responseStatus !== 0) return;
+    const wallet = await tx.wallet.findUnique({
+      where: { id: reservation.walletId },
+    });
+    if (!wallet) return;
+    const captureUnits = reservation.amountUnits;
+    const newReserved = wallet.reservedUnits - captureUnits;
+    const newAvailable = wallet.availableUnits;
+    const updated = await tx.wallet.updateMany({
+      where: { id: wallet.id, version: wallet.version },
+      data: {
+        reservedUnits: newReserved,
+        availableUnits: newAvailable,
+        version: { increment: 1 },
+      },
+    });
+    if (updated.count !== 1) {
+      throw new Error(
+        `wallet version conflict during capture (wallet=${wallet.id})`,
+      );
+    }
+    await tx.reservation.update({
+      where: { id: reservation.id },
+      data: {
+        status: ReservationStatus.CAPTURED,
+        capturedUnits: captureUnits,
+        capturedAt: new Date(),
+      },
+    });
+    await tx.transaction.create({
+      data: {
+        walletId: wallet.id,
+        userId: reservation.userId,
+        type: TransactionType.RESERVATION_CAPTURE,
+        currency: reservation.currency,
+        amountUnits: -captureUnits,
+        balanceAfterUnits: newAvailable,
+        reservedAfterUnits: newReserved,
+        reservationId: reservation.id,
+        taskId: reservation.taskId,
+        bundleKey: reservation.bundleKey,
+        pricingSnapshotId: reservation.pricingSnapshotId,
+        description: 'Reservation capture',
+        idempotencyKey: idemKey,
+        idempotencyScope: 'reservation.capture',
+      },
+    });
+    await tx.idempotencyRecord.upsert({
+      where: { scope_key: { scope: 'reservation.capture', key: idemKey } },
+      update: { responseStatus: 200 },
+      create: {
+        scope: 'reservation.capture',
+        key: idemKey,
+        responseJson: { ok: true },
+        responseStatus: 200,
+      },
+    });
+  });
+}
+
+async function releaseReservation(
+  prisma: PrismaClient,
+  taskId: string,
+  note: string,
+): Promise<void> {
+  const reservation = await prisma.reservation.findFirst({
+    where: { taskId, status: ReservationStatus.PENDING },
+  });
+  if (!reservation) return;
+  const idemKey = `reservation:${reservation.id}:release`;
+  await prisma.$transaction(async (tx) => {
+    const existing = await tx.idempotencyRecord.findUnique({
+      where: { scope_key: { scope: 'reservation.release', key: idemKey } },
+    });
+    if (existing && existing.responseStatus !== 0) return;
+    const wallet = await tx.wallet.findUnique({
+      where: { id: reservation.walletId },
+    });
+    if (!wallet) return;
+    const newReserved = wallet.reservedUnits - reservation.amountUnits;
+    const newAvailable = wallet.availableUnits + reservation.amountUnits;
+    const updated = await tx.wallet.updateMany({
+      where: { id: wallet.id, version: wallet.version },
+      data: {
+        reservedUnits: newReserved,
+        availableUnits: newAvailable,
+        version: { increment: 1 },
+      },
+    });
+    if (updated.count !== 1) {
+      throw new Error(
+        `wallet version conflict during release (wallet=${wallet.id})`,
+      );
+    }
+    await tx.reservation.update({
+      where: { id: reservation.id },
+      data: { status: ReservationStatus.RELEASED, releasedAt: new Date() },
+    });
+    await tx.transaction.create({
+      data: {
+        walletId: wallet.id,
+        userId: reservation.userId,
+        type: TransactionType.RESERVATION_RELEASE,
+        currency: reservation.currency,
+        amountUnits: reservation.amountUnits,
+        balanceAfterUnits: newAvailable,
+        reservedAfterUnits: newReserved,
+        reservationId: reservation.id,
+        taskId: reservation.taskId,
+        bundleKey: reservation.bundleKey,
+        pricingSnapshotId: reservation.pricingSnapshotId,
+        description: `Reservation release (${note})`,
+        idempotencyKey: idemKey,
+        idempotencyScope: 'reservation.release',
+      },
+    });
+    await tx.idempotencyRecord.upsert({
+      where: { scope_key: { scope: 'reservation.release', key: idemKey } },
+      update: { responseStatus: 200 },
+      create: {
+        scope: 'reservation.release',
+        key: idemKey,
+        responseJson: { ok: true, note },
+        responseStatus: 200,
+      },
+    });
+  });
+}
+
+async function failTask(
+  prisma: PrismaClient,
+  taskId: string,
+  err: PublicError,
+): Promise<void> {
+  await prisma.$transaction(async (tx) => {
+    const task = await tx.task.findUnique({
+      where: { id: taskId },
+      include: { apiRequest: true },
+    });
+    if (!task) return;
+    if (
+      task.status === TaskStatus.SUCCEEDED ||
+      task.status === TaskStatus.FAILED ||
+      task.status === TaskStatus.CANCELLED
+    ) {
+      return;
+    }
+    await tx.task.update({
+      where: { id: taskId },
+      data: {
+        status: TaskStatus.FAILED,
+        errorCode: err.code,
+        errorMessage: err.message.slice(0, 1000),
+        finishedAt: new Date(),
+        attempts: { increment: 1 },
+      },
+    });
+    await tx.apiRequest.update({
+      where: { id: task.apiRequestId },
+      data: {
+        status: ApiRequestStatus.FINALIZED,
+        errorCode: err.code,
+        errorMessage: err.message.slice(0, 1000),
+        finalizedAt: new Date(),
+      },
+    });
+  });
+  await releaseReservation(prisma, taskId, err.code);
+}
+
+async function succeedTask(
+  prisma: PrismaClient,
+  opts: {
+    taskId: string;
+    apiRequestId: string;
+    userId: string;
+    providerSlug: string;
+    modelSlug: string;
+    methodCode: string;
+    files: AdapterFile[];
+  },
+): Promise<void> {
+  const expiresAt = new Date(Date.now() + RESULT_TTL_MS);
+  await prisma.$transaction(async (tx) => {
+    const created = await Promise.all(
+      opts.files.map((f) =>
+        tx.resultFile.create({
+          data: {
+            taskId: opts.taskId,
+            apiRequestId: opts.apiRequestId,
+            userId: opts.userId,
+            providerSlug: opts.providerSlug,
+            modelSlug: opts.modelSlug,
+            methodCode: opts.methodCode,
+            fileUrl: f.url,
+            storageBucket: f.bucket,
+            storageKey: f.key,
+            mimeType: f.mimeType,
+            fileSize: BigInt(f.size),
+            fileType: f.fileType,
+            width: f.width ?? null,
+            height: f.height ?? null,
+            durationSeconds: f.durationSeconds ?? null,
+            status: ResultFileStatus.AVAILABLE,
+            expiresAt,
+          },
+        }),
+      ),
+    );
+    const fileViews = created.map((c) => ({
+      id: c.id,
+      url: c.fileUrl,
+      mimeType: c.mimeType,
+      fileType: c.fileType,
+      sizeBytes: c.fileSize.toString(),
+      width: c.width,
+      height: c.height,
+      durationSeconds: c.durationSeconds?.toString() ?? null,
+      expiresAt: c.expiresAt.toISOString(),
+    }));
+    await tx.task.update({
+      where: { id: opts.taskId },
+      data: {
+        status: TaskStatus.SUCCEEDED,
+        finishedAt: new Date(),
+        attempts: { increment: 1 },
+        resultData: { files: fileViews },
+        resultFiles: fileViews,
+      },
+    });
+    await tx.apiRequest.update({
+      where: { id: opts.apiRequestId },
+      data: {
+        status: ApiRequestStatus.FINALIZED,
+        finalizedAt: new Date(),
+      },
+    });
+  });
+  await captureReservation(prisma, opts.taskId);
+}
+
+export function createGenerationWorker(opts: {
+  redisUrl: string;
+  prisma: PrismaClient;
+  storage: WorkerStorage;
+  registry: WorkerAdapterRegistry;
+}): GenerationProcessorHandle {
+  const connection = parseRedisUrl(opts.redisUrl);
+  const { prisma, storage, registry } = opts;
+  void storage; // referenced via registry; kept here for symmetry/logging
+
+  const worker = new Worker<JobData>(
+    QUEUE,
+    async (job) => {
+      const { taskId } = job.data;
+
+      const task = await prisma.task.findUnique({
+        where: { id: taskId },
+        include: { apiRequest: true },
+      });
+      if (!task) return;
+      if (
+        task.status === TaskStatus.SUCCEEDED ||
+        task.status === TaskStatus.FAILED ||
+        task.status === TaskStatus.CANCELLED
+      ) {
+        return;
+      }
+
+      const method = await prisma.method.findUnique({
+        where: { id: task.methodId },
+        include: { provider: true, model: true },
+      });
+      if (!method) {
+        await failTask(prisma, taskId, {
+          code: 'method_not_found',
+          message: `Method ${task.methodId} not found`,
+        });
+        return;
+      }
+
+      const adapter = registry.find(
+        method.provider.code,
+        method.model.code,
+        method.code,
+      );
+      if (!adapter) {
+        await failTask(prisma, taskId, {
+          code: NOT_IMPLEMENTED,
+          message: `No adapter for ${method.provider.code}/${method.model.code}/${method.code}`,
+        });
+        return;
+      }
+
+      // Mark task as processing
+      await prisma.task.update({
+        where: { id: taskId },
+        data: { status: TaskStatus.PROCESSING, startedAt: new Date() },
+      });
+
+      const tried: string[] = [];
+      let attemptNumber = await prisma.providerAttempt.count({
+        where: { taskId },
+      });
+      const params = (task.apiRequest.paramsRaw ?? {}) as Record<string, unknown>;
+
+      // Try up to 2 accounts: switch only on billing/quota/invalid_credentials
+      for (let attempt = 0; attempt < 2; attempt++) {
+        const acc = await pickAccount(
+          prisma,
+          method.providerId,
+          method.modelId,
+          method.id,
+          tried,
+        );
+        if (!acc) {
+          await failTask(prisma, taskId, {
+            code: 'no_available_provider_account',
+            message: 'No active provider account matches this task',
+          });
+          return;
+        }
+        tried.push(acc.id);
+
+        let proxyCtx: AdapterContext['proxy'] | undefined;
+        if (acc.proxyId) {
+          const proxy = await prisma.proxy.findUnique({
+            where: { id: acc.proxyId },
+          });
+          if (!proxy || proxy.status !== ProxyStatus.ACTIVE) {
+            await failTask(prisma, taskId, {
+              code: 'proxy_unavailable',
+              message: `Proxy for account ${acc.id} not active`,
+            });
+            return;
+          }
+          proxyCtx = {
+            host: proxy.host,
+            port: proxy.port,
+            protocol: proxy.protocol,
+            login: proxy.login ?? undefined,
+            password: proxy.passwordHash ?? undefined,
+          };
+        }
+
+        attemptNumber += 1;
+        const attemptStart = new Date();
+        const attemptRow = await prisma.providerAttempt.create({
+          data: {
+            taskId,
+            attemptNumber,
+            providerId: method.providerId,
+            providerAccountId: acc.id,
+            proxyId: acc.proxyId,
+            status: 'started',
+            startedAt: attemptStart,
+          },
+        });
+
+        try {
+          const result = await adapter.execute({
+            taskId,
+            apiRequestId: task.apiRequestId,
+            userId: task.userId,
+            provider: { id: method.providerId, code: method.provider.code },
+            model: { id: method.modelId, code: method.model.code },
+            method: { id: method.id, code: method.code },
+            params,
+            account: { id: acc.id, credentials: acc.credentials },
+            proxy: proxyCtx,
+          });
+          const finishedAt = new Date();
+          await prisma.providerAttempt.update({
+            where: { id: attemptRow.id },
+            data: {
+              status: 'success',
+              finishedAt,
+              durationMs: finishedAt.getTime() - attemptStart.getTime(),
+            },
+          });
+          await prisma.providerAccount
+            .update({
+              where: { id: acc.id },
+              data: {
+                lastSuccessAt: finishedAt,
+                todayRequestsCount: { increment: 1 },
+                monthRequestsCount: { increment: 1 },
+              },
+            })
+            .catch(() => undefined);
+
+          await succeedTask(prisma, {
+            taskId,
+            apiRequestId: task.apiRequestId,
+            userId: task.userId,
+            providerSlug: method.provider.code,
+            modelSlug: method.model.code,
+            methodCode: method.code,
+            files: result.files ?? [],
+          });
+          return;
+        } catch (err) {
+          const c = classifyError(err);
+          const finishedAt = new Date();
+          await prisma.providerAttempt.update({
+            where: { id: attemptRow.id },
+            data: {
+              status: 'failed',
+              errorType: reasonFromKind(c.kind as AdapterError['kind']),
+              errorCode: c.publicCode,
+              errorMessage: c.message.slice(0, 4000),
+              finishedAt,
+              durationMs: finishedAt.getTime() - attemptStart.getTime(),
+            },
+          });
+
+          if (c.failAccount) {
+            await prisma.providerAccount
+              .update({
+                where: { id: acc.id },
+                data: {
+                  status:
+                    c.kind === 'billing'
+                      ? ProviderAccountStatus.EXCLUDED_BY_BILLING
+                      : c.kind === 'quota'
+                        ? ProviderAccountStatus.QUOTA_EXHAUSTED
+                        : ProviderAccountStatus.INVALID_CREDENTIALS,
+                  lastErrorAt: finishedAt,
+                  lastErrorMessage: c.message.slice(0, 1000),
+                  excludedReason: reasonFromKind(c.kind as AdapterError['kind']),
+                },
+              })
+              .catch(() => undefined);
+            // try the next account
+            continue;
+          }
+
+          // Non-account-fatal: fail immediately
+          await failTask(prisma, taskId, {
+            code: c.publicCode,
+            message: c.message,
+          });
+          return;
+        }
+      }
+
+      // Both attempts exhausted on account-level failures
+      await failTask(prisma, taskId, {
+        code: 'no_available_provider_account',
+        message: 'All matching provider accounts failed (billing/quota/credentials)',
+      });
+    },
+    { connection, concurrency: 5 },
+  );
+
+  worker.on('failed', (job, err) => {
+    console.error(
+      `[generation-worker] job ${job?.id ?? '?'} failed: ${err.message}`,
+    );
+  });
+
+  return {
+    worker,
+    close: async () => {
+      await worker.close();
+    },
+  };
+}

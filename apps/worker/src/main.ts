@@ -1,15 +1,36 @@
-// Worker entry point. Stage 6 wires the stub-generation processor; real
-// provider adapters (Banana, Veo, Kling) will be added in Stages 7-9.
+// Worker entry point. Stage 7 wires the real generation processor with the
+// Google Banana adapter. Stages 8/9 will plug Veo and Kling adapters into
+// the same registry.
 import { PrismaClient } from '@aiagg/db';
-import { createStubGenerationWorker } from './processors/stub-generation.processor';
+import { createGenerationWorker } from './processors/generation.processor';
+import { WorkerAdapterRegistry } from './adapters/registry';
+import { WorkerStorage } from './storage/storage';
 
 async function main(): Promise<void> {
   const redisUrl = process.env.REDIS_URL ?? 'redis://localhost:6379';
   const prisma = new PrismaClient();
   await prisma.$connect();
 
-  const handle = createStubGenerationWorker({ redisUrl, prisma });
-  console.log('[worker] stub-generation processor started');
+  const storage = WorkerStorage.fromEnv();
+  // Best-effort bucket bootstrap. Don't crash the worker if MinIO isn't ready
+  // yet — adapter calls will retry on first use.
+  try {
+    await storage.ensureBucket();
+  } catch (err) {
+    console.warn(
+      `[worker] storage init warning: ${err instanceof Error ? err.message : String(err)}`,
+    );
+  }
+
+  const registry = new WorkerAdapterRegistry(storage);
+
+  const handle = createGenerationWorker({
+    redisUrl,
+    prisma,
+    storage,
+    registry,
+  });
+  console.log('[worker] generation processor started (Stage 7)');
 
   const shutdown = async (): Promise<void> => {
     console.log('[worker] shutting down...');

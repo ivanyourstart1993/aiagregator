@@ -38,6 +38,17 @@ export const envSchema = z
 
     SEED_SUPERADMIN_EMAIL: z.string().email().default('admin@example.com'),
     SEED_SUPERADMIN_PASSWORD: z.string().default('change-me-on-first-login'),
+
+    // Stage 7+ — object storage (MinIO / S3-compatible)
+    S3_ENDPOINT: z.string().default('http://localhost:9000'),
+    S3_REGION: z.string().default('us-east-1'),
+    S3_ACCESS_KEY: z.string().default('minioadmin'),
+    S3_SECRET_KEY: z.string().default('minioadmin'),
+    S3_BUCKET: z.string().default('aiagg-results'),
+    S3_FORCE_PATH_STYLE: z.string().default('true'),
+
+    // Stage 7 — single-key fallback (later moved into ProviderAccount.credentials)
+    GOOGLE_BANANA_API_KEY: z.string().optional().or(z.literal('').transform(() => undefined)),
   })
   .passthrough();
 
