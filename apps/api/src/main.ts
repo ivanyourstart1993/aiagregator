@@ -30,11 +30,12 @@ async function bootstrap(): Promise<void> {
     credentials: true,
   });
 
+  // Global ValidationPipe: keep `transform: true` (so class-validator DTOs
+  // get type coercion) but DO NOT whitelist — Zod-based routes use their own
+  // pipe and shouldn't have request bodies stripped before Zod sees them.
   app.useGlobalPipes(
     new ValidationPipe({
-      whitelist: true,
       transform: true,
-      forbidNonWhitelisted: true,
     }),
   );
 

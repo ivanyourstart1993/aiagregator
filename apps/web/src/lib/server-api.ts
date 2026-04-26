@@ -527,9 +527,11 @@ export const serverApi = {
     apiGet<CouponRedemptionsPage>(`/internal/admin/coupons/redemptions${qs({ ...filters })}`),
 
   // ---- Stage 5: Catalog (public) ----
-  catalogListProviders: () => apiGet<ProviderView[]>('/internal/catalog/providers'),
-  catalogListMethods: (filters?: { provider?: string; model?: string }) =>
-    apiGet<MethodView[]>(`/internal/catalog/methods${qs({ ...filters })}`),
+  // API returns { items: [...] } envelope; unwrap on the client.
+  catalogListProviders: async (): Promise<ProviderView[]> =>
+    (await apiGet<{ items: ProviderView[] }>('/internal/catalog/providers')).items,
+  catalogListMethods: async (filters?: { provider?: string; model?: string }): Promise<MethodView[]> =>
+    (await apiGet<{ items: MethodView[] }>(`/internal/catalog/methods${qs({ ...filters })}`)).items,
   catalogGetMethod: (provider: string, model: string, method: string) =>
     apiGet<MethodView>(
       `/internal/catalog/methods/${encodeURIComponent(provider)}/${encodeURIComponent(model)}/${encodeURIComponent(method)}`,
