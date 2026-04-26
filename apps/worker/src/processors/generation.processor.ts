@@ -2,7 +2,7 @@
 // Replaces stub-generation.processor.ts. Uses the worker-local adapter
 // registry to call Google Banana; falls back to provider_not_implemented
 // for providers without an adapter (Veo / Kling — Stages 8+9).
-import { Worker, type ConnectionOptions } from 'bullmq';
+import { Queue, Worker, type ConnectionOptions } from 'bullmq';
 import {
   ApiRequestStatus,
   ProviderAccountStatus,
@@ -22,8 +22,11 @@ import {
 import type { WorkerStorage } from '../storage/storage';
 
 const QUEUE = 'generation';
+const CALLBACK_QUEUE = 'callback';
+const DLQ = 'generation-dead-letter';
 const NOT_IMPLEMENTED = 'provider_not_implemented';
 const RESULT_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
+const MAX_ATTEMPTS = 3;
 
 interface JobData {
   taskId: string;
@@ -162,9 +165,74 @@ async function pickAccount(
   return null;
 }
 
+// Compute provider cost via ProviderRateCard fallback if adapter didn't report.
+// Mirrors RateCardService.getCost() in apps/api but inlined to avoid cross-app
+// imports (worker is a separate Nest-less BullMQ runner).
+async function computeProviderCostFallback(
+  prisma: PrismaClient,
+  providerId: string,
+  modelId: string,
+  methodId: string,
+  params: Record<string, unknown>,
+): Promise<bigint | null> {
+  const now = new Date();
+  const candidates = await prisma.providerRateCard.findMany({
+    where: {
+      providerId,
+      status: 'ACTIVE',
+      validFrom: { lte: now },
+      OR: [{ validTo: null }, { validTo: { gte: now } }],
+    },
+    orderBy: { validFrom: 'desc' },
+  });
+  if (candidates.length === 0) return null;
+  const mode = (params.mode as string | undefined) ?? null;
+  const resolution = (params.resolution as string | undefined) ?? null;
+  const durationSeconds =
+    (params.durationSeconds as number | undefined) ??
+    (params.duration as number | undefined) ??
+    null;
+  const aspectRatio = (params.aspectRatio as string | undefined) ?? null;
+  const imagesCount = (params.numberOfImages as number | undefined) ?? 1;
+  const ranked = candidates
+    .map((c) => {
+      let score = 0;
+      if (c.modelId && c.modelId !== modelId) return { card: c, score: -1 };
+      if (c.methodId && c.methodId !== methodId) return { card: c, score: -1 };
+      if (c.mode && c.mode !== mode) return { card: c, score: -1 };
+      if (c.resolution && c.resolution !== resolution) return { card: c, score: -1 };
+      if (c.durationSeconds != null && c.durationSeconds !== durationSeconds) {
+        return { card: c, score: -1 };
+      }
+      if (c.aspectRatio && c.aspectRatio !== aspectRatio) return { card: c, score: -1 };
+      if (c.modelId) score += 8;
+      if (c.methodId) score += 4;
+      if (c.mode) score += 2;
+      if (c.resolution) score += 2;
+      if (c.durationSeconds != null) score += 1;
+      if (c.aspectRatio) score += 1;
+      return { card: c, score };
+    })
+    .filter((x) => x.score >= 0)
+    .sort((a, b) => b.score - a.score);
+  if (ranked.length === 0) return null;
+  const card = ranked[0]!.card;
+  switch (card.priceType) {
+    case 'PER_REQUEST':
+      return card.providerCostUnits ?? 0n;
+    case 'PER_SECOND':
+      return (card.pricePerSecond ?? 0n) * BigInt(durationSeconds ?? 0);
+    case 'PER_IMAGE':
+      return (card.pricePerImage ?? 0n) * BigInt(imagesCount ?? 1);
+    default:
+      return card.providerCostUnits ?? 0n;
+  }
+}
+
 async function captureReservation(
   prisma: PrismaClient,
   taskId: string,
+  providerCostUnits?: bigint | null,
 ): Promise<void> {
   const reservation = await prisma.reservation.findFirst({
     where: { taskId, status: ReservationStatus.PENDING },
@@ -218,6 +286,10 @@ async function captureReservation(
         bundleKey: reservation.bundleKey,
         pricingSnapshotId: reservation.pricingSnapshotId,
         description: 'Reservation capture',
+        metadata:
+          providerCostUnits != null
+            ? { providerCostUnits: providerCostUnits.toString() }
+            : undefined,
         idempotencyKey: idemKey,
         idempotencyScope: 'reservation.capture',
       },
@@ -355,6 +427,7 @@ async function succeedTask(
     modelSlug: string;
     methodCode: string;
     files: AdapterFile[];
+    providerCostUnits?: bigint | null;
   },
 ): Promise<void> {
   const expiresAt = new Date(Date.now() + RESULT_TTL_MS);
@@ -413,7 +486,7 @@ async function succeedTask(
       },
     });
   });
-  await captureReservation(prisma, opts.taskId);
+  await captureReservation(prisma, opts.taskId, opts.providerCostUnits ?? null);
 }
 
 export function createGenerationWorker(opts: {
@@ -425,6 +498,33 @@ export function createGenerationWorker(opts: {
   const connection = parseRedisUrl(opts.redisUrl);
   const { prisma, storage, registry } = opts;
   void storage; // referenced via registry; kept here for symmetry/logging
+  const callbackQueue = new Queue(CALLBACK_QUEUE, { connection });
+  const dlq = new Queue(DLQ, { connection });
+
+  async function enqueueCallback(apiRequestId: string): Promise<void> {
+    if (!apiRequestId) return;
+    try {
+      await callbackQueue.add(
+        'dispatch',
+        { apiRequestId },
+        {
+          attempts: Number(process.env.CALLBACK_MAX_ATTEMPTS ?? 5),
+          backoff: {
+            type: 'exponential',
+            delay: Number(process.env.CALLBACK_BACKOFF_MS ?? 2000),
+          },
+          removeOnComplete: { age: 3600, count: 1000 },
+          removeOnFail: { age: 86400, count: 5000 },
+        },
+      );
+    } catch (err) {
+      console.warn(
+        `[generation-worker] failed to enqueue callback for ${apiRequestId}: ${
+          err instanceof Error ? err.message : String(err)
+        }`,
+      );
+    }
+  }
 
   const worker = new Worker<JobData>(
     QUEUE,
@@ -453,6 +553,7 @@ export function createGenerationWorker(opts: {
           code: 'method_not_found',
           message: `Method ${task.methodId} not found`,
         });
+        await enqueueCallback(task.apiRequestId);
         return;
       }
 
@@ -466,6 +567,7 @@ export function createGenerationWorker(opts: {
           code: NOT_IMPLEMENTED,
           message: `No adapter for ${method.provider.code}/${method.model.code}/${method.code}`,
         });
+        await enqueueCallback(task.apiRequestId);
         return;
       }
 
@@ -495,6 +597,7 @@ export function createGenerationWorker(opts: {
             code: 'no_available_provider_account',
             message: 'No active provider account matches this task',
           });
+          await enqueueCallback(task.apiRequestId);
           return;
         }
         tried.push(acc.id);
@@ -509,6 +612,7 @@ export function createGenerationWorker(opts: {
               code: 'proxy_unavailable',
               message: `Proxy for account ${acc.id} not active`,
             });
+            await enqueueCallback(task.apiRequestId);
             return;
           }
           proxyCtx = {
@@ -547,12 +651,25 @@ export function createGenerationWorker(opts: {
             proxy: proxyCtx,
           });
           const finishedAt = new Date();
+          // Resolve provider cost: adapter-reported wins; otherwise look up
+          // ProviderRateCard. Stored on ProviderAttempt for analytics.
+          let providerCostUnits: bigint | null = result.providerCostUnits ?? null;
+          if (providerCostUnits == null) {
+            providerCostUnits = await computeProviderCostFallback(
+              prisma,
+              method.providerId,
+              method.modelId,
+              method.id,
+              params,
+            ).catch(() => null);
+          }
           await prisma.providerAttempt.update({
             where: { id: attemptRow.id },
             data: {
               status: 'success',
               finishedAt,
               durationMs: finishedAt.getTime() - attemptStart.getTime(),
+              providerCostUnits: providerCostUnits ?? undefined,
             },
           });
           await prisma.providerAccount
@@ -603,7 +720,9 @@ export function createGenerationWorker(opts: {
             modelSlug: method.model.code,
             methodCode: method.code,
             files: result.files ?? [],
+            providerCostUnits,
           });
+          await enqueueCallback(task.apiRequestId);
           return;
         } catch (err) {
           const c = classifyError(err);
@@ -641,11 +760,18 @@ export function createGenerationWorker(opts: {
             continue;
           }
 
+          // Retryable transient errors: rethrow so BullMQ applies backoff.
+          // Final attempt falls through to terminal-fail path.
+          if (c.retryable && (job.attemptsMade ?? 0) < MAX_ATTEMPTS - 1) {
+            throw err;
+          }
+
           // Non-account-fatal: fail immediately
           await failTask(prisma, taskId, {
             code: c.publicCode,
             message: c.message,
           });
+          await enqueueCallback(task.apiRequestId);
           return;
         }
       }
@@ -655,6 +781,7 @@ export function createGenerationWorker(opts: {
         code: 'no_available_provider_account',
         message: 'All matching provider accounts failed (billing/quota/credentials)',
       });
+      await enqueueCallback(task.apiRequestId);
     },
     { connection, concurrency: 5 },
   );
@@ -663,12 +790,50 @@ export function createGenerationWorker(opts: {
     console.error(
       `[generation-worker] job ${job?.id ?? '?'} failed: ${err.message}`,
     );
+    if (!job) return;
+    const attemptsMade = job.attemptsMade ?? 0;
+    if (attemptsMade >= MAX_ATTEMPTS) {
+      // Move data into DLQ for inspection / manual retry.
+      dlq
+        .add('generation-dlq', job.data, {
+          removeOnComplete: 1000,
+          removeOnFail: 5000,
+          attempts: 1,
+        })
+        .catch(() => undefined);
+      // Best-effort: terminate the task and release its reservation so the
+      // user is not stuck holding funds. Idempotent — failTask is a no-op
+      // if the task already moved to a terminal status.
+      const data = job.data as JobData | undefined;
+      if (data?.taskId) {
+        void (async () => {
+          try {
+            await failTask(prisma, data.taskId, {
+              code: 'dead_letter',
+              message: `Job exhausted ${attemptsMade} attempts: ${err.message}`,
+            });
+            await enqueueCallback(
+              (
+                await prisma.task.findUnique({
+                  where: { id: data.taskId },
+                  select: { apiRequestId: true },
+                })
+              )?.apiRequestId ?? '',
+            );
+          } catch {
+            /* swallow — best-effort cleanup */
+          }
+        })();
+      }
+    }
   });
 
   return {
     worker,
     close: async () => {
       await worker.close();
+      await callbackQueue.close();
+      await dlq.close();
     },
   };
 }

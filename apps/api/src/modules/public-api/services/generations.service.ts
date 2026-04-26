@@ -195,9 +195,10 @@ export class GenerationsService {
         { taskId },
         {
           jobId: `task:${taskId}`,
-          attempts: 1,
-          removeOnComplete: { age: 3600, count: 1000 },
-          removeOnFail: { age: 86400, count: 1000 },
+          attempts: 3,
+          backoff: { type: 'exponential', delay: 5000 },
+          removeOnComplete: 100,
+          removeOnFail: 1000,
         },
       );
     } catch (err) {

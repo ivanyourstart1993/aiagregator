@@ -27,6 +27,8 @@ import { CouponsModule } from './modules/coupons/coupons.module';
 import { CatalogModule } from './modules/catalog/catalog.module';
 import { PublicApiModule } from './modules/public-api/public-api.module';
 import { ProvidersModule } from './modules/providers/providers.module';
+import { RateCardsModule } from './modules/rate-cards/rate-cards.module';
+import { AnalyticsModule } from './modules/analytics/analytics.module';
 import { RedisModule } from './common/redis/redis.module';
 import { StorageModule } from './common/storage/storage.module';
 
@@ -77,6 +79,8 @@ import { StorageModule } from './common/storage/storage.module';
     CatalogModule,
     PublicApiModule,
     ProvidersModule,
+    RateCardsModule,
+    AnalyticsModule,
   ],
   providers: [
     { provide: APP_FILTER, useClass: PublicErrorFilter },

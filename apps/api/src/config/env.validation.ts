@@ -49,6 +49,11 @@ export const envSchema = z
 
     // Stage 7 — single-key fallback (later moved into ProviderAccount.credentials)
     GOOGLE_BANANA_API_KEY: z.string().optional().or(z.literal('').transform(() => undefined)),
+
+    // Stage 10 — webhook callback dispatch
+    WEBHOOK_SECRET: z.string().min(16).default('dev-webhook-secret-change-me'),
+    CALLBACK_MAX_ATTEMPTS: z.coerce.number().int().positive().default(5),
+    CALLBACK_BACKOFF_MS: z.coerce.number().int().positive().default(2000),
   })
   .passthrough();
 

@@ -3,6 +3,7 @@
 // the same registry.
 import { PrismaClient } from '@aiagg/db';
 import { createGenerationWorker } from './processors/generation.processor';
+import { createCallbackWorker } from './processors/callback.processor';
 import { WorkerAdapterRegistry } from './adapters/registry';
 import { WorkerStorage } from './storage/storage';
 
@@ -32,10 +33,23 @@ async function main(): Promise<void> {
   });
   console.log('[worker] generation processor started (Stage 7)');
 
+  const callbackHandle = createCallbackWorker({
+    redisUrl,
+    prisma,
+    webhookSecret: process.env.WEBHOOK_SECRET ?? 'dev-webhook-secret-change-me',
+    maxAttempts: Number(process.env.CALLBACK_MAX_ATTEMPTS ?? 5),
+  });
+  console.log('[worker] callback processor started (Stage 10)');
+
   const shutdown = async (): Promise<void> => {
     console.log('[worker] shutting down...');
     try {
       await handle.close();
+    } catch {
+      /* swallow */
+    }
+    try {
+      await callbackHandle.close();
     } catch {
       /* swallow */
     }

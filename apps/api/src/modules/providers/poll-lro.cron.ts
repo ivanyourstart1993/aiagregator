@@ -18,7 +18,10 @@
 //      10 min) AND we haven't been able to read a definitive answer, fail
 //      with `external_task_timeout`.
 import { Injectable, Logger } from '@nestjs/common';
+import { InjectQueue } from '@nestjs/bullmq';
 import { Cron } from '@nestjs/schedule';
+import { Queue } from 'bullmq';
+import { CALLBACK_QUEUE } from '../bullmq/queue.constants';
 import {
   ApiRequestStatus,
   ProxyStatus,
@@ -29,6 +32,7 @@ import {
 } from '@aiagg/db';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { AdapterRegistry } from './adapters/adapter-registry';
+import { RateCardService } from '../rate-cards/rate-cards.service';
 import {
   AdapterError,
   type AdapterContext,
@@ -46,7 +50,33 @@ export class PollLroCron {
   constructor(
     private readonly prisma: PrismaService,
     private readonly registry: AdapterRegistry,
+    private readonly rateCards: RateCardService,
+    @InjectQueue(CALLBACK_QUEUE) private readonly callbackQueue: Queue,
   ) {}
+
+  private async enqueueCallback(apiRequestId: string): Promise<void> {
+    try {
+      await this.callbackQueue.add(
+        'dispatch',
+        { apiRequestId },
+        {
+          attempts: Number(process.env.CALLBACK_MAX_ATTEMPTS ?? 5),
+          backoff: {
+            type: 'exponential',
+            delay: Number(process.env.CALLBACK_BACKOFF_MS ?? 2000),
+          },
+          removeOnComplete: { age: 3600, count: 1000 },
+          removeOnFail: { age: 86400, count: 5000 },
+        },
+      );
+    } catch (err) {
+      this.logger.warn(
+        `failed to enqueue callback for ${apiRequestId}: ${
+          err instanceof Error ? err.message : String(err)
+        }`,
+      );
+    }
+  }
 
   @Cron('*/15 * * * * *')
   async tick(): Promise<void> {
@@ -102,6 +132,7 @@ export class PollLroCron {
         code: 'method_not_found',
         message: `Method ${task.methodId} not found`,
       });
+      await this.enqueueCallback(task.apiRequestId);
       return;
     }
     const adapter = this.registry.find(
@@ -114,6 +145,7 @@ export class PollLroCron {
         code: 'provider_not_implemented',
         message: `No polling adapter for ${method.provider.code}/${method.model.code}/${method.code}`,
       });
+      await this.enqueueCallback(task.apiRequestId);
       return;
     }
 
@@ -127,6 +159,7 @@ export class PollLroCron {
         code: 'no_provider_attempt',
         message: 'No provider attempt found for polling',
       });
+      await this.enqueueCallback(task.apiRequestId);
       return;
     }
     const account = await this.prisma.providerAccount.findUnique({
@@ -137,6 +170,7 @@ export class PollLroCron {
         code: 'no_available_provider_account',
         message: `Provider account ${attempt.providerAccountId} not found`,
       });
+      await this.enqueueCallback(task.apiRequestId);
       return;
     }
     let proxyCtx: AdapterContext['proxy'] | undefined;
@@ -183,10 +217,30 @@ export class PollLroCron {
             code: 'external_task_timeout',
             message: `LRO ${task.providerJobId} exceeded ${timeoutMs}ms`,
           });
+          await this.enqueueCallback(task.apiRequestId);
         }
         return;
       }
       const files = result.files ?? [];
+      // Resolve provider cost from adapter result or rate card.
+      let providerCostUnits: bigint | null = result.providerCostUnits ?? null;
+      if (providerCostUnits == null) {
+        const cost = await this.rateCards
+          .getCost(method.providerId, method.modelId, method.id, {
+            mode: (params.mode as string | undefined) ?? null,
+            resolution: (params.resolution as string | undefined) ?? null,
+            durationSeconds:
+              (params.durationSeconds as number | undefined) ??
+              (params.duration as number | undefined) ??
+              null,
+            aspectRatio: (params.aspectRatio as string | undefined) ?? null,
+            imagesCount: (params.numberOfImages as number | undefined) ?? 1,
+          })
+          .catch(() => null);
+        if (cost && cost.source === 'rate_card') {
+          providerCostUnits = cost.providerCostUnits;
+        }
+      }
       await this.succeedTask({
         taskId: task.id,
         apiRequestId: task.apiRequestId,
@@ -195,7 +249,9 @@ export class PollLroCron {
         modelSlug: method.model.code,
         methodCode: method.code,
         files,
+        providerCostUnits,
       });
+      await this.enqueueCallback(task.apiRequestId);
       await this.prisma.providerAttempt
         .update({
           where: { id: attempt.id },
@@ -204,6 +260,7 @@ export class PollLroCron {
             finishedAt: new Date(),
             durationMs:
               Date.now() - (attempt.startedAt?.getTime() ?? Date.now()),
+            providerCostUnits: providerCostUnits ?? undefined,
           },
         })
         .catch(() => undefined);
@@ -214,6 +271,7 @@ export class PollLroCron {
           code: publicCode,
           message: err.message,
         });
+        await this.enqueueCallback(task.apiRequestId);
         await this.prisma.providerAttempt
           .update({
             where: { id: attempt.id },
@@ -247,6 +305,7 @@ export class PollLroCron {
     modelSlug: string;
     methodCode: string;
     files: AdapterFile[];
+    providerCostUnits?: bigint | null;
   }): Promise<void> {
     const expiresAt = new Date(Date.now() + RESULT_TTL_MS);
     await this.prisma.$transaction(async (tx) => {
@@ -304,7 +363,7 @@ export class PollLroCron {
         },
       });
     });
-    await this.captureReservation(opts.taskId);
+    await this.captureReservation(opts.taskId, opts.providerCostUnits ?? null);
   }
 
   private async failTask(
@@ -344,7 +403,10 @@ export class PollLroCron {
     await this.releaseReservation(taskId, err.code);
   }
 
-  private async captureReservation(taskId: string): Promise<void> {
+  private async captureReservation(
+    taskId: string,
+    providerCostUnits?: bigint | null,
+  ): Promise<void> {
     const reservation = await this.prisma.reservation.findFirst({
       where: { taskId, status: ReservationStatus.PENDING },
     });
@@ -397,6 +459,10 @@ export class PollLroCron {
           bundleKey: reservation.bundleKey,
           pricingSnapshotId: reservation.pricingSnapshotId,
           description: 'Reservation capture',
+          metadata:
+            providerCostUnits != null
+              ? { providerCostUnits: providerCostUnits.toString() }
+              : undefined,
           idempotencyKey: idemKey,
           idempotencyScope: 'reservation.capture',
         },

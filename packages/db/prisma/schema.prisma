@@ -628,9 +628,10 @@ model Provider {
   createdAt   DateTime      @default(now())
   updatedAt   DateTime      @updatedAt
 
-  models   Model[]
-  methods  Method[]
-  accounts ProviderAccount[]
+  models     Model[]
+  methods    Method[]
+  accounts   ProviderAccount[]
+  rateCards  ProviderRateCard[]
 
   @@index([status])
   @@map("provider")
@@ -880,20 +881,22 @@ model ProviderAccount {
 // History of provider call attempts per task. One Task may have multiple attempts
 // when we switch accounts on billing/quota/temporary errors.
 model ProviderAttempt {
-  id                String    @id @default(cuid())
-  taskId            String
-  attemptNumber     Int       @default(1)
-  providerId        String
-  providerAccountId String?
-  proxyId           String?
-  status            String    // 'success' | 'failed' | 'switched' | ...
-  errorType         String?   // 'provider_billing_error', 'provider_quota_exhausted', etc.
-  errorCode         String?
-  errorMessage      String?   @db.Text
-  providerJobId     String?
-  startedAt         DateTime  @default(now())
-  finishedAt        DateTime?
-  durationMs        Int?
+  id                 String    @id @default(cuid())
+  taskId             String
+  attemptNumber      Int       @default(1)
+  providerId         String
+  providerAccountId  String?
+  proxyId            String?
+  status             String    // 'success' | 'failed' | 'switched' | ...
+  errorType          String?   // 'provider_billing_error', 'provider_quota_exhausted', etc.
+  errorCode          String?
+  errorMessage       String?   @db.Text
+  providerJobId      String?
+  // Actual provider cost incurred for this attempt (nano-USD or provider unit).
+  providerCostUnits  BigInt?
+  startedAt          DateTime  @default(now())
+  finishedAt         DateTime?
+  durationMs         Int?
 
   providerAccount ProviderAccount? @relation(fields: [providerAccountId], references: [id])
 
@@ -940,4 +943,81 @@ model ResultFile {
   @@index([taskId])
   @@index([status, expiresAt])
   @@map("result_file")
+}
+
+// =============================================================================
+// STAGE 12 — PROVIDER RATE CARDS (cost/margin analytics)
+// =============================================================================
+
+enum RateCardPriceType {
+  PER_REQUEST
+  PER_SECOND
+  PER_TOKEN_INPUT
+  PER_TOKEN_OUTPUT
+  PER_IMAGE
+  CUSTOM
+}
+
+model ProviderRateCard {
+  id                  String            @id @default(cuid())
+  providerId          String
+  modelId             String?
+  methodId            String?
+  mode                String?
+  resolution          String?
+  durationSeconds     Int?
+  aspectRatio         String?
+  priceType           RateCardPriceType
+  // Provider's actual cost (in nano-USD or whatever unit they bill)
+  providerCostUnits   BigInt?
+  providerUnitCost    BigInt?
+  pricePerSecond      BigInt?
+  pricePerImage       BigInt?
+  pricePerTokenInput  BigInt?
+  pricePerTokenOutput BigInt?
+  batchDiscount       Int?
+  priorityMultiplier  Int?
+  currency            Currency          @default(USD)
+  providerCurrency    String?
+  validFrom           DateTime          @default(now())
+  validTo             DateTime?
+  status              CatalogStatus     @default(ACTIVE)
+  createdAt           DateTime          @default(now())
+  updatedAt           DateTime          @updatedAt
+
+  provider Provider @relation(fields: [providerId], references: [id], onDelete: Cascade)
+
+  @@index([providerId, modelId, methodId, status])
+  @@index([validFrom, validTo])
+  @@map("provider_rate_card")
+}
+
+// =============================================================================
+// STAGE 10 — WEBHOOK CALLBACK DELIVERIES
+// =============================================================================
+
+enum WebhookDeliveryStatus {
+  PENDING
+  SUCCESS
+  FAILED
+}
+
+model WebhookDelivery {
+  id             String                @id @default(cuid())
+  apiRequestId   String
+  taskId         String
+  url            String
+  attempt        Int                   @default(1)
+  status         WebhookDeliveryStatus @default(PENDING)
+  responseStatus Int?
+  responseBody   String?               @db.Text
+  errorMessage   String?               @db.Text
+  signature      String
+  payload        Json
+  createdAt      DateTime              @default(now())
+  finishedAt     DateTime?
+
+  @@index([apiRequestId])
+  @@index([status, createdAt])
+  @@map("webhook_delivery")
 }

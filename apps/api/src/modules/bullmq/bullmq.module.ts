@@ -2,7 +2,13 @@ import { BullModule } from '@nestjs/bullmq';
 import { Global, Module } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { ConnectionOptions } from 'bullmq';
-import { EMAIL_QUEUE, GENERATION_QUEUE } from './queue.constants';
+import {
+  CALLBACK_DLQ,
+  CALLBACK_QUEUE,
+  EMAIL_QUEUE,
+  GENERATION_DLQ,
+  GENERATION_QUEUE,
+} from './queue.constants';
 
 function parseRedisUrl(url: string): ConnectionOptions {
   const u = new URL(url);
@@ -26,6 +32,9 @@ function parseRedisUrl(url: string): ConnectionOptions {
     }),
     BullModule.registerQueue({ name: EMAIL_QUEUE }),
     BullModule.registerQueue({ name: GENERATION_QUEUE }),
+    BullModule.registerQueue({ name: CALLBACK_QUEUE }),
+    BullModule.registerQueue({ name: GENERATION_DLQ }),
+    BullModule.registerQueue({ name: CALLBACK_DLQ }),
   ],
   exports: [BullModule],
 })

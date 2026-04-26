@@ -33,6 +33,8 @@ export {
   ProxyStatus,
   ProxyProtocol,
   ResultFileStatus,
+  RateCardPriceType,
+  WebhookDeliveryStatus,
 } from '@prisma/client';
 
 export type * from '@prisma/client';
