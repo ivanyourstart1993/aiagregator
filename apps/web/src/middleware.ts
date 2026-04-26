@@ -38,6 +38,8 @@ export default async function middleware(request: NextRequest) {
 export const config = {
   matcher: [
     // Skip Next internals and API routes; everything else goes through next-intl.
-    '/((?!api|_next|_vercel|.*\\..*).*)',
+    // Match paths that don't END in a known static file extension — bare dots
+    // inside slugs (e.g. `gemini-3.1-flash`) must still be routed.
+    '/((?!api|_next|_vercel|.*\\.(?:ico|png|jpg|jpeg|gif|webp|svg|css|js|map|txt|xml|json|woff2?|ttf|eot)$).*)',
   ],
 };
