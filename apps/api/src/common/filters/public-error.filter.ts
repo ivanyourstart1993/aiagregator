@@ -50,6 +50,9 @@ import {
   TaskNotOwnedError,
   TaskResultNotReadyError,
   UserBlockedError,
+  QueueOverloadedError,
+  ProviderPausedError,
+  BundlePausedError,
 } from '../errors/public-api.errors';
 
 export interface PublicErrorEnvelope {
@@ -435,6 +438,36 @@ function fromDomainError(e: Error): MappedDomainError | undefined {
         code: ErrorCode.TASK_FAILED,
         message: 'Task result is not yet available.',
         details: { taskId: e.taskId },
+      },
+    };
+  }
+  if (e instanceof QueueOverloadedError) {
+    return {
+      status: HttpStatus.SERVICE_UNAVAILABLE,
+      shape: {
+        code: ErrorCode.QUEUE_OVERLOADED,
+        message: 'Generation queue is currently overloaded or paused.',
+        details: { reason: e.reason },
+      },
+    };
+  }
+  if (e instanceof ProviderPausedError) {
+    return {
+      status: HttpStatus.SERVICE_UNAVAILABLE,
+      shape: {
+        code: ErrorCode.PROVIDER_UNAVAILABLE,
+        message: 'Provider is temporarily unavailable.',
+        details: { provider: e.providerCode },
+      },
+    };
+  }
+  if (e instanceof BundlePausedError) {
+    return {
+      status: HttpStatus.SERVICE_UNAVAILABLE,
+      shape: {
+        code: ErrorCode.METHOD_UNAVAILABLE,
+        message: 'This method is temporarily unavailable.',
+        details: { bundleKey: e.bundleKey },
       },
     };
   }

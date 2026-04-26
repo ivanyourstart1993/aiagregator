@@ -9,6 +9,7 @@ import type { AuthConfig } from '../../config/configuration';
 const BASE62 = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz';
 const generatePrefix = customAlphabet(BASE62, 12);
 const generateSecret = customAlphabet(BASE62, 24);
+const generateWebhookSecret = customAlphabet(BASE62, 40);
 
 export interface ApiKeyView {
   id: string;
@@ -25,6 +26,7 @@ export interface ApiKeyView {
 
 export interface ApiKeyCreated extends ApiKeyView {
   plaintext: string;
+  webhookSecret: string;
 }
 
 function mask(prefix: string, last4: string): string {
@@ -92,6 +94,7 @@ export class ApiKeysService {
       timeCost: 2,
       parallelism: 1,
     });
+    const webhookSecret = `whsec_${generateWebhookSecret()}`;
 
     const created = await this.prisma.apiKey.create({
       data: {
@@ -100,6 +103,7 @@ export class ApiKeysService {
         prefix,
         hashedSecret,
         last4,
+        webhookSecret,
       },
       select: {
         id: true,
@@ -118,7 +122,22 @@ export class ApiKeysService {
       ...created,
       masked: mask(created.prefix, created.last4),
       plaintext: `sk_live_${prefix}_${secret}`,
+      webhookSecret,
     };
+  }
+
+  async rotateWebhookSecret(
+    userId: string,
+    id: string,
+  ): Promise<{ id: string; webhookSecret: string }> {
+    const row = await this.prisma.apiKey.findFirst({ where: { id, userId } });
+    if (!row) throw new NotFoundException('API key not found');
+    const webhookSecret = `whsec_${generateWebhookSecret()}`;
+    await this.prisma.apiKey.update({
+      where: { id },
+      data: { webhookSecret },
+    });
+    return { id, webhookSecret };
   }
 
   async revoke(userId: string, id: string): Promise<ApiKeyView> {

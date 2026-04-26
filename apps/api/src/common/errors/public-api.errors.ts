@@ -62,3 +62,24 @@ export class TaskResultNotReadyError extends Error {
     this.name = 'TaskResultNotReadyError';
   }
 }
+
+export class QueueOverloadedError extends Error {
+  constructor(public readonly reason: string = 'queue_paused') {
+    super('Generation queue is currently overloaded or paused.');
+    this.name = 'QueueOverloadedError';
+  }
+}
+
+export class ProviderPausedError extends Error {
+  constructor(public readonly providerCode: string) {
+    super(`Provider ${providerCode} is temporarily unavailable.`);
+    this.name = 'ProviderPausedError';
+  }
+}
+
+export class BundlePausedError extends Error {
+  constructor(public readonly bundleKey: string) {
+    super('This method is temporarily unavailable.');
+    this.name = 'BundlePausedError';
+  }
+}

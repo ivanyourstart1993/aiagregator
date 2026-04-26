@@ -54,6 +54,17 @@ export class ApiKeysController {
     return this.keys.revoke(user.id, id);
   }
 
+  // Stage 16 — rotate per-key webhook signing secret. Returns the plaintext
+  // exactly once; subsequent requests will not reveal it.
+  @Post(':id/rotate-webhook-secret')
+  @HttpCode(HttpStatus.OK)
+  rotateWebhookSecret(
+    @CurrentUser() user: CurrentUserPayload,
+    @Param('id') id: string,
+  ) {
+    return this.keys.rotateWebhookSecret(user.id, id);
+  }
+
   @Delete(':id')
   @HttpCode(HttpStatus.OK)
   delete(@CurrentUser() user: CurrentUserPayload, @Param('id') id: string) {

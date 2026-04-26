@@ -29,6 +29,10 @@ import { PublicApiModule } from './modules/public-api/public-api.module';
 import { ProvidersModule } from './modules/providers/providers.module';
 import { RateCardsModule } from './modules/rate-cards/rate-cards.module';
 import { AnalyticsModule } from './modules/analytics/analytics.module';
+import { AlertsModule } from './modules/alerts/alerts.module';
+import { SystemSettingsModule } from './modules/system-settings/system-settings.module';
+import { FilesModule } from './modules/files/files.module';
+import { ExportsModule } from './modules/exports/exports.module';
 import { RedisModule } from './common/redis/redis.module';
 import { StorageModule } from './common/storage/storage.module';
 
@@ -81,6 +85,10 @@ import { StorageModule } from './common/storage/storage.module';
     ProvidersModule,
     RateCardsModule,
     AnalyticsModule,
+    AlertsModule,
+    SystemSettingsModule,
+    FilesModule,
+    ExportsModule,
   ],
   providers: [
     { provide: APP_FILTER, useClass: PublicErrorFilter },

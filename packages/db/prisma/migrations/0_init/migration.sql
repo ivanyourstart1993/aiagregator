@@ -82,6 +82,21 @@ CREATE TYPE "RateCardPriceType" AS ENUM ('PER_REQUEST', 'PER_SECOND', 'PER_TOKEN
 -- CreateEnum
 CREATE TYPE "WebhookDeliveryStatus" AS ENUM ('PENDING', 'SUCCESS', 'FAILED');
 
+-- CreateEnum
+CREATE TYPE "AlertSeverity" AS ENUM ('INFO', 'WARNING', 'CRITICAL');
+
+-- CreateEnum
+CREATE TYPE "AlertCategory" AS ENUM ('ACCOUNT_BILLING', 'ACCOUNT_QUOTA', 'ACCOUNT_BLOCKED', 'ACCOUNT_INVALID_CREDENTIALS', 'PROXY_DOWN', 'HIGH_FAILURE_RATE', 'QUEUE_BACKLOG', 'PROVIDER_NO_ACCOUNTS', 'STORAGE_FULL', 'CUSTOM');
+
+-- CreateEnum
+CREATE TYPE "AlertStatus" AS ENUM ('OPEN', 'ACKNOWLEDGED', 'RESOLVED');
+
+-- CreateEnum
+CREATE TYPE "ExportType" AS ENUM ('TRANSACTIONS', 'REQUESTS', 'TASKS', 'DEPOSITS');
+
+-- CreateEnum
+CREATE TYPE "ExportStatus" AS ENUM ('PENDING', 'PROCESSING', 'DONE', 'FAILED', 'EXPIRED');
+
 -- CreateTable
 CREATE TABLE "user" (
     "id" TEXT NOT NULL,
@@ -92,6 +107,7 @@ CREATE TABLE "user" (
     "locale" TEXT NOT NULL DEFAULT 'en',
     "role" "UserRole" NOT NULL DEFAULT 'USER',
     "status" "UserStatus" NOT NULL DEFAULT 'ACTIVE',
+    "sandboxEnabled" BOOLEAN NOT NULL DEFAULT false,
     "lastLoginAt" TIMESTAMP(3),
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
@@ -143,6 +159,7 @@ CREATE TABLE "api_key" (
     "prefix" TEXT NOT NULL,
     "hashedSecret" TEXT NOT NULL,
     "last4" TEXT NOT NULL,
+    "webhookSecret" TEXT,
     "status" "ApiKeyStatus" NOT NULL DEFAULT 'ACTIVE',
     "lastUsedAt" TIMESTAMP(3),
     "lastUsedIp" TEXT,
@@ -694,6 +711,57 @@ CREATE TABLE "webhook_delivery" (
     CONSTRAINT "webhook_delivery_pkey" PRIMARY KEY ("id")
 );
 
+-- CreateTable
+CREATE TABLE "alert" (
+    "id" TEXT NOT NULL,
+    "category" "AlertCategory" NOT NULL,
+    "severity" "AlertSeverity" NOT NULL DEFAULT 'WARNING',
+    "status" "AlertStatus" NOT NULL DEFAULT 'OPEN',
+    "title" TEXT NOT NULL,
+    "message" TEXT NOT NULL,
+    "targetType" TEXT,
+    "targetId" TEXT,
+    "dedupeKey" TEXT NOT NULL,
+    "metadata" JSONB,
+    "acknowledgedById" TEXT,
+    "acknowledgedAt" TIMESTAMP(3),
+    "resolvedAt" TIMESTAMP(3),
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "alert_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "system_setting" (
+    "key" TEXT NOT NULL,
+    "value" JSONB NOT NULL,
+    "comment" TEXT,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+    "updatedById" TEXT,
+
+    CONSTRAINT "system_setting_pkey" PRIMARY KEY ("key")
+);
+
+-- CreateTable
+CREATE TABLE "export" (
+    "id" TEXT NOT NULL,
+    "userId" TEXT NOT NULL,
+    "type" "ExportType" NOT NULL,
+    "format" TEXT NOT NULL,
+    "filter" JSONB NOT NULL,
+    "status" "ExportStatus" NOT NULL DEFAULT 'PENDING',
+    "rowCount" INTEGER,
+    "fileUrl" TEXT,
+    "fileSize" BIGINT,
+    "error" TEXT,
+    "expiresAt" TIMESTAMP(3),
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "finishedAt" TIMESTAMP(3),
+
+    CONSTRAINT "export_pkey" PRIMARY KEY ("id")
+);
+
 -- CreateIndex
 CREATE UNIQUE INDEX "user_email_key" ON "user"("email");
 
@@ -940,6 +1008,21 @@ CREATE INDEX "webhook_delivery_apiRequestId_idx" ON "webhook_delivery"("apiReque
 -- CreateIndex
 CREATE INDEX "webhook_delivery_status_createdAt_idx" ON "webhook_delivery"("status", "createdAt");
 
+-- CreateIndex
+CREATE UNIQUE INDEX "alert_dedupeKey_key" ON "alert"("dedupeKey");
+
+-- CreateIndex
+CREATE INDEX "alert_status_severity_createdAt_idx" ON "alert"("status", "severity", "createdAt");
+
+-- CreateIndex
+CREATE INDEX "alert_category_status_idx" ON "alert"("category", "status");
+
+-- CreateIndex
+CREATE INDEX "export_userId_createdAt_idx" ON "export"("userId", "createdAt");
+
+-- CreateIndex
+CREATE INDEX "export_status_idx" ON "export"("status");
+
 -- AddForeignKey
 ALTER TABLE "account" ADD CONSTRAINT "account_userId_fkey" FOREIGN KEY ("userId") REFERENCES "user"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
@@ -1057,8 +1140,11 @@ ALTER TABLE "provider_attempt" ADD CONSTRAINT "provider_attempt_providerAccountI
 -- AddForeignKey
 ALTER TABLE "provider_rate_card" ADD CONSTRAINT "provider_rate_card_providerId_fkey" FOREIGN KEY ("providerId") REFERENCES "provider"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
+-- AddForeignKey
+ALTER TABLE "export" ADD CONSTRAINT "export_userId_fkey" FOREIGN KEY ("userId") REFERENCES "user"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
--- Manual constraints (preserved across schema regenerations)
+
+-- Manual constraints
 ALTER TABLE "wallet" ADD CONSTRAINT "wallet_available_units_nonneg" CHECK ("availableUnits" >= 0);
 ALTER TABLE "wallet" ADD CONSTRAINT "wallet_reserved_units_nonneg" CHECK ("reservedUnits" >= 0);
 CREATE UNIQUE INDEX "tariff_only_one_default" ON "tariff"("isDefault") WHERE "isDefault" = TRUE;

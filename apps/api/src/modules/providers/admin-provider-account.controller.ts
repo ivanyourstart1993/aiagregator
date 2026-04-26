@@ -199,6 +199,68 @@ export class AdminProviderAccountController {
     return this.toView(acc);
   }
 
+  // Stage 11 (full) — usage / error breakdown for an account, derived from
+  // ProviderAttempt rows. `from`/`to` are ISO timestamps; default = last 7d.
+  @Get(':id/stats')
+  async stats(
+    @Param('id') id: string,
+    @Query('from') fromRaw?: string,
+    @Query('to') toRaw?: string,
+  ) {
+    const acc = await this.prisma.providerAccount.findUnique({
+      where: { id },
+    });
+    if (!acc) throw new NotFoundException();
+    const to = toRaw ? new Date(toRaw) : new Date();
+    const from = fromRaw
+      ? new Date(fromRaw)
+      : new Date(to.getTime() - 7 * 24 * 60 * 60 * 1000);
+    const attempts = await this.prisma.providerAttempt.findMany({
+      where: {
+        providerAccountId: id,
+        startedAt: { gte: from, lte: to },
+      },
+      select: {
+        status: true,
+        errorType: true,
+        errorCode: true,
+        durationMs: true,
+        providerCostUnits: true,
+      },
+    });
+    let success = 0;
+    let failed = 0;
+    let totalDurationMs = 0;
+    let totalCostUnits = 0n;
+    const errorBreakdown: Record<string, number> = {};
+    for (const a of attempts) {
+      if (a.status === 'success') success += 1;
+      if (a.status === 'failed') failed += 1;
+      if (a.durationMs) totalDurationMs += a.durationMs;
+      if (a.providerCostUnits) totalCostUnits += a.providerCostUnits;
+      const k = a.errorType ?? a.errorCode;
+      if (k) errorBreakdown[k] = (errorBreakdown[k] ?? 0) + 1;
+    }
+    return {
+      accountId: id,
+      from: from.toISOString(),
+      to: to.toISOString(),
+      attempts: attempts.length,
+      success,
+      failed,
+      avgDurationMs:
+        attempts.length > 0 ? Math.round(totalDurationMs / attempts.length) : 0,
+      totalProviderCostUnits: totalCostUnits.toString(),
+      errorBreakdown,
+      counters: {
+        todayRequests: acc.todayRequestsCount,
+        todayCostUnits: acc.todayCostUnits.toString(),
+        monthRequests: acc.monthRequestsCount,
+        monthCostUnits: acc.monthCostUnits.toString(),
+      },
+    };
+  }
+
   private toView(a: {
     id: string;
     providerId: string;

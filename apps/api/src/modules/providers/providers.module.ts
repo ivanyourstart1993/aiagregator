@@ -9,6 +9,9 @@ import { AccountRepository } from './account.repository';
 import { AdminProviderAccountController } from './admin-provider-account.controller';
 import { AdminProxyController } from './admin-proxy.controller';
 import { PollLroCron } from './poll-lro.cron';
+import { ProxyHealthCron } from './proxy-health.cron';
+import { AccountHealthCron } from './account-health.cron';
+import { CountersResetCron } from './counters-reset.cron';
 
 @Module({
   imports: [RateCardsModule],
@@ -21,6 +24,9 @@ import { PollLroCron } from './poll-lro.cron';
     AccountSelectorService,
     AccountRepository,
     PollLroCron,
+    ProxyHealthCron,
+    AccountHealthCron,
+    CountersResetCron,
   ],
   exports: [
     AdapterRegistry,

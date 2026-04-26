@@ -6,6 +6,7 @@ import {
   CALLBACK_DLQ,
   CALLBACK_QUEUE,
   EMAIL_QUEUE,
+  EXPORTS_QUEUE,
   GENERATION_DLQ,
   GENERATION_QUEUE,
 } from './queue.constants';
@@ -33,6 +34,7 @@ function parseRedisUrl(url: string): ConnectionOptions {
     BullModule.registerQueue({ name: EMAIL_QUEUE }),
     BullModule.registerQueue({ name: GENERATION_QUEUE }),
     BullModule.registerQueue({ name: CALLBACK_QUEUE }),
+    BullModule.registerQueue({ name: EXPORTS_QUEUE }),
     BullModule.registerQueue({ name: GENERATION_DLQ }),
     BullModule.registerQueue({ name: CALLBACK_DLQ }),
   ],

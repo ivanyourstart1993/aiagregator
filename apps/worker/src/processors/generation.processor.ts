@@ -30,6 +30,7 @@ const MAX_ATTEMPTS = 3;
 
 interface JobData {
   taskId: string;
+  sandbox?: boolean;
 }
 
 function parseRedisUrl(url: string): ConnectionOptions {
@@ -529,7 +530,7 @@ export function createGenerationWorker(opts: {
   const worker = new Worker<JobData>(
     QUEUE,
     async (job) => {
-      const { taskId } = job.data;
+      const { taskId, sandbox } = job.data;
 
       const task = await prisma.task.findUnique({
         where: { id: taskId },
@@ -548,6 +549,54 @@ export function createGenerationWorker(opts: {
         where: { id: task.methodId },
         include: { provider: true, model: true },
       });
+
+      // Stage 16: sandbox short-circuit — never call real provider; emit a
+      // mocked result and capture $0 so reservations and accounting still
+      // settle in the same code paths as production.
+      if (sandbox && method) {
+        await prisma.task.update({
+          where: { id: taskId },
+          data: {
+            status: TaskStatus.PROCESSING,
+            startedAt: new Date(),
+          },
+        });
+        const mockUrl =
+          process.env.SANDBOX_PLACEHOLDER_URL ??
+          (storage as unknown as { getObjectUrl?: (k: string) => string })
+            .getObjectUrl?.('sandbox/placeholder.png') ??
+          'https://example.com/sandbox/placeholder.png';
+        const file: AdapterFile = {
+          url: mockUrl,
+          mimeType: 'image/png',
+          bucket: 'sandbox',
+          key: 'sandbox/placeholder.png',
+          size: 0,
+          fileType: 'image',
+        };
+        // Tag task metadata so downstream (analytics, exports) can filter.
+        try {
+          await prisma.task.update({
+            where: { id: taskId },
+            data: { resultData: { sandbox: true } },
+          });
+        } catch {
+          /* swallow */
+        }
+        await succeedTask(prisma, {
+          taskId,
+          apiRequestId: task.apiRequestId,
+          userId: task.userId,
+          providerSlug: method.provider.code,
+          modelSlug: method.model.code,
+          methodCode: method.code,
+          files: [file],
+          providerCostUnits: 0n,
+        });
+        await enqueueCallback(task.apiRequestId);
+        return;
+      }
+
       if (!method) {
         await failTask(prisma, taskId, {
           code: 'method_not_found',
@@ -583,8 +632,15 @@ export function createGenerationWorker(opts: {
       });
       const params = (task.apiRequest.paramsRaw ?? {}) as Record<string, unknown>;
 
-      // Try up to 2 accounts: switch only on billing/quota/invalid_credentials
-      for (let attempt = 0; attempt < 2; attempt++) {
+      // Stage 11 (full): rotate up to N accounts. The worker switches on
+      // billing/quota/invalid_credentials and on retryable errors after a
+      // single retry (BullMQ already handles BackoffRetry across job
+      // attempts; here N controls intra-attempt account switching).
+      const maxAccountAttempts = Math.max(
+        1,
+        Number(process.env.MAX_PROVIDER_ACCOUNT_ATTEMPTS_PER_TASK ?? 3),
+      );
+      for (let attempt = 0; attempt < maxAccountAttempts; attempt++) {
         const acc = await pickAccount(
           prisma,
           method.providerId,
@@ -782,6 +838,35 @@ export function createGenerationWorker(opts: {
         message: 'All matching provider accounts failed (billing/quota/credentials)',
       });
       await enqueueCallback(task.apiRequestId);
+      // Best-effort: raise an alert that operators can act on. We upsert by
+      // dedupeKey so repeated failures don't spam.
+      try {
+        const dedupeKey = `provider_no_accounts:${method.providerId}`;
+        await prisma.alert.upsert({
+          where: { dedupeKey },
+          update: {
+            status: 'OPEN',
+            updatedAt: new Date(),
+            message: `Provider ${method.provider.code}: ${tried.length} accounts failed back-to-back (last task ${taskId})`,
+          },
+          create: {
+            category: 'PROVIDER_NO_ACCOUNTS',
+            severity: 'CRITICAL',
+            status: 'OPEN',
+            title: `No accounts available for ${method.provider.code}`,
+            message: `Provider ${method.provider.code}: ${tried.length} accounts failed back-to-back (task ${taskId})`,
+            targetType: 'provider',
+            targetId: method.providerId,
+            dedupeKey,
+          },
+        });
+      } catch (err) {
+        console.warn(
+          `[generation-worker] failed to raise PROVIDER_NO_ACCOUNTS alert: ${
+            err instanceof Error ? err.message : String(err)
+          }`,
+        );
+      }
     },
     { connection, concurrency: 5 },
   );

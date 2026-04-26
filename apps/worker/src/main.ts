@@ -4,6 +4,7 @@
 import { PrismaClient } from '@aiagg/db';
 import { createGenerationWorker } from './processors/generation.processor';
 import { createCallbackWorker } from './processors/callback.processor';
+import { createExportsWorker } from './processors/exports.processor';
 import { WorkerAdapterRegistry } from './adapters/registry';
 import { WorkerStorage } from './storage/storage';
 
@@ -41,6 +42,9 @@ async function main(): Promise<void> {
   });
   console.log('[worker] callback processor started (Stage 10)');
 
+  const exportsHandle = createExportsWorker({ redisUrl, prisma, storage });
+  console.log('[worker] exports processor started (Stage 16)');
+
   const shutdown = async (): Promise<void> => {
     console.log('[worker] shutting down...');
     try {
@@ -50,6 +54,11 @@ async function main(): Promise<void> {
     }
     try {
       await callbackHandle.close();
+    } catch {
+      /* swallow */
+    }
+    try {
+      await exportsHandle.close();
     } catch {
       /* swallow */
     }

@@ -220,6 +220,32 @@ export class GoogleBananaAdapter implements ProviderAdapter {
     return { files };
   }
 
+  async validateAccount(
+    credentials: Record<string, unknown>,
+  ): Promise<{ ok: boolean; reason?: string }> {
+    const apiKey =
+      (credentials['apiKey'] as string | undefined) ??
+      (credentials['api_key'] as string | undefined) ??
+      (credentials['key'] as string | undefined);
+    if (!apiKey) return { ok: false, reason: 'missing apiKey' };
+    try {
+      const res = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(apiKey)}&pageSize=1`,
+        { method: 'GET' },
+      );
+      if (res.status === 401 || res.status === 403) {
+        return { ok: false, reason: `http ${res.status}` };
+      }
+      if (res.status >= 200 && res.status < 300) return { ok: true };
+      return { ok: false, reason: `http ${res.status}` };
+    } catch (err) {
+      return {
+        ok: false,
+        reason: err instanceof Error ? err.message : String(err),
+      };
+    }
+  }
+
   private extractApiKey(ctx: AdapterContext): string | null {
     const c = ctx.account.credentials ?? {};
     const v =

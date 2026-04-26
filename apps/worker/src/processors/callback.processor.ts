@@ -163,8 +163,23 @@ export function createCallbackWorker(opts: {
             : null,
       };
 
+      // Stage 16 — per-ApiKey webhook secret takes precedence over the
+      // global env fallback. The plaintext is stored alongside the key.
+      let signingSecret = webhookSecret;
+      if (apiRequest.apiKeyId) {
+        try {
+          const apiKey = await prisma.apiKey.findUnique({
+            where: { id: apiRequest.apiKeyId },
+            select: { webhookSecret: true },
+          });
+          if (apiKey?.webhookSecret) signingSecret = apiKey.webhookSecret;
+        } catch {
+          /* swallow — fall back to global */
+        }
+      }
+
       const rawBody = JSON.stringify(payload);
-      const signature = createHmac('sha256', webhookSecret)
+      const signature = createHmac('sha256', signingSecret)
         .update(rawBody)
         .digest('hex');
 

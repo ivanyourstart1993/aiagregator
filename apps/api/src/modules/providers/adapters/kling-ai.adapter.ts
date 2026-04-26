@@ -112,6 +112,38 @@ export class KlingAiAdapter implements ProviderAdapter {
     return SUPPORTED_MODELS.has(modelCode) && SUPPORTED_METHODS.has(methodCode);
   }
 
+  async validateAccount(
+    credentials: Record<string, unknown>,
+  ): Promise<{ ok: boolean; reason?: string }> {
+    const accessKey =
+      (credentials['accessKey'] as string | undefined) ??
+      (credentials['access_key'] as string | undefined);
+    const secretKey =
+      (credentials['secretKey'] as string | undefined) ??
+      (credentials['secret_key'] as string | undefined);
+    if (!accessKey || !secretKey) {
+      return { ok: false, reason: 'missing accessKey/secretKey' };
+    }
+    try {
+      const token = signKlingJwt(accessKey, secretKey);
+      // Hit a cheap endpoint — list with pageSize=1. Kling returns 200/JSON.
+      const res = await fetch(
+        `${KLING_BASE}/v1/videos/text2video?pageNum=1&pageSize=1`,
+        { method: 'GET', headers: { Authorization: `Bearer ${token}` } },
+      );
+      if (res.status === 401 || res.status === 403) {
+        return { ok: false, reason: `http ${res.status}` };
+      }
+      if (res.status >= 200 && res.status < 500) return { ok: true };
+      return { ok: false, reason: `http ${res.status}` };
+    } catch (err) {
+      return {
+        ok: false,
+        reason: err instanceof Error ? err.message : String(err),
+      };
+    }
+  }
+
   async execute(ctx: AdapterContext): Promise<AdapterResult> {
     const creds = this.extractCreds(ctx);
     const token = signKlingJwt(creds.accessKey, creds.secretKey);

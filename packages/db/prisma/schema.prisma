@@ -45,11 +45,13 @@ model User {
   locale        String     @default("en")
   role          UserRole   @default(USER)
   status        UserStatus @default(ACTIVE)
+  sandboxEnabled Boolean   @default(false)
   lastLoginAt   DateTime?
   createdAt     DateTime   @default(now())
   updatedAt     DateTime   @updatedAt
 
   accounts            Account[]
+  exports             Export[]
   sessions            Session[]
   apiKeys             ApiKey[]
   adminActionsAsActor AdminAction[]      @relation("AdminActionsActor")
@@ -122,6 +124,7 @@ model ApiKey {
   prefix       String       @unique // first 12 base62 chars of secret part
   hashedSecret String // argon2id hash of full secret + pepper
   last4        String // for masked display
+  webhookSecret String? // per-key plaintext HMAC secret (Stage 16). null = use global env.
   status       ApiKeyStatus @default(ACTIVE)
   lastUsedAt   DateTime?
   lastUsedIp   String?
@@ -1020,4 +1023,110 @@ model WebhookDelivery {
   @@index([apiRequestId])
   @@index([status, createdAt])
   @@map("webhook_delivery")
+}
+
+// =============================================================================
+// STAGE 13 — ALERTS
+// =============================================================================
+
+enum AlertSeverity {
+  INFO
+  WARNING
+  CRITICAL
+}
+
+enum AlertCategory {
+  ACCOUNT_BILLING
+  ACCOUNT_QUOTA
+  ACCOUNT_BLOCKED
+  ACCOUNT_INVALID_CREDENTIALS
+  PROXY_DOWN
+  HIGH_FAILURE_RATE
+  QUEUE_BACKLOG
+  PROVIDER_NO_ACCOUNTS
+  STORAGE_FULL
+  CUSTOM
+}
+
+enum AlertStatus {
+  OPEN
+  ACKNOWLEDGED
+  RESOLVED
+}
+
+model Alert {
+  id               String        @id @default(cuid())
+  category         AlertCategory
+  severity         AlertSeverity @default(WARNING)
+  status           AlertStatus   @default(OPEN)
+  title            String
+  message          String        @db.Text
+  targetType       String?
+  targetId         String?
+  dedupeKey        String        @unique
+  metadata         Json?
+  acknowledgedById String?
+  acknowledgedAt   DateTime?
+  resolvedAt       DateTime?
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+
+  @@index([status, severity, createdAt])
+  @@index([category, status])
+  @@map("alert")
+}
+
+// =============================================================================
+// STAGE 14 — SYSTEM SETTINGS
+// =============================================================================
+
+model SystemSetting {
+  key         String   @id
+  value       Json
+  comment     String?
+  updatedAt   DateTime @updatedAt
+  updatedById String?
+
+  @@map("system_setting")
+}
+
+// =============================================================================
+// STAGE 16 — EXPORTS (history exports for users / admins)
+// =============================================================================
+
+enum ExportType {
+  TRANSACTIONS
+  REQUESTS
+  TASKS
+  DEPOSITS
+}
+
+enum ExportStatus {
+  PENDING
+  PROCESSING
+  DONE
+  FAILED
+  EXPIRED
+}
+
+model Export {
+  id         String       @id @default(cuid())
+  userId     String
+  type       ExportType
+  format     String // 'csv' | 'json'
+  filter     Json
+  status     ExportStatus @default(PENDING)
+  rowCount   Int?
+  fileUrl    String?
+  fileSize   BigInt?
+  error      String?
+  expiresAt  DateTime?
+  createdAt  DateTime     @default(now())
+  finishedAt DateTime?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@index([status])
+  @@map("export")
 }

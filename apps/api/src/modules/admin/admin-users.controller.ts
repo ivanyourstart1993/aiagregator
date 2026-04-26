@@ -1,8 +1,20 @@
-import { Controller, DefaultValuePipe, Get, ParseIntPipe, Query, UseGuards } from '@nestjs/common';
+import {
+  Controller,
+  DefaultValuePipe,
+  Get,
+  HttpCode,
+  HttpStatus,
+  Param,
+  ParseIntPipe,
+  Post,
+  Query,
+  UseGuards,
+} from '@nestjs/common';
 import { UserRole } from '@aiagg/db';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
+import { LogAdminAction } from '../../common/decorators/log-admin-action.decorator';
 import { PrismaService } from '../../common/prisma/prisma.service';
 
 @Controller('internal/admin/users')
@@ -37,5 +49,39 @@ export class AdminUsersController {
       this.prisma.user.count(),
     ]);
     return { items, total, page, pageSize };
+  }
+
+  // Stage 16 — sandbox toggle. When ON, GenerationsService routes the user's
+  // jobs through a mock path (no real provider calls, $0 capture).
+  @Post(':id/sandbox/enable')
+  @HttpCode(HttpStatus.OK)
+  @LogAdminAction({
+    action: 'users.sandbox.enable',
+    targetType: 'user',
+    targetIdFrom: 'params.id',
+  })
+  async enableSandbox(@Param('id') id: string) {
+    const user = await this.prisma.user.update({
+      where: { id },
+      data: { sandboxEnabled: true },
+      select: { id: true, email: true, sandboxEnabled: true },
+    });
+    return user;
+  }
+
+  @Post(':id/sandbox/disable')
+  @HttpCode(HttpStatus.OK)
+  @LogAdminAction({
+    action: 'users.sandbox.disable',
+    targetType: 'user',
+    targetIdFrom: 'params.id',
+  })
+  async disableSandbox(@Param('id') id: string) {
+    const user = await this.prisma.user.update({
+      where: { id },
+      data: { sandboxEnabled: false },
+      select: { id: true, email: true, sandboxEnabled: true },
+    });
+    return user;
   }
 }

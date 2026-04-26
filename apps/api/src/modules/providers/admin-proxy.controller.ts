@@ -120,6 +120,37 @@ export class AdminProxyController {
     await this.prisma.proxy.delete({ where: { id } });
   }
 
+  // Stage 11 (full) — usage / latency stats. We don't yet store per-tick
+  // history rows, so the endpoint reports current state plus aggregate
+  // attempt counts via attached provider accounts.
+  @Get(':id/stats')
+  async stats(@Param('id') id: string) {
+    const proxy = await this.prisma.proxy.findUnique({ where: { id } });
+    if (!proxy) throw new NotFoundException();
+    const accounts = await this.prisma.providerAccount.findMany({
+      where: { proxyId: id },
+      select: { id: true },
+    });
+    const attemptCount =
+      accounts.length === 0
+        ? 0
+        : await this.prisma.providerAttempt.count({
+            where: { proxyId: id },
+          });
+    return {
+      proxyId: id,
+      status: proxy.status,
+      latencyMs: proxy.latencyMs,
+      externalIp: proxy.externalIp,
+      lastCheckAt: proxy.lastCheckAt,
+      lastSuccessAt: proxy.lastSuccessAt,
+      lastErrorAt: proxy.lastErrorAt,
+      lastErrorMessage: proxy.lastErrorMessage,
+      accounts: accounts.length,
+      totalAttempts: attemptCount,
+    };
+  }
+
   private toView(p: {
     id: string;
     name: string;

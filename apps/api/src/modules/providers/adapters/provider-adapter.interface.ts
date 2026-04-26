@@ -84,4 +84,20 @@ export interface ProviderAdapter {
     ctx: AdapterContext,
     operationName: string,
   ): Promise<AdapterResult>;
+  /**
+   * Optional credential check — used by AccountHealthCron to attempt
+   * recovery of accounts marked EXCLUDED_BY_BILLING / INVALID_CREDENTIALS /
+   * COOLDOWN. Implementations should make a cheap, idempotent call (list
+   * models / "ping") and report whether the credentials currently work.
+   */
+  validateAccount?(
+    credentials: Record<string, unknown>,
+    proxy?: {
+      host: string;
+      port: number;
+      protocol: 'HTTP' | 'HTTPS' | 'SOCKS5';
+      login?: string;
+      password?: string;
+    },
+  ): Promise<{ ok: boolean; reason?: string }>;
 }

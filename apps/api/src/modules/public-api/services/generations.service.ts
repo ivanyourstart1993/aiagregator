@@ -1,25 +1,36 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import { InjectQueue } from '@nestjs/bullmq';
 import {
   ApiRequestStatus,
   Prisma,
   TaskMode,
   TaskStatus,
+  UserStatus,
 } from '@aiagg/db';
 import { Queue } from 'bullmq';
 import { randomUUID } from 'node:crypto';
+import type { Redis } from 'ioredis';
 import { CatalogService } from '../../catalog/catalog.service';
 import { BundleSpecService } from '../../catalog/bundle-spec.service';
 import { PricingService } from '../../pricing/pricing.service';
 import { CouponsService } from '../../coupons/coupons.service';
 import { BillingService } from '../../billing/billing.service';
 import { PrismaService } from '../../../common/prisma/prisma.service';
+import { IOREDIS_CLIENT } from '../../../common/redis/redis.module';
 import { GENERATION_QUEUE } from '../../bullmq/queue.constants';
 import { InsufficientBalanceError } from '../../../common/errors/billing.errors';
+import {
+  BundlePausedError,
+  ProviderPausedError,
+  QueueOverloadedError,
+  RateLimitExceededError,
+  UserBlockedError,
+} from '../../../common/errors/public-api.errors';
 import type { PrismaTx } from '../../../common/prisma/prisma.types';
 import type { CreateGenerationDto } from '../dto/create-generation.dto';
 import type { AdmitResultView, AuthContext } from '../dto/views';
 import { EstimateService } from './estimate.service';
+import { SystemSettingsService } from '../../system-settings/system-settings.service';
 
 @Injectable()
 export class GenerationsService {
@@ -33,8 +44,60 @@ export class GenerationsService {
     private readonly billing: BillingService,
     private readonly estimate: EstimateService,
     private readonly prisma: PrismaService,
+    private readonly settings: SystemSettingsService,
     @InjectQueue(GENERATION_QUEUE) private readonly generationQueue: Queue,
+    @Inject(IOREDIS_CLIENT) private readonly redis: Redis,
   ) {}
+
+  private async enforceAntiAbuse(userId: string, sandbox: boolean): Promise<void> {
+    // 1) User status: SUSPENDED / DELETED → user_blocked.
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { status: true, sandboxEnabled: true },
+    });
+    if (!user || user.status !== UserStatus.ACTIVE) {
+      throw new UserBlockedError(userId);
+    }
+    if (sandbox) return; // sandbox bypasses concurrency / daily caps
+
+    // 2) Per-user concurrency cap.
+    const concurrentLimit = Math.max(
+      1,
+      Number(process.env.MAX_CONCURRENT_PER_USER ?? 10),
+    );
+    const concurrent = await this.prisma.task.count({
+      where: {
+        userId,
+        status: { in: [TaskStatus.PENDING, TaskStatus.PROCESSING] },
+      },
+    });
+    if (concurrent >= concurrentLimit) {
+      throw new RateLimitExceededError(concurrentLimit, 60, 60);
+    }
+
+    // 3) Daily request cap, tracked in Redis (per UTC day).
+    const dailyLimit = Math.max(
+      1,
+      Number(process.env.MAX_REQUESTS_PER_DAY_PER_USER ?? 10000),
+    );
+    const day = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+    const key = `user:${userId}:gen-day:${day}`;
+    try {
+      const count = await this.redis.incr(key);
+      if (count === 1) {
+        await this.redis.expire(key, 90_000); // ~25h
+      }
+      if (count > dailyLimit) {
+        throw new RateLimitExceededError(dailyLimit, 86_400, 3600);
+      }
+    } catch (err) {
+      if (err instanceof RateLimitExceededError) throw err;
+      // Fail-open on Redis errors — don't block the user.
+      this.logger.warn(
+        `daily-cap redis error for ${userId}: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
+  }
 
   async admit(input: {
     auth: AuthContext;
@@ -46,6 +109,19 @@ export class GenerationsService {
     const { auth, body } = input;
     const userId = auth.user.id;
 
+    // -------- Stage 16: anti-abuse + sandbox detection --------
+    const userRow = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { sandboxEnabled: true },
+    });
+    const sandbox = Boolean(userRow?.sandboxEnabled);
+    await this.enforceAntiAbuse(userId, sandbox);
+
+    // -------- Stage 14: pause gates --------
+    if (await this.settings.isPaused('generation.queue.paused')) {
+      throw new QueueOverloadedError('queue_paused');
+    }
+
     // -------- Pre-tx --------
     const triple = await this.catalog.resolveAndCheck(
       body.provider,
@@ -53,6 +129,10 @@ export class GenerationsService {
       body.method,
       userId,
     );
+
+    if (await this.settings.isPaused(`provider.${triple.provider.code}.paused`)) {
+      throw new ProviderPausedError(triple.provider.code);
+    }
     const params = body.params;
     this.catalog.validateParamsOrThrow(triple.method, params);
 
@@ -65,6 +145,10 @@ export class GenerationsService {
       params,
       body.mode ?? undefined,
     );
+
+    if (await this.settings.isPaused(`bundle.${bundle.bundleKey}.paused`)) {
+      throw new BundlePausedError(bundle.bundleKey);
+    }
 
     const resolved = await this.pricing.resolvePrice({
       userId,
@@ -192,7 +276,7 @@ export class GenerationsService {
     try {
       await this.generationQueue.add(
         'generate',
-        { taskId },
+        { taskId, sandbox },
         {
           jobId: `task:${taskId}`,
           attempts: 3,

@@ -121,6 +121,31 @@ export class GoogleVeoAdapter implements ProviderAdapter {
     return SUPPORTED_MODELS.has(modelCode) && SUPPORTED_METHODS.has(methodCode);
   }
 
+  async validateAccount(
+    credentials: Record<string, unknown>,
+  ): Promise<{ ok: boolean; reason?: string }> {
+    const apiKey =
+      (credentials['apiKey'] as string | undefined) ??
+      (credentials['api_key'] as string | undefined) ??
+      (credentials['key'] as string | undefined);
+    if (!apiKey) return { ok: false, reason: 'missing apiKey' };
+    try {
+      const res = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(apiKey)}&pageSize=1`,
+      );
+      if (res.status === 401 || res.status === 403) {
+        return { ok: false, reason: `http ${res.status}` };
+      }
+      if (res.status >= 200 && res.status < 300) return { ok: true };
+      return { ok: false, reason: `http ${res.status}` };
+    } catch (err) {
+      return {
+        ok: false,
+        reason: err instanceof Error ? err.message : String(err),
+      };
+    }
+  }
+
   async execute(ctx: AdapterContext): Promise<AdapterResult> {
     const apiKey = this.extractApiKey(ctx);
     if (!apiKey) {
