@@ -1,2 +1,2 @@
--- Delete partial seed entry; super_admin will be re-registered via API.
-DELETE FROM "user" WHERE email = 'yourstart.com.ua@gmail.com';
+-- Promote registered user to SUPER_ADMIN role + verify email.
+UPDATE "user" SET role='SUPER_ADMIN', "emailVerified"=NOW() WHERE email='yourstart.com.ua@gmail.com';
