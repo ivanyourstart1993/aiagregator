@@ -74,4 +74,14 @@ export interface ProviderAdapter {
   readonly providerCode: string;
   supports(modelCode: string, methodCode: string): boolean;
   execute(ctx: AdapterContext): Promise<AdapterResult>;
+  /**
+   * Optional: poll a long-running operation. Adapters that return
+   * `{ pending: true, providerJobId }` from `execute` must implement this.
+   * Returns `{ pending: true }` while operation is still running, or
+   * `{ files }` (or throws AdapterError) when finished.
+   */
+  pollOperation?(
+    ctx: AdapterContext,
+    operationName: string,
+  ): Promise<AdapterResult>;
 }

@@ -566,6 +566,35 @@ export function createGenerationWorker(opts: {
             })
             .catch(() => undefined);
 
+          // Async / long-running flow (e.g. Veo): adapter returned a
+          // providerJobId without files. Persist it on the Task and the
+          // current ProviderAttempt; PollLroCron in the API will pick the
+          // task up by status=PROCESSING + providerJobId and finalise.
+          if (result.pending && result.providerJobId) {
+            await prisma.task.update({
+              where: { id: taskId },
+              data: {
+                providerJobId: result.providerJobId,
+                status: TaskStatus.PROCESSING,
+              },
+            });
+            await prisma.providerAttempt.update({
+              where: { id: attemptRow.id },
+              data: { providerJobId: result.providerJobId },
+            });
+            await prisma.providerAccount
+              .update({
+                where: { id: acc.id },
+                data: {
+                  lastSuccessAt: finishedAt,
+                  todayRequestsCount: { increment: 1 },
+                  monthRequestsCount: { increment: 1 },
+                },
+              })
+              .catch(() => undefined);
+            return;
+          }
+
           await succeedTask(prisma, {
             taskId,
             apiRequestId: task.apiRequestId,

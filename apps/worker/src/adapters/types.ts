@@ -66,4 +66,13 @@ export interface ProviderAdapter {
   readonly providerCode: string;
   supports(modelCode: string, methodCode: string): boolean;
   execute(ctx: AdapterContext): Promise<AdapterResult>;
+  /**
+   * Optional poll for long-running operations. Worker submits the initial
+   * request via `execute` (which returns `{ pending: true, providerJobId }`),
+   * and the API-side cron polls progress via this method.
+   */
+  pollOperation?(
+    ctx: AdapterContext,
+    operationName: string,
+  ): Promise<AdapterResult>;
 }
