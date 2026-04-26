@@ -18,7 +18,7 @@ RUN pnpm --filter @aiagg/db prisma:generate \
 # Stage standalone artifacts together so the runtime layer can copy a single tree.
 RUN set -e \
  && cp -R apps/web/.next/static apps/web/.next/standalone/apps/web/.next/static \
- && cp -R apps/web/public apps/web/.next/standalone/apps/web/public
+ && if [ -d apps/web/public ]; then cp -R apps/web/public apps/web/.next/standalone/apps/web/public; fi
 
 FROM node:${NODE_VERSION} AS runtime
 WORKDIR /app
