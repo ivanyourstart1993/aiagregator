@@ -10,7 +10,7 @@ import {
   Query,
   UseGuards,
 } from '@nestjs/common';
-import { UserRole } from '@aiagg/db';
+import { UserRole, UserStatus } from '@aiagg/db';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
@@ -81,6 +81,32 @@ export class AdminUsersController {
       where: { id },
       data: { sandboxEnabled: false },
       select: { id: true, email: true, sandboxEnabled: true },
+    });
+    return user;
+  }
+
+  // Soft-anonymize: free up the unique email so the address can re-register,
+  // mark the account BLOCKED, scrub identifying fields. Cheaper than a full
+  // cascade delete and avoids breaking historical FK references (transactions,
+  // tasks, audit logs).
+  @Post(':id/anonymize')
+  @HttpCode(HttpStatus.OK)
+  @LogAdminAction({
+    action: 'users.anonymize',
+    targetType: 'user',
+    targetIdFrom: 'params.id',
+  })
+  async anonymize(@Param('id') id: string) {
+    const tombstone = `deleted-${Date.now()}-${id}@tombstone.local`;
+    const user = await this.prisma.user.update({
+      where: { id },
+      data: {
+        email: tombstone,
+        name: null,
+        emailVerified: null,
+        status: UserStatus.BLOCKED,
+      },
+      select: { id: true, email: true, status: true },
     });
     return user;
   }
