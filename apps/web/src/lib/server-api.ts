@@ -590,8 +590,12 @@ export const serverApi = {
     ),
 
   // ---- Stage 5: Catalog (admin) ----
-  adminListProviders: () =>
-    apiGet<ProviderAdminView[]>('/internal/admin/catalog/providers'),
+  adminListProviders: async () => {
+    const res = await apiGet<ProviderAdminView[] | { items: ProviderAdminView[] }>(
+      '/internal/admin/catalog/providers',
+    );
+    return Array.isArray(res) ? res : (res.items ?? []);
+  },
   adminGetProvider: (id: string) =>
     apiGet<ProviderAdminView>(`/internal/admin/catalog/providers/${id}`),
   adminCreateProvider: (body: CreateProviderInput) =>
