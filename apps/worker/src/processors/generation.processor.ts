@@ -35,12 +35,14 @@ interface JobData {
 
 function parseRedisUrl(url: string): ConnectionOptions {
   const u = new URL(url);
+  const isTls = u.protocol === 'rediss:';
   return {
     host: u.hostname,
     port: Number(u.port || 6379),
-    username: u.username || undefined,
-    password: u.password || undefined,
+    username: u.username ? decodeURIComponent(u.username) : undefined,
+    password: u.password ? decodeURIComponent(u.password) : undefined,
     db: u.pathname && u.pathname.length > 1 ? Number(u.pathname.slice(1)) : 0,
+    ...(isTls ? { tls: {} } : {}),
   };
 }
 
