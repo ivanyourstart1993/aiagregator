@@ -73,6 +73,8 @@ export class AuthService {
       parallelism: 1,
     });
 
+    const autoVerify = this.config.get<string>('EMAIL_AUTO_VERIFY') === 'true';
+
     let user: User;
     try {
       user = await this.prisma.user.create({
@@ -81,6 +83,7 @@ export class AuthService {
           passwordHash,
           name: dto.name ?? null,
           locale: dto.locale ?? 'en',
+          emailVerified: autoVerify ? new Date() : null,
         },
       });
     } catch (err) {
@@ -96,7 +99,9 @@ export class AuthService {
       throw err;
     }
 
-    await this.issueAndSendVerification(user.email, user.name ?? user.email);
+    if (!autoVerify) {
+      await this.issueAndSendVerification(user.email, user.name ?? user.email);
+    }
     return { user: toSafeUser(user) };
   }
 
