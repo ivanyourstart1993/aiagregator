@@ -1079,17 +1079,27 @@ export interface QueuesLoad {
 }
 
 export interface RedisLoad {
-  connected: boolean;
-  usedMemoryBytes?: number;
-  ops?: number;
-  clients?: number;
-  uptimeSeconds?: number;
+  ok: boolean;
+  error?: string;
+  uptimeSeconds?: string;
+  connectedClients?: string;
+  usedMemory?: string;
+  usedMemoryHuman?: string;
+  memFragmentationRatio?: string;
+  totalCommandsProcessed?: string;
+  keyspaceHits?: string;
+  keyspaceMisses?: string;
+  role?: string;
+}
+
+export interface DbLoadGroup {
+  total: number;
+  byStatus: Record<string, number>;
 }
 
 export interface DbLoad {
-  taskCounts?: Record<string, number>;
-  reservationCount?: number;
-  pendingDeposits?: number;
+  tasks: DbLoadGroup;
+  apiRequests: DbLoadGroup;
 }
 
 // ---- Stage 15 ----

@@ -2,6 +2,22 @@ import { useTranslations } from 'next-intl';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import type { RedisLoad } from '@/lib/server-api';
 
+function fmtUptime(s?: string): string {
+  if (!s) return '—';
+  const n = Number(s);
+  if (!Number.isFinite(n)) return s;
+  if (n >= 86400) return `${(n / 86400).toFixed(1)}d`;
+  if (n >= 3600) return `${(n / 3600).toFixed(1)}h`;
+  return `${Math.round(n / 60)}m`;
+}
+
+function fmtBytes(s?: string): string {
+  if (!s) return '—';
+  const n = Number(s);
+  if (!Number.isFinite(n)) return s;
+  return `${(n / 1_048_576).toFixed(1)} MB`;
+}
+
 export function RedisStats({ data }: { data: RedisLoad | null }) {
   const t = useTranslations('admin.load');
   if (!data) return null;
@@ -12,19 +28,16 @@ export function RedisStats({ data }: { data: RedisLoad | null }) {
       </CardHeader>
       <CardContent className="grid grid-cols-2 gap-3 text-xs sm:grid-cols-4">
         <Stat
-          label={data.connected ? t('redisConnected') : t('redisDisconnected')}
-          value={data.connected ? '●' : '○'}
+          label={data.ok ? t('redisConnected') : t('redisDisconnected')}
+          value={data.ok ? '●' : '○'}
         />
-        <Stat
-          label={t('redisMemory')}
-          value={data.usedMemoryBytes != null ? `${(data.usedMemoryBytes / 1_048_576).toFixed(1)} MB` : '—'}
-        />
-        <Stat label={t('redisOps')} value={data.ops ?? '—'} />
-        <Stat label={t('redisClients')} value={data.clients ?? '—'} />
-        <Stat
-          label={t('redisUptime')}
-          value={data.uptimeSeconds != null ? `${(data.uptimeSeconds / 60).toFixed(0)}m` : '—'}
-        />
+        <Stat label={t('redisMemory')} value={data.usedMemoryHuman ?? fmtBytes(data.usedMemory)} />
+        <Stat label={t('redisOps')} value={data.totalCommandsProcessed ?? '—'} />
+        <Stat label={t('redisClients')} value={data.connectedClients ?? '—'} />
+        <Stat label={t('redisUptime')} value={fmtUptime(data.uptimeSeconds)} />
+        <Stat label="role" value={data.role ?? '—'} />
+        <Stat label="hits" value={data.keyspaceHits ?? '—'} />
+        <Stat label="misses" value={data.keyspaceMisses ?? '—'} />
       </CardContent>
     </Card>
   );
