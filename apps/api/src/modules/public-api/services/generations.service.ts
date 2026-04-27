@@ -278,7 +278,7 @@ export class GenerationsService {
         'generate',
         { taskId, sandbox },
         {
-          jobId: `task:${taskId}`,
+          jobId: `task-${taskId}`,
           attempts: 3,
           backoff: { type: 'exponential', delay: 5000 },
           removeOnComplete: 100,

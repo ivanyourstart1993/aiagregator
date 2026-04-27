@@ -132,7 +132,7 @@ export class TaskSweeperCron {
       select: { id: true },
     });
     for (const t of stale) {
-      const jobId = `task:${t.id}`;
+      const jobId = `task-${t.id}`;
       try {
         const existing = await this.queue.getJob(jobId);
         if (existing) continue;

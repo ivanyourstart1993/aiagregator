@@ -36,7 +36,7 @@ export class ExportsService {
       'generate',
       { exportId: row.id },
       {
-        jobId: `export:${row.id}`,
+        jobId: `export-${row.id}`,
         attempts: 3,
         backoff: { type: 'exponential', delay: 5000 },
         removeOnComplete: 100,
