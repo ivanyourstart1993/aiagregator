@@ -73,7 +73,7 @@ export class AuthService {
       parallelism: 1,
     });
 
-    const autoVerify = this.config.get<string>('EMAIL_AUTO_VERIFY') === 'true';
+    const autoVerify = process.env.EMAIL_AUTO_VERIFY === 'true';
 
     let user: User;
     try {
