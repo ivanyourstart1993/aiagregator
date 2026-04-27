@@ -7,6 +7,7 @@ export interface ProviderView {
   description: string | null;
   status: CatalogStatus;
   sortOrder: number;
+  models?: ModelView[];
 }
 
 export interface ModelView {

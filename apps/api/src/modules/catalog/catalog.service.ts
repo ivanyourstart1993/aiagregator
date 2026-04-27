@@ -55,7 +55,8 @@ export class CatalogService {
   // Views
   // ---------------------------------------------------------------------
 
-  toProviderView(p: Provider): ProviderView {
+  toProviderView(p: Provider & { models?: Model[] }): ProviderView {
+    const models = p.models;
     return {
       id: p.id,
       code: p.code,
@@ -63,6 +64,13 @@ export class CatalogService {
       description: p.description,
       status: p.status,
       sortOrder: p.sortOrder,
+      ...(models
+        ? {
+            models: models
+              .filter((m) => m.status === CatalogStatus.ACTIVE)
+              .map((m) => this.toModelView({ ...m, provider: p })),
+          }
+        : {}),
     };
   }
 
@@ -117,12 +125,17 @@ export class CatalogService {
 
   async listProviders(
     options: { includeDisabled?: boolean } = {},
-  ): Promise<Provider[]> {
+  ): Promise<(Provider & { models: Model[] })[]> {
     return this.prisma.provider.findMany({
       where: options.includeDisabled
         ? undefined
         : { status: CatalogStatus.ACTIVE },
       orderBy: [{ sortOrder: 'asc' }, { code: 'asc' }],
+      include: {
+        models: {
+          orderBy: [{ sortOrder: 'asc' }, { code: 'asc' }],
+        },
+      },
     });
   }
 
