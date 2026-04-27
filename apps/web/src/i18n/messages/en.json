@@ -1,4 +1,18 @@
 {
+  "support": {
+    "title": "Support",
+    "description": "Describe your issue — we'll reply to the e-mail in your profile.",
+    "fromName": "From",
+    "fromEmail": "Email",
+    "subject": "Subject",
+    "subjectPlaceholder": "Briefly describe your question",
+    "message": "Message",
+    "messagePlaceholder": "Details, reproduction steps, request_id (if any)…",
+    "send": "Send",
+    "sending": "Sending…",
+    "sent": "Message sent. We'll reply to your email.",
+    "failed": "Failed to send: {error}"
+  },
   "common": {
     "appName": "AI API Aggregator",
     "loading": "Loading...",

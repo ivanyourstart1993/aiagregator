@@ -44,7 +44,7 @@ export class MailService {
     });
   }
 
-  private async send(args: SendArgs): Promise<void> {
+  async send(args: SendArgs): Promise<void> {
     if (this.resend) {
       const { error } = await this.resend.emails.send({
         from: this.mail.resendFrom,

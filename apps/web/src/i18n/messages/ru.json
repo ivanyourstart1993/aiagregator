@@ -1,4 +1,18 @@
 {
+  "support": {
+    "title": "Поддержка",
+    "description": "Опишите вашу проблему — мы ответим на e-mail, указанный в профиле.",
+    "fromName": "От",
+    "fromEmail": "Email",
+    "subject": "Тема",
+    "subjectPlaceholder": "Кратко суть вопроса",
+    "message": "Сообщение",
+    "messagePlaceholder": "Подробное описание, шаги воспроизведения, ID запроса (если есть)…",
+    "send": "Отправить",
+    "sending": "Отправка…",
+    "sent": "Сообщение отправлено. Мы ответим вам на email.",
+    "failed": "Не удалось отправить: {error}"
+  },
   "common": {
     "appName": "AI API Aggregator",
     "loading": "Загрузка...",
