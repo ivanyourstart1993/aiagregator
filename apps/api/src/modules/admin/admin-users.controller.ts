@@ -104,7 +104,7 @@ export class AdminUsersController {
         email: tombstone,
         name: null,
         emailVerified: null,
-        status: UserStatus.BLOCKED,
+        status: UserStatus.DELETED,
       },
       select: { id: true, email: true, status: true },
     });
