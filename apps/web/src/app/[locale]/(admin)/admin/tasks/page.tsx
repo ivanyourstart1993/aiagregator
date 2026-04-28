@@ -1,12 +1,16 @@
-import { ApiError, serverApi, type AdminTaskFilters, type AdminTasksPage } from '@/lib/server-api';
+import {
+  ApiError,
+  serverApi,
+  type AdminTaskFilters,
+  type AdminTaskStatus,
+  type AdminTasksPage,
+} from '@/lib/server-api';
 import { Link } from '@/i18n/navigation';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
 interface Props {
   searchParams: Promise<Record<string, string | undefined>>;
 }
-
-import type { AdminTaskStatus } from '@/lib/server-api';
 
 const STATUSES: readonly AdminTaskStatus[] = [
   'PENDING',
