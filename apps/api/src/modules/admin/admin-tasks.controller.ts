@@ -44,15 +44,25 @@ export class AdminTasksController {
     if (userId) where.userId = userId;
     if (methodId) where.methodId = methodId;
     if (providerId) {
-      where.method = { providerId };
+      // Task has no `method` relation — pre-resolve methodIds for this provider.
+      const ids = await this.prisma.method.findMany({
+        where: { providerId },
+        select: { id: true },
+      });
+      where.methodId = { in: ids.map((m) => m.id) };
     }
     if (userEmail) {
-      where.user = { email: { contains: userEmail, mode: 'insensitive' } };
+      const users = await this.prisma.user.findMany({
+        where: { email: { contains: userEmail, mode: 'insensitive' } },
+        select: { id: true },
+      });
+      where.userId = { in: users.map((u) => u.id) };
     }
     if (from || to) {
-      where.createdAt = {};
-      if (from) where.createdAt.gte = new Date(from);
-      if (to) where.createdAt.lte = new Date(to);
+      const range: Prisma.DateTimeFilter = {};
+      if (from) range.gte = new Date(from);
+      if (to) range.lte = new Date(to);
+      where.createdAt = range;
     }
 
     const [items, total] = await Promise.all([

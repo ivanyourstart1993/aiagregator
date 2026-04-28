@@ -6,7 +6,22 @@ interface Props {
   searchParams: Promise<Record<string, string | undefined>>;
 }
 
-const STATUSES = ['PENDING', 'PROCESSING', 'SUCCEEDED', 'FAILED', 'CANCELLED'] as const;
+import type { AdminTaskStatus } from '@/lib/server-api';
+
+const STATUSES: readonly AdminTaskStatus[] = [
+  'PENDING',
+  'PROCESSING',
+  'SUCCEEDED',
+  'FAILED',
+  'CANCELLED',
+];
+
+function parseStatus(raw: string | undefined): AdminTaskStatus | undefined {
+  if (!raw) return undefined;
+  return (STATUSES as readonly string[]).includes(raw)
+    ? (raw as AdminTaskStatus)
+    : undefined;
+}
 
 function fmt(d: string | null): string {
   if (!d) return '—';
@@ -43,9 +58,7 @@ export default async function AdminTasksPage({ searchParams }: Props) {
   const filters: AdminTaskFilters = {
     page,
     pageSize: 50,
-    status: STATUSES.includes(sp.status as (typeof STATUSES)[number])
-      ? (sp.status as (typeof STATUSES)[number])
-      : undefined,
+    status: parseStatus(sp.status),
     errorCode: sp.errorCode || undefined,
     userEmail: sp.userEmail || undefined,
     from: sp.from || undefined,
