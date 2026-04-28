@@ -132,13 +132,16 @@ export class GoogleBananaAdapter implements ProviderAdapter {
       responseModalities: ['IMAGE'],
     };
     const aspect = pickAspect(params);
-    const resolution = pickResolution(params);
+    // NOTE: `resolution` is part of our bundle key for pricing tiers (0.5K/1K/2K/4K)
+    // but the current Gemini Image API only accepts `aspectRatio` inside imageConfig
+    // and rejects `resolution` with `Cannot find field`. Keep resolution out of the
+    // outbound payload — Google picks the rendering size automatically.
     const imageConfig: Record<string, unknown> = {};
     if (aspect) imageConfig.aspectRatio = aspect;
-    if (resolution) imageConfig.resolution = resolution;
     if (Object.keys(imageConfig).length > 0) {
       generationConfig.imageConfig = imageConfig;
     }
+    void pickResolution; // keep helper exported for future API revisions
 
     const count = pickImagesCount(params);
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model.code)}:generateContent?key=${encodeURIComponent(apiKey)}`;
