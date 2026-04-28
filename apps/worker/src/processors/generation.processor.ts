@@ -809,8 +809,9 @@ export function createGenerationWorker(opts: {
                         ? ProviderAccountStatus.QUOTA_EXHAUSTED
                         : ProviderAccountStatus.INVALID_CREDENTIALS,
                   lastErrorAt: finishedAt,
-                  lastErrorCode: c.publicCode,
-                  lastErrorMessage: c.message.slice(0, 1000),
+                  // Schema has no lastErrorCode — prefix the publicCode into
+                  // the message so the admin UI can pattern-match if needed.
+                  lastErrorMessage: `[${c.publicCode}] ${c.message}`.slice(0, 1000),
                   excludedReason: reasonFromKind(c.kind as AdapterError['kind']),
                 },
               })
@@ -819,7 +820,7 @@ export function createGenerationWorker(opts: {
             continue;
           }
 
-          // Even for non-fatal adapter errors (rate-limit, validation, content),
+          // Non-fatal adapter errors (rate-limit, validation, content) — still
           // record the latest error on the account so the admin UI surfaces
           // the diagnostic without manual log diving.
           await prisma.providerAccount
@@ -827,8 +828,7 @@ export function createGenerationWorker(opts: {
               where: { id: acc.id },
               data: {
                 lastErrorAt: finishedAt,
-                lastErrorCode: c.publicCode,
-                lastErrorMessage: c.message.slice(0, 1000),
+                lastErrorMessage: `[${c.publicCode}] ${c.message}`.slice(0, 1000),
               },
             })
             .catch(() => undefined);

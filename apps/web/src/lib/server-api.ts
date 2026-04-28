@@ -818,7 +818,21 @@ export interface ProxyStats {
   avgLatencyMs?: number | null;
 }
 
-export type ProviderAccountStatus = 'ACTIVE' | 'DISABLED' | 'BROKEN' | 'EXHAUSTED';
+export type ProviderAccountStatus =
+  | 'ACTIVE'
+  | 'INACTIVE'
+  | 'MANUALLY_DISABLED'
+  | 'EXCLUDED_BY_BILLING'
+  | 'QUOTA_EXHAUSTED'
+  | 'LIMIT_REACHED'
+  | 'INVALID_CREDENTIALS'
+  | 'PROXY_ERROR'
+  | 'COOLDOWN'
+  | 'BLOCKED'
+  // legacy values still possible in older rows:
+  | 'DISABLED'
+  | 'BROKEN'
+  | 'EXHAUSTED';
 
 export interface ProviderAccountView {
   id: string;

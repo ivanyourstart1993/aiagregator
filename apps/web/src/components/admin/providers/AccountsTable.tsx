@@ -75,7 +75,14 @@ export function AccountsTable({ items }: Props) {
               <TableCell className="font-mono text-xs">{a.providerCode ?? a.providerId}</TableCell>
               <TableCell className="font-medium">{a.name}</TableCell>
               <TableCell>
-                <StatusBadge status={a.status} />
+                <div className="flex flex-col items-start gap-1">
+                  <StatusBadge status={a.status} />
+                  {BILLING_STATUSES.has(a.status) ? (
+                    <Badge variant="destructive" className="text-[10px]">
+                      ⚠ Проблема с биллингом
+                    </Badge>
+                  ) : null}
+                </div>
               </TableCell>
               <TableCell className="text-xs text-muted-foreground">
                 {a.proxy ? a.proxy.name : '—'}
@@ -134,22 +141,13 @@ export function AccountsTable({ items }: Props) {
   );
 }
 
-// Provider error codes that signal a billing / quota / credential problem on
-// the upstream account (Google AI Studio, Kling, etc.) — i.e. something the
-// admin should fix in the provider's billing console, not in our app.
-const BILLING_ERROR_CODES = new Set([
-  // codes the adapter actually emits via classifyError → publicCode:
-  'provider_billing_error',
-  'provider_quota_exhausted',
-  'provider_invalid_credentials',
-  'provider_rate_limited',
-  // legacy / external-style codes kept for forward compatibility:
-  'quota_exceeded',
-  'insufficient_quota',
-  'payment_required',
-  'billing_required',
-  'invalid_credentials',
-  'provider_unauthorized',
+// Statuses indicating the upstream provider account is broken at the source
+// (billing not enabled, quota burned, credentials invalid). Operator must fix
+// it in the provider's console — retrying our side won't help.
+const BILLING_STATUSES = new Set<ProviderAccountView['status']>([
+  'EXCLUDED_BY_BILLING' as ProviderAccountView['status'],
+  'QUOTA_EXHAUSTED' as ProviderAccountView['status'],
+  'INVALID_CREDENTIALS' as ProviderAccountView['status'],
 ]);
 
 function LastErrorCell({
@@ -159,18 +157,12 @@ function LastErrorCell({
   code: string | null;
   message: string | null;
 }) {
-  if (!code) return <span className="text-muted-foreground">—</span>;
-  const isBilling = BILLING_ERROR_CODES.has(code);
+  if (!code && !message) return <span className="text-muted-foreground">—</span>;
   return (
-    <div className="flex flex-col gap-1" title={message ?? code}>
-      <span className={isBilling ? 'font-mono text-destructive' : 'font-mono text-muted-foreground'}>
-        {code}
+    <div className="flex flex-col gap-1" title={message ?? code ?? ''}>
+      <span className="font-mono text-muted-foreground truncate max-w-[280px]">
+        {code ?? message}
       </span>
-      {isBilling ? (
-        <Badge variant="destructive" className="w-fit text-[10px]">
-          ⚠ Проблема с биллингом
-        </Badge>
-      ) : null}
     </div>
   );
 }
