@@ -138,7 +138,12 @@ export function AccountsTable({ items }: Props) {
 // the upstream account (Google AI Studio, Kling, etc.) — i.e. something the
 // admin should fix in the provider's billing console, not in our app.
 const BILLING_ERROR_CODES = new Set([
+  // codes the adapter actually emits via classifyError → publicCode:
+  'provider_billing_error',
+  'provider_quota_exhausted',
+  'provider_invalid_credentials',
   'provider_rate_limited',
+  // legacy / external-style codes kept for forward compatibility:
   'quota_exceeded',
   'insufficient_quota',
   'payment_required',

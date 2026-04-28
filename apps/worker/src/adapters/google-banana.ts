@@ -251,15 +251,23 @@ export class GoogleBananaAdapter implements ProviderAdapter {
       if (status === 401 || status === 403) {
         throw new AdapterError('invalid_credentials', message);
       }
+      // Google sometimes returns 429 with code=RESOURCE_EXHAUSTED for both
+      // transient rate limits AND hard quota exhaustion (free tier with
+      // billing not enabled returns "limit: 0"). Distinguish: if the message
+      // mentions free_tier / "limit: 0" / billing — treat as a hard quota
+      // problem so the account is flagged EXCLUDED_BY_BILLING / quota.
+      if (
+        code === 'RESOURCE_EXHAUSTED' ||
+        /quota exceeded|limit: 0|free_tier|billing/i.test(message)
+      ) {
+        throw new AdapterError('quota', message);
+      }
       if (status === 429) {
         const retry = res.headers.get('retry-after');
         const retryMs = retry ? Number(retry) * 1000 : undefined;
         throw new AdapterError('rate_limit', message, retryMs);
       }
-      if (
-        status === 400 &&
-        (code === 'RESOURCE_EXHAUSTED' || /quota/i.test(message))
-      ) {
+      if (status === 400 && /quota/i.test(message)) {
         throw new AdapterError('quota', message);
       }
       if (status === 400) {

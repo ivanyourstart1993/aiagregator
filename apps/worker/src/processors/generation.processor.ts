@@ -809,6 +809,7 @@ export function createGenerationWorker(opts: {
                         ? ProviderAccountStatus.QUOTA_EXHAUSTED
                         : ProviderAccountStatus.INVALID_CREDENTIALS,
                   lastErrorAt: finishedAt,
+                  lastErrorCode: c.publicCode,
                   lastErrorMessage: c.message.slice(0, 1000),
                   excludedReason: reasonFromKind(c.kind as AdapterError['kind']),
                 },
@@ -817,6 +818,20 @@ export function createGenerationWorker(opts: {
             // try the next account
             continue;
           }
+
+          // Even for non-fatal adapter errors (rate-limit, validation, content),
+          // record the latest error on the account so the admin UI surfaces
+          // the diagnostic without manual log diving.
+          await prisma.providerAccount
+            .update({
+              where: { id: acc.id },
+              data: {
+                lastErrorAt: finishedAt,
+                lastErrorCode: c.publicCode,
+                lastErrorMessage: c.message.slice(0, 1000),
+              },
+            })
+            .catch(() => undefined);
 
           // Retryable transient errors: rethrow so BullMQ applies backoff.
           // Final attempt falls through to terminal-fail path.
