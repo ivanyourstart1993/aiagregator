@@ -743,6 +743,17 @@ export const serverApi = {
   adminLoadRedis: () => apiGet<RedisLoad>(`/internal/admin/load/redis`),
   adminLoadDb: () => apiGet<DbLoad>(`/internal/admin/load/db`),
 
+  // ---- Admin tasks (Stage post-16) ----
+  adminListTasks: (filters?: AdminTaskFilters) =>
+    apiGet<AdminTasksPage>(`/internal/admin/tasks${qs(filters ?? {})}`),
+  adminGetTask: (id: string) => apiGet<AdminTaskDetail>(`/internal/admin/tasks/${id}`),
+  adminTaskErrorSummary: (hours = 24) =>
+    apiGet<{
+      hours: number;
+      since: string;
+      items: { errorCode: string; count: number }[];
+    }>(`/internal/admin/tasks/errors/summary?hours=${hours}`),
+
   // ---- Stage 15: Files ----
   adminListFiles: (filters?: FilesFilters) =>
     apiGet<FilesPage>(`/internal/admin/files${qs({ ...filters })}`),
@@ -1094,6 +1105,82 @@ export interface RedisLoad {
   keyspaceHits?: string;
   keyspaceMisses?: string;
   role?: string;
+}
+
+export type AdminTaskStatus =
+  | 'PENDING'
+  | 'PROCESSING'
+  | 'SUCCEEDED'
+  | 'FAILED'
+  | 'CANCELLED';
+
+export interface AdminTaskFilters {
+  page?: number;
+  pageSize?: number;
+  status?: AdminTaskStatus;
+  errorCode?: string;
+  userId?: string;
+  userEmail?: string;
+  providerId?: string;
+  methodId?: string;
+  from?: string;
+  to?: string;
+}
+
+export interface AdminTaskListItem {
+  id: string;
+  status: AdminTaskStatus;
+  mode: 'SYNC' | 'ASYNC';
+  providerJobId: string | null;
+  errorCode: string | null;
+  errorMessage: string | null;
+  attempts: number;
+  startedAt: string | null;
+  finishedAt: string | null;
+  createdAt: string;
+  user: { id: string; email: string; name: string | null };
+  method: {
+    id: string;
+    code: string;
+    publicName: string;
+    provider: { id: string; code: string; publicName: string };
+    model: { id: string; code: string; publicName: string };
+  } | null;
+  apiRequest: {
+    id: string;
+    bundleKey: string | null;
+    idempotencyKey: string | null;
+  } | null;
+}
+
+export interface AdminTasksPage {
+  items: AdminTaskListItem[];
+  total: number;
+  page: number;
+  pageSize: number;
+}
+
+export interface AdminTaskDetail {
+  task: {
+    id: string;
+    status: AdminTaskStatus;
+    mode: string;
+    providerJobId: string | null;
+    errorCode: string | null;
+    errorMessage: string | null;
+    attempts: number;
+    startedAt: string | null;
+    finishedAt: string | null;
+    createdAt: string;
+    updatedAt: string;
+    resultData: unknown;
+  };
+  user: { id: string; email: string; name: string | null; role: string; status: string };
+  method: AdminTaskListItem['method'];
+  apiRequest: Record<string, unknown> | null;
+  reservation: Record<string, unknown> | null;
+  transactions: Record<string, unknown>[];
+  resultFiles: Record<string, unknown>[];
 }
 
 export interface DbLoadGroup {
