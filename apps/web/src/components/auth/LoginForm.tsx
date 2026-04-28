@@ -63,7 +63,10 @@ export function LoginForm({ callbackUrl = '/dashboard' }: LoginFormProps) {
         return;
       }
       toast.success(tCommon('success'));
-      router.push(callbackUrl);
+      // next-intl router.push prepends the active locale automatically — strip
+      // any locale prefix from callbackUrl to avoid `/ru/ru/...` double prefix.
+      const noLocale = callbackUrl.replace(/^\/(en|ru)(?=\/|$)/, '') || '/dashboard';
+      router.push(noLocale);
       router.refresh();
     });
   }

@@ -83,8 +83,11 @@ export function AccountsTable({ items }: Props) {
               <TableCell className="text-xs">
                 {(a.todayUsed ?? 0)} / {a.dailyLimit ?? '∞'}
               </TableCell>
-              <TableCell className="text-xs text-muted-foreground">
-                {a.lastErrorCode ?? '—'}
+              <TableCell className="text-xs">
+                <LastErrorCell
+                  code={a.lastErrorCode ?? null}
+                  message={a.lastErrorMessage ?? null}
+                />
               </TableCell>
               <TableCell className="text-right">
                 <div className="flex justify-end gap-1">
@@ -127,6 +130,42 @@ export function AccountsTable({ items }: Props) {
           ))}
         </TableBody>
       </Table>
+    </div>
+  );
+}
+
+// Provider error codes that signal a billing / quota / credential problem on
+// the upstream account (Google AI Studio, Kling, etc.) — i.e. something the
+// admin should fix in the provider's billing console, not in our app.
+const BILLING_ERROR_CODES = new Set([
+  'provider_rate_limited',
+  'quota_exceeded',
+  'insufficient_quota',
+  'payment_required',
+  'billing_required',
+  'invalid_credentials',
+  'provider_unauthorized',
+]);
+
+function LastErrorCell({
+  code,
+  message,
+}: {
+  code: string | null;
+  message: string | null;
+}) {
+  if (!code) return <span className="text-muted-foreground">—</span>;
+  const isBilling = BILLING_ERROR_CODES.has(code);
+  return (
+    <div className="flex flex-col gap-1" title={message ?? code}>
+      <span className={isBilling ? 'font-mono text-destructive' : 'font-mono text-muted-foreground'}>
+        {code}
+      </span>
+      {isBilling ? (
+        <Badge variant="destructive" className="w-fit text-[10px]">
+          ⚠ Проблема с биллингом
+        </Badge>
+      ) : null}
     </div>
   );
 }

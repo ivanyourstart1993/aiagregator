@@ -25,9 +25,16 @@ export default async function middleware(request: NextRequest) {
     if (!session?.user) {
       const locale = localeFromPath(pathname);
       const loginPath = locale === routing.defaultLocale ? '/login' : `/${locale}/login`;
+      // LoginForm uses next-intl's router.push which prepends the active
+      // locale, so the callbackUrl must be locale-less. Strip leading /<lc>/.
+      const stripped = pathname.replace(
+        new RegExp(`^/(?:${(routing.locales as readonly string[]).join('|')})(?=/|$)`),
+        '',
+      );
+      const callbackUrl = stripped || pathname;
       const url = request.nextUrl.clone();
       url.pathname = loginPath;
-      url.search = `?callbackUrl=${encodeURIComponent(pathname)}`;
+      url.search = `?callbackUrl=${encodeURIComponent(callbackUrl)}`;
       return NextResponse.redirect(url);
     }
   }

@@ -837,6 +837,7 @@ export interface ProviderAccountView {
   todayUsed?: number | null;
   monthUsed?: number | null;
   lastErrorCode?: string | null;
+  lastErrorMessage?: string | null;
   lastErrorAt?: string | null;
   createdAt?: string;
   updatedAt?: string;
