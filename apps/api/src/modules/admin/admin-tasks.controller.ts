@@ -121,16 +121,14 @@ export class AdminTasksController {
       by: ['errorCode'],
       where: { status: TaskStatus.FAILED, finishedAt: { gte: since } },
       _count: { _all: true },
-      orderBy: { _count: { errorCode: 'desc' } },
     });
-    return {
-      hours,
-      since,
-      items: grouped.map((g) => ({
+    const items = grouped
+      .map((g) => ({
         errorCode: g.errorCode ?? 'unknown',
         count: g._count._all,
-      })),
-    };
+      }))
+      .sort((a, b) => b.count - a.count);
+    return { hours, since, items };
   }
 
   @Get(':id')
@@ -154,7 +152,7 @@ export class AdminTasksController {
       orderBy: { createdAt: 'desc' },
     });
 
-    const transactions = await this.prisma.walletTransaction.findMany({
+    const transactions = await this.prisma.transaction.findMany({
       where: { taskId: id },
       orderBy: { createdAt: 'asc' },
     });
