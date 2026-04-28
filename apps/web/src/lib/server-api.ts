@@ -745,7 +745,7 @@ export const serverApi = {
 
   // ---- Admin tasks (Stage post-16) ----
   adminListTasks: (filters?: AdminTaskFilters) =>
-    apiGet<AdminTasksPage>(`/internal/admin/tasks${qs(filters ?? {})}`),
+    apiGet<AdminTasksPage>(`/internal/admin/tasks${qs({ ...(filters ?? {}) })}`),
   adminGetTask: (id: string) => apiGet<AdminTaskDetail>(`/internal/admin/tasks/${id}`),
   adminTaskErrorSummary: (hours = 24) =>
     apiGet<{
