@@ -1,3 +1,4 @@
+import { createSign } from 'node:crypto';
 import { HttpsProxyAgent } from 'https-proxy-agent';
 import {
   AdapterError,
@@ -7,6 +8,75 @@ import {
   type ProviderAdapter,
 } from './types';
 import type { WorkerStorage } from '../storage/storage';
+
+// ----- Service Account → Vertex AI auth (cached access tokens) -------------
+interface ServiceAccountKey {
+  client_email: string;
+  private_key: string;
+  project_id: string;
+  token_uri?: string;
+}
+
+const saTokenCache = new Map<string, { token: string; expiresAt: number }>();
+
+function signJwtRS256(header: object, payload: object, privateKey: string): string {
+  const enc = (o: object) => Buffer.from(JSON.stringify(o)).toString('base64url');
+  const data = `${enc(header)}.${enc(payload)}`;
+  const sig = createSign('RSA-SHA256').update(data).sign(privateKey, 'base64url');
+  return `${data}.${sig}`;
+}
+
+async function getSAAccessToken(sa: ServiceAccountKey): Promise<string> {
+  const cached = saTokenCache.get(sa.client_email);
+  const now = Math.floor(Date.now() / 1000);
+  if (cached && cached.expiresAt - 120 > now) return cached.token;
+
+  const tokenUri = sa.token_uri ?? 'https://oauth2.googleapis.com/token';
+  const jwt = signJwtRS256(
+    { alg: 'RS256', typ: 'JWT' },
+    {
+      iss: sa.client_email,
+      scope: 'https://www.googleapis.com/auth/cloud-platform',
+      aud: tokenUri,
+      exp: now + 3600,
+      iat: now,
+    },
+    sa.private_key,
+  );
+  const body = new URLSearchParams({
+    grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer',
+    assertion: jwt,
+  });
+  const res = await fetch(tokenUri, {
+    method: 'POST',
+    headers: { 'content-type': 'application/x-www-form-urlencoded' },
+    body: body.toString(),
+  });
+  if (!res.ok) {
+    const t = await res.text();
+    throw new AdapterError(
+      'invalid_credentials',
+      `service-account token exchange failed: ${res.status} ${t.slice(0, 200)}`,
+    );
+  }
+  const json = (await res.json()) as { access_token?: string; expires_in?: number };
+  if (!json.access_token) {
+    throw new AdapterError('invalid_credentials', 'no access_token in token response');
+  }
+  saTokenCache.set(sa.client_email, {
+    token: json.access_token,
+    expiresAt: now + (json.expires_in ?? 3600),
+  });
+  return json.access_token;
+}
+
+// AI Studio model code → Vertex AI model code (Imagen replaces Gemini image-preview)
+function vertexModelFor(aiStudioModelCode: string): string {
+  if (aiStudioModelCode.includes('pro-image')) return 'imagen-4.0-ultra-generate-001';
+  return 'imagen-4.0-generate-001';
+}
+
+const VERTEX_LOCATION = 'us-central1';
 
 const SUPPORTED_MODELS = new Set([
   'gemini-3.1-flash-image-preview',
@@ -106,11 +176,17 @@ export class GoogleBananaAdapter implements ProviderAdapter {
   }
 
   async execute(ctx: AdapterContext): Promise<AdapterResult> {
+    // Service Account credential? → Vertex AI / Imagen path (uses Cloud Billing).
+    const sa = this.extractServiceAccount(ctx);
+    if (sa) {
+      return this.executeVertex(ctx, sa);
+    }
+
     const apiKey = this.extractApiKey(ctx);
     if (!apiKey) {
       throw new AdapterError(
         'invalid_credentials',
-        'google_banana account credentials missing apiKey',
+        'google_banana account credentials missing apiKey or serviceAccount',
       );
     }
 
@@ -181,6 +257,157 @@ export class GoogleBananaAdapter implements ProviderAdapter {
       }
     }
 
+    return { files };
+  }
+
+  private extractServiceAccount(ctx: AdapterContext): ServiceAccountKey | null {
+    const c = ctx.account.credentials ?? {};
+    let raw: unknown =
+      c['serviceAccount'] ??
+      c['service_account'] ??
+      c['serviceAccountKey'] ??
+      c['serviceAccountJson'];
+    if (typeof raw === 'string') {
+      try {
+        raw = JSON.parse(raw);
+      } catch {
+        return null;
+      }
+    }
+    if (!raw || typeof raw !== 'object') return null;
+    const obj = raw as Record<string, unknown>;
+    const email = obj['client_email'];
+    const key = obj['private_key'];
+    const project = obj['project_id'];
+    if (
+      typeof email !== 'string' ||
+      typeof key !== 'string' ||
+      typeof project !== 'string'
+    ) {
+      return null;
+    }
+    return {
+      client_email: email,
+      private_key: key,
+      project_id: project,
+      token_uri:
+        typeof obj['token_uri'] === 'string'
+          ? (obj['token_uri'] as string)
+          : undefined,
+    };
+  }
+
+  private async executeVertex(
+    ctx: AdapterContext,
+    sa: ServiceAccountKey,
+  ): Promise<AdapterResult> {
+    const { method, model, params } = ctx;
+    if (!SUPPORTED_METHODS.has(method.code)) {
+      throw new AdapterError('validation', `unsupported method: ${method.code}`);
+    }
+    const prompt = typeof params['prompt'] === 'string' ? params['prompt'] : '';
+    if (!prompt && method.code === 'text_to_image') {
+      throw new AdapterError('validation', 'prompt is required');
+    }
+
+    const access = await getSAAccessToken(sa);
+    const vertexModel = vertexModelFor(model.code);
+    const url = `https://${VERTEX_LOCATION}-aiplatform.googleapis.com/v1/projects/${sa.project_id}/locations/${VERTEX_LOCATION}/publishers/google/models/${vertexModel}:predict`;
+
+    const count = pickImagesCount(params);
+    const aspect = pickAspect(params);
+    const instances: Array<Record<string, unknown>> = [{ prompt }];
+    const parameters: Record<string, unknown> = { sampleCount: count };
+    if (aspect) parameters.aspectRatio = aspect;
+
+    let res: Response;
+    try {
+      const init: RequestInit & { agent?: unknown } = {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          authorization: `Bearer ${access}`,
+        },
+        body: JSON.stringify({ instances, parameters }),
+      };
+      const agent = this.buildProxyAgent(ctx);
+      if (agent) init.agent = agent;
+      res = await fetch(url, init);
+    } catch (err) {
+      throw new AdapterError(
+        'temporary',
+        `network error calling vertex: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
+    const text = await res.text();
+    let parsed: {
+      predictions?: Array<{ bytesBase64Encoded?: string; mimeType?: string }>;
+      error?: { code?: number; status?: string; message?: string };
+    } = {};
+    try {
+      parsed = text ? JSON.parse(text) : {};
+    } catch {
+      // fallthrough — leave parsed empty
+    }
+    if (!res.ok) {
+      const status = res.status;
+      const message =
+        parsed.error?.message ??
+        `vertex returned status ${status}: ${text.slice(0, 500)}`;
+      const code = parsed.error?.status ?? '';
+      if (status === 401 || status === 403) {
+        throw new AdapterError('invalid_credentials', message);
+      }
+      if (
+        code === 'RESOURCE_EXHAUSTED' ||
+        /quota exceeded|limit: 0|free_tier|billing|prepayment/i.test(message)
+      ) {
+        throw new AdapterError('quota', message);
+      }
+      if (status === 429) {
+        const retry = res.headers.get('retry-after');
+        const retryMs = retry ? Number(retry) * 1000 : undefined;
+        throw new AdapterError('rate_limit', message, retryMs);
+      }
+      if (status === 400) throw new AdapterError('validation', message);
+      if (status >= 500) throw new AdapterError('temporary', message);
+      throw new AdapterError('unknown', message);
+    }
+
+    const preds = parsed.predictions ?? [];
+    if (preds.length === 0) {
+      throw new AdapterError('unknown', 'vertex response had no predictions');
+    }
+
+    const files: AdapterFile[] = [];
+    for (let i = 0; i < preds.length; i++) {
+      const p = preds[i];
+      const data = p?.bytesBase64Encoded;
+      if (!data) continue;
+      const mime = p.mimeType ?? 'image/png';
+      const ext = mimeToExt(mime);
+      const key = this.storage.buildKey({
+        userId: ctx.userId,
+        taskId: ctx.taskId,
+        filename: `image_${i}.${ext}`,
+      });
+      const uploaded = await this.storage.upload({
+        key,
+        body: Buffer.from(data, 'base64'),
+        contentType: mime,
+      });
+      files.push({
+        url: uploaded.url,
+        mimeType: mime,
+        bucket: uploaded.bucket,
+        key: uploaded.key,
+        size: uploaded.size,
+        fileType: 'image',
+      });
+    }
+    if (files.length === 0) {
+      throw new AdapterError('unknown', 'vertex predictions had no image data');
+    }
     return { files };
   }
 
