@@ -358,15 +358,25 @@ export class GoogleBananaAdapter implements ProviderAdapter {
       if (status === 401 || status === 403) {
         throw new AdapterError('invalid_credentials', message);
       }
-      if (
-        code === 'RESOURCE_EXHAUSTED' ||
-        /quota exceeded|limit: 0|free_tier|billing|prepayment/i.test(message)
-      ) {
+      // Hard billing/quota markers — these mean the account is unusable until
+      // the operator fixes billing on Google's side. failAccount=true.
+      const isHardQuota =
+        /free_tier|limit:\s*0|prepayment|credits.*depleted|billing.*disabled/i.test(
+          message,
+        );
+      // Per-minute / per-region rate limits — RESOURCE_EXHAUSTED with markers
+      // like online_prediction_requests_per_base_model. These are TRANSIENT —
+      // retry with backoff, do NOT mark the account as exhausted.
+      const isPerMinuteRate =
+        /requests_per_base_model|requests_per_minute|requests_per_region|requests_per_project|submit a quota increase/i.test(
+          message,
+        );
+      if (isHardQuota) {
         throw new AdapterError('quota', message);
       }
-      if (status === 429) {
+      if (status === 429 || code === 'RESOURCE_EXHAUSTED' || isPerMinuteRate) {
         const retry = res.headers.get('retry-after');
-        const retryMs = retry ? Number(retry) * 1000 : undefined;
+        const retryMs = retry ? Number(retry) * 1000 : 30_000;
         throw new AdapterError('rate_limit', message, retryMs);
       }
       if (status === 400) throw new AdapterError('validation', message);
@@ -478,20 +488,23 @@ export class GoogleBananaAdapter implements ProviderAdapter {
       if (status === 401 || status === 403) {
         throw new AdapterError('invalid_credentials', message);
       }
-      // Google sometimes returns 429 with code=RESOURCE_EXHAUSTED for both
-      // transient rate limits AND hard quota exhaustion (free tier with
-      // billing not enabled returns "limit: 0"). Distinguish: if the message
-      // mentions free_tier / "limit: 0" / billing — treat as a hard quota
-      // problem so the account is flagged EXCLUDED_BY_BILLING / quota.
-      if (
-        code === 'RESOURCE_EXHAUSTED' ||
-        /quota exceeded|limit: 0|free_tier|billing/i.test(message)
-      ) {
+      // Distinguish hard quota (free_tier limit:0, billing depleted) from
+      // transient per-minute rate limits — same message family but vastly
+      // different operator action: "fix billing" vs "wait 30s".
+      const isHardQuota =
+        /free_tier|limit:\s*0|prepayment|credits.*depleted|billing.*disabled/i.test(
+          message,
+        );
+      const isPerMinuteRate =
+        /requests_per_base_model|requests_per_minute|requests_per_region|requests_per_project|submit a quota increase/i.test(
+          message,
+        );
+      if (isHardQuota) {
         throw new AdapterError('quota', message);
       }
-      if (status === 429) {
+      if (status === 429 || code === 'RESOURCE_EXHAUSTED' || isPerMinuteRate) {
         const retry = res.headers.get('retry-after');
-        const retryMs = retry ? Number(retry) * 1000 : undefined;
+        const retryMs = retry ? Number(retry) * 1000 : 30_000;
         throw new AdapterError('rate_limit', message, retryMs);
       }
       if (status === 400 && /quota/i.test(message)) {
