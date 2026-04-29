@@ -84,6 +84,10 @@ export class CreateProviderAccountDto {
   @ArrayMaxSize(128)
   @IsString({ each: true })
   supportedMethodIds?: string[];
+
+  // USD as a float (e.g. 35 means $35). Service-side converts to nano-USD.
+  @IsOptional()
+  acquisitionCostUsd?: number;
 }
 
 export class UpdateProviderAccountDto {
@@ -154,4 +158,7 @@ export class UpdateProviderAccountDto {
   @ArrayMaxSize(128)
   @IsString({ each: true })
   supportedMethodIds?: string[];
+
+  @IsOptional()
+  acquisitionCostUsd?: number;
 }

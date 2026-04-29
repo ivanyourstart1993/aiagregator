@@ -853,6 +853,7 @@ export interface ProviderAccountView {
   lastErrorCode?: string | null;
   lastErrorMessage?: string | null;
   lastErrorAt?: string | null;
+  acquisitionCostUnits?: string | null;
   createdAt?: string;
   updatedAt?: string;
 }
@@ -896,6 +897,27 @@ export interface UpdateProviderAccountInput {
 }
 
 export interface ProviderAccountStats {
+  accountId?: string;
+  from?: string;
+  to?: string;
+  attempts?: number;
+  success?: number;
+  failed?: number;
+  avgDurationMs?: number;
+  totalProviderCostUnits?: string;
+  totalRevenueUnits?: string;
+  acquisitionCostUnits?: string;
+  netProfitUnits?: string;
+  roiPct?: number | null;
+  breakevenAtRequest?: number | null;
+  errorBreakdown?: Record<string, number>;
+  counters?: {
+    todayRequests?: number;
+    todayCostUnits?: string;
+    monthRequests?: number;
+    monthCostUnits?: string;
+  };
+  // legacy fields kept for older callers:
   requestsToday?: number;
   successToday?: number;
   failuresToday?: number;

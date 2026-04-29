@@ -55,6 +55,11 @@ export function AccountForm({ mode, account, providers, proxies }: Props) {
   const [supportedMethods, setSupportedMethods] = useState(
     (account?.supportedMethodIds ?? []).join(','),
   );
+  const [acquisitionCostUsd, setAcquisitionCostUsd] = useState(
+    account?.acquisitionCostUnits != null
+      ? (Number(account.acquisitionCostUnits) / 1_000_000_000).toString()
+      : '',
+  );
 
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -82,6 +87,7 @@ export function AccountForm({ mode, account, providers, proxies }: Props) {
         .split(',')
         .map((s) => s.trim())
         .filter(Boolean),
+      acquisitionCostUsd: acquisitionCostUsd ? Number(acquisitionCostUsd) : 0,
     };
 
     startTransition(async () => {
@@ -196,6 +202,23 @@ export function AccountForm({ mode, account, providers, proxies }: Props) {
       <div className="space-y-2">
         <Label>{t('fieldSupportedMethods')}</Label>
         <Input value={supportedMethods} onChange={(e) => setSupportedMethods(e.target.value)} />
+      </div>
+
+      <div className="space-y-2">
+        <Label>
+          Стоимость аккаунта (USD)
+          <span className="ml-2 text-xs text-muted-foreground">
+            Сколько потрачено на покупку (карта/SIM/ключ). Используется для ROI.
+          </span>
+        </Label>
+        <Input
+          type="number"
+          step="0.01"
+          min="0"
+          placeholder="35"
+          value={acquisitionCostUsd}
+          onChange={(e) => setAcquisitionCostUsd(e.target.value)}
+        />
       </div>
 
       <div className="flex justify-end gap-2">

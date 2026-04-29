@@ -869,6 +869,10 @@ model ProviderAccount {
   monthRequestsCount  Int                   @default(0)
   monthCostUnits      BigInt                @default(0)
   countersResetAt     DateTime              @default(now())
+  // Acquisition cost in nano-USD (1 USD = 1e9). E.g. cost of buying the API
+  // key from a marketplace, virtual card + SMS for trial farming, etc.
+  // Used for per-account ROI calculation.
+  acquisitionCostUnits BigInt?              @default(0)
   createdAt           DateTime              @default(now())
   updatedAt           DateTime              @updatedAt
 

@@ -91,6 +91,10 @@ export class AdminProviderAccountController {
         maxRequestsPerDay: body.maxRequestsPerDay ?? null,
         supportedModelIds: body.supportedModelIds ?? [],
         supportedMethodIds: body.supportedMethodIds ?? [],
+        acquisitionCostUnits:
+          body.acquisitionCostUsd !== undefined && body.acquisitionCostUsd !== null
+            ? BigInt(Math.round(body.acquisitionCostUsd * 1_000_000_000))
+            : 0n,
       },
     });
     return this.toView(created);
@@ -147,6 +151,12 @@ export class AdminProviderAccountController {
     }
     if (body.supportedMethodIds !== undefined) {
       data.supportedMethodIds = body.supportedMethodIds;
+    }
+    if (body.acquisitionCostUsd !== undefined) {
+      data.acquisitionCostUnits =
+        body.acquisitionCostUsd === null
+          ? 0n
+          : BigInt(Math.round(body.acquisitionCostUsd * 1_000_000_000));
     }
     const acc = await this.prisma.providerAccount.update({
       where: { id },
@@ -221,6 +231,7 @@ export class AdminProviderAccountController {
         startedAt: { gte: from, lte: to },
       },
       select: {
+        taskId: true,
         status: true,
         errorType: true,
         errorCode: true,
@@ -233,14 +244,56 @@ export class AdminProviderAccountController {
     let totalDurationMs = 0;
     let totalCostUnits = 0n;
     const errorBreakdown: Record<string, number> = {};
+    const successTaskIds: string[] = [];
     for (const a of attempts) {
-      if (a.status === 'success') success += 1;
+      if (a.status === 'success') {
+        success += 1;
+        if (a.taskId) successTaskIds.push(a.taskId);
+      }
       if (a.status === 'failed') failed += 1;
       if (a.durationMs) totalDurationMs += a.durationMs;
       if (a.providerCostUnits) totalCostUnits += a.providerCostUnits;
       const k = a.errorType ?? a.errorCode;
       if (k) errorBreakdown[k] = (errorBreakdown[k] ?? 0) + 1;
     }
+
+    // Revenue = sum of CAPTURED reservations on tasks that this account
+    // successfully served. Wallet transactions of type RESERVATION_CAPTURE
+    // record what the user actually paid.
+    let totalRevenueUnits = 0n;
+    if (successTaskIds.length > 0) {
+      const txs = await this.prisma.transaction.findMany({
+        where: {
+          taskId: { in: successTaskIds },
+          type: 'RESERVATION_CAPTURE',
+          status: 'POSTED',
+        },
+        select: { amountUnits: true },
+      });
+      // RESERVATION_CAPTURE amounts are negative (debit from wallet);
+      // revenue = absolute value.
+      for (const t of txs) {
+        const n = t.amountUnits;
+        totalRevenueUnits += n < 0n ? -n : n;
+      }
+    }
+
+    const acquisitionCostUnits = acc.acquisitionCostUnits ?? 0n;
+    const netProfitUnits = totalRevenueUnits - totalCostUnits - acquisitionCostUnits;
+    const roiPct =
+      acquisitionCostUnits > 0n
+        ? Number(((netProfitUnits * 10000n) / acquisitionCostUnits).toString()) / 100
+        : null;
+    const breakevenAtRequest =
+      success > 0 && totalRevenueUnits > 0n
+        ? Number(
+            (
+              (acquisitionCostUnits * BigInt(success)) /
+              totalRevenueUnits
+            ).toString(),
+          )
+        : null;
+
     return {
       accountId: id,
       from: from.toISOString(),
@@ -251,6 +304,11 @@ export class AdminProviderAccountController {
       avgDurationMs:
         attempts.length > 0 ? Math.round(totalDurationMs / attempts.length) : 0,
       totalProviderCostUnits: totalCostUnits.toString(),
+      totalRevenueUnits: totalRevenueUnits.toString(),
+      acquisitionCostUnits: acquisitionCostUnits.toString(),
+      netProfitUnits: netProfitUnits.toString(),
+      roiPct,
+      breakevenAtRequest,
       errorBreakdown,
       counters: {
         todayRequests: acc.todayRequestsCount,
@@ -282,6 +340,7 @@ export class AdminProviderAccountController {
     lastErrorAt: Date | null;
     lastErrorMessage: string | null;
     excludedReason: string | null;
+    acquisitionCostUnits?: bigint | null;
     createdAt: Date;
     updatedAt: Date;
   }) {
@@ -319,6 +378,7 @@ export class AdminProviderAccountController {
       lastErrorAt: a.lastErrorAt,
       lastErrorMessage: a.lastErrorMessage,
       excludedReason: a.excludedReason,
+      acquisitionCostUnits: (a.acquisitionCostUnits ?? 0n).toString(),
       createdAt: a.createdAt,
       updatedAt: a.updatedAt,
     };
