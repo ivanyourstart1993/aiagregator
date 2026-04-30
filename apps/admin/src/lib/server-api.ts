@@ -158,6 +158,7 @@ export interface AdminUserSummary {
   status: 'ACTIVE' | 'SUSPENDED' | 'DELETED';
   emailVerified: string | null;
   createdAt: string;
+  lastLoginAt?: string | null;
 }
 
 function buildQuery(filters: TransactionFiltersInput | undefined): string {
