@@ -10,6 +10,12 @@ import {
   type VerifyEmailDto,
 } from './dto/verify-email.dto';
 import { oauthBridgeSchema, type OauthBridgeDto } from './dto/oauth-bridge.dto';
+import {
+  forgotPasswordSchema,
+  type ForgotPasswordDto,
+  resetPasswordSchema,
+  type ResetPasswordDto,
+} from './dto/password-reset.dto';
 import { AuthService } from './auth.service';
 
 @Controller('internal/auth')
@@ -54,5 +60,21 @@ export class AuthController {
   @UsePipes(new ZodValidationPipe(oauthBridgeSchema))
   oauthBridge(@Body() body: OauthBridgeDto) {
     return this.auth.oauthBridge(body);
+  }
+
+  @Public()
+  @Post('forgot-password')
+  @HttpCode(HttpStatus.OK)
+  @UsePipes(new ZodValidationPipe(forgotPasswordSchema))
+  forgotPassword(@Body() body: ForgotPasswordDto) {
+    return this.auth.forgotPassword(body);
+  }
+
+  @Public()
+  @Post('reset-password')
+  @HttpCode(HttpStatus.OK)
+  @UsePipes(new ZodValidationPipe(resetPasswordSchema))
+  resetPassword(@Body() body: ResetPasswordDto) {
+    return this.auth.resetPassword(body);
   }
 }

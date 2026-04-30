@@ -18,12 +18,17 @@ import type { AuthConfig } from '../../config/configuration';
 import type { LoginDto } from './dto/login.dto';
 import type { RegisterDto } from './dto/register.dto';
 import type { OauthBridgeDto } from './dto/oauth-bridge.dto';
+import type { ForgotPasswordDto, ResetPasswordDto } from './dto/password-reset.dto';
 
 const tokenAlphabet = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
 const generateToken = customAlphabet(tokenAlphabet, 48);
 
 const VERIFY_TTL_MS = 24 * 60 * 60 * 1000;
 const RESEND_THROTTLE_MS = 60_000;
+
+const PASSWORD_RESET_TTL_MS = 60 * 60 * 1000; // 1 hour
+const PASSWORD_RESET_TTL_HOURS = 1;
+const PASSWORD_RESET_THROTTLE_MS = 60_000;
 
 export interface SafeUser {
   id: string;
@@ -291,6 +296,104 @@ export class AuthService {
       return user;
     });
     return { user: toSafeUser(created) };
+  }
+
+  /**
+   * Request a password reset link. Always returns `{ ok: true }` — even if the
+   * email doesn't exist — to avoid leaking which addresses are registered.
+   * If a token was issued in the last minute, refuses to send another (throttle).
+   */
+  async forgotPassword(dto: ForgotPasswordDto): Promise<{ ok: true }> {
+    const email = dto.email.toLowerCase().trim();
+    const user = await this.prisma.user.findUnique({ where: { email } });
+    if (!user || user.status !== UserStatus.ACTIVE) {
+      return { ok: true };
+    }
+
+    const recent = await this.prisma.verificationToken.findFirst({
+      where: {
+        identifier: email,
+        type: VerificationTokenType.PASSWORD_RESET,
+        expires: { gt: new Date(Date.now() + PASSWORD_RESET_TTL_MS - PASSWORD_RESET_THROTTLE_MS) },
+      },
+    });
+    if (recent) {
+      // Silently swallow throttle for the user-facing endpoint to avoid
+      // leaking timing info; one minute later they can retry.
+      return { ok: true };
+    }
+
+    const token = generateToken();
+    const expires = new Date(Date.now() + PASSWORD_RESET_TTL_MS);
+    await this.prisma.verificationToken.deleteMany({
+      where: { identifier: email, type: VerificationTokenType.PASSWORD_RESET },
+    });
+    await this.prisma.verificationToken.create({
+      data: { identifier: email, token, expires, type: VerificationTokenType.PASSWORD_RESET },
+    });
+
+    const resetUrl = `${this.webUrl.replace(/\/$/, '')}/reset-password?token=${encodeURIComponent(token)}`;
+    try {
+      await this.mail.sendPasswordResetEmail(
+        user.email,
+        user.name ?? user.email,
+        resetUrl,
+        PASSWORD_RESET_TTL_HOURS,
+      );
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      this.logger.error(`Failed to send password reset email to ${email}: ${msg}`);
+      // Do not leak send failure — token is valid until expiry; user can retry.
+    }
+
+    return { ok: true };
+  }
+
+  /**
+   * Consume a password reset token: hash the new password, update the user,
+   * delete the token. Throws on invalid / expired token.
+   */
+  async resetPassword(dto: ResetPasswordDto): Promise<{ user: SafeUser }> {
+    const record = await this.prisma.verificationToken.findUnique({ where: { token: dto.token } });
+    if (!record || record.type !== VerificationTokenType.PASSWORD_RESET) {
+      throw new NotFoundException({
+        code: ErrorCode.INVALID_REQUEST,
+        message: 'Reset token not found.',
+      });
+    }
+    if (record.expires.getTime() < Date.now()) {
+      // Clean up expired token opportunistically.
+      await this.prisma.verificationToken.delete({ where: { token: dto.token } }).catch(() => {});
+      throw new BadRequestException({
+        code: ErrorCode.INVALID_REQUEST,
+        message: 'Reset token has expired.',
+      });
+    }
+
+    const passwordHash = await argon2.hash(dto.password + this.auth.apiKeyPepper, {
+      type: argon2.argon2id,
+      memoryCost: 19456,
+      timeCost: 2,
+      parallelism: 1,
+    });
+
+    const user = await this.prisma.$transaction(async (tx) => {
+      const updated = await tx.user.update({
+        where: { email: record.identifier },
+        data: {
+          passwordHash,
+          // A successful reset implies email ownership; mirror verify-email semantics.
+          emailVerified: new Date(),
+        },
+      });
+      // Invalidate this and any other outstanding reset tokens for this email.
+      await tx.verificationToken.deleteMany({
+        where: { identifier: record.identifier, type: VerificationTokenType.PASSWORD_RESET },
+      });
+      return updated;
+    });
+
+    return { user: toSafeUser(user) };
   }
 
   private async issueAndSendVerification(email: string, displayName: string): Promise<void> {

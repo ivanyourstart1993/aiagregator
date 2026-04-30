@@ -1,7 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { render } from '@react-email/render';
-import { VerifyEmail } from '@aiagg/email-templates';
+import { VerifyEmail, PasswordResetEmail } from '@aiagg/email-templates';
 import { Resend } from 'resend';
 import * as nodemailer from 'nodemailer';
 import type { MailConfig } from '../../config/configuration';
@@ -39,6 +39,22 @@ export class MailService {
     await this.send({
       to,
       subject: 'Verify your email — AI API Aggregator',
+      html,
+      text,
+    });
+  }
+
+  async sendPasswordResetEmail(
+    to: string,
+    name: string,
+    resetUrl: string,
+    ttlHours = 1,
+  ): Promise<void> {
+    const html = await render(PasswordResetEmail({ name, resetUrl, ttlHours }));
+    const text = `Hi ${name}, reset your password: ${resetUrl} (link expires in ${ttlHours}h)`;
+    await this.send({
+      to,
+      subject: 'Reset your password — AI API Aggregator',
       html,
       text,
     });

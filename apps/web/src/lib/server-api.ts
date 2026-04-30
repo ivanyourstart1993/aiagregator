@@ -416,6 +416,14 @@ export const serverApi = {
     apiPost<{ ok: true }>('/internal/auth/verify-email', { token }, { anonymous: true }),
   resendVerification: (email: string) =>
     apiPost<{ ok: true }>('/internal/auth/resend-verification', { email }, { anonymous: true }),
+  forgotPassword: (email: string) =>
+    apiPost<{ ok: true }>('/internal/auth/forgot-password', { email }, { anonymous: true }),
+  resetPassword: (token: string, password: string) =>
+    apiPost<{ user: CurrentUser }>(
+      '/internal/auth/reset-password',
+      { token, password },
+      { anonymous: true },
+    ),
 
   // Stage 2 — User billing
   getBalance: () => apiGet<BalanceView>('/internal/billing/balance'),
