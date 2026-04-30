@@ -47,6 +47,10 @@ export const config = {
     // Skip Next internals and API routes; everything else goes through next-intl.
     // Match paths that don't END in a known static file extension — bare dots
     // inside slugs (e.g. `gemini-3.1-flash`) must still be routed.
-    '/((?!api|_next|_vercel|.*\\.(?:ico|png|jpg|jpeg|gif|webp|svg|css|js|map|txt|xml|json|woff2?|ttf|eot)$).*)',
+    // `api/` (with trailing slash) excludes route handlers under /api/* —
+    // earlier `api` (no slash) also blocked legitimate page routes like
+    // /api-keys and /api-explorer, returning 404 because next-intl never
+    // resolved the [locale] segment.
+    '/((?!api/|_next|_vercel|.*\\.(?:ico|png|jpg|jpeg|gif|webp|svg|css|js|map|txt|xml|json|woff2?|ttf|eot)$).*)',
   ],
 };
