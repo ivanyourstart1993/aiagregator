@@ -20,6 +20,16 @@ async function safe<T>(fn: () => Promise<T>, fallback: T): Promise<T> {
   }
 }
 
+// API endpoints sometimes return {items: [...]} envelope, sometimes raw array.
+// Coerce to array defensively.
+function asArray<T>(x: unknown): T[] {
+  if (Array.isArray(x)) return x as T[];
+  if (x && typeof x === 'object' && Array.isArray((x as { items?: unknown }).items)) {
+    return (x as { items: T[] }).items;
+  }
+  return [];
+}
+
 function isoDaysAgo(days: number): string {
   const d = new Date();
   d.setUTCDate(d.getUTCDate() - days);
@@ -57,18 +67,26 @@ export default async function DashboardPage() {
   const to = new Date().toISOString();
   const filter = { from, to };
 
-  const [summary, daily, costByProvider, topUsers, accountsPage] = await Promise.all([
-    safe<AnalyticsSummary | null>(() => serverApi.adminAnalyticsSummary(filter), null),
-    safe<DailyPoint[]>(() => serverApi.adminAnalyticsRevenueDaily(filter), []),
-    safe<CostByProviderRow[]>(() => serverApi.adminAnalyticsCostByProvider(filter), []),
-    safe<TopUserRow[]>(() => serverApi.adminAnalyticsTopUsers({ ...filter, limit: 10 }), []),
-    safe<{ items?: ProviderAccountView[] }>(
-      () => serverApi.adminListProviderAccounts({ pageSize: 200 }),
-      { items: [] },
-    ),
-  ]);
+  const [summaryRaw, dailyRaw, costByProviderRaw, topUsersRaw, accountsPageRaw] =
+    await Promise.all([
+      safe<unknown>(() => serverApi.adminAnalyticsSummary(filter), null),
+      safe<unknown>(() => serverApi.adminAnalyticsRevenueDaily(filter), []),
+      safe<unknown>(() => serverApi.adminAnalyticsCostByProvider(filter), []),
+      safe<unknown>(
+        () => serverApi.adminAnalyticsTopUsers({ ...filter, limit: 10 }),
+        [],
+      ),
+      safe<unknown>(
+        () => serverApi.adminListProviderAccounts({ pageSize: 200 }),
+        { items: [] },
+      ),
+    ]);
 
-  const accounts: ProviderAccountView[] = accountsPage.items ?? [];
+  const summary = (summaryRaw ?? null) as AnalyticsSummary | null;
+  const daily = asArray<DailyPoint>(dailyRaw);
+  const costByProvider = asArray<CostByProviderRow>(costByProviderRaw);
+  const topUsers = asArray<TopUserRow>(topUsersRaw);
+  const accounts = asArray<ProviderAccountView>(accountsPageRaw);
 
   // per-account ROI — only for accounts with acquisitionCost set or recently used
   const interesting = accounts
