@@ -23,6 +23,8 @@
     "password": "Password",
     "signIn": "Sign in",
     "signingIn": "Signing in…",
+    "or": "or",
+    "googleButton": "Continue with Google",
     "errorInvalid": "Invalid email or password",
     "errorForbidden": "Forbidden. Admins only.",
     "errorGeneric": "Sign-in failed. Try again later."

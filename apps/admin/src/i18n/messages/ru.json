@@ -23,6 +23,8 @@
     "password": "Пароль",
     "signIn": "Войти",
     "signingIn": "Входим…",
+    "or": "или",
+    "googleButton": "Продолжить через Google",
     "errorInvalid": "Неверный email или пароль",
     "errorForbidden": "Доступ запрещён. Только для админов.",
     "errorGeneric": "Ошибка входа. Попробуйте позже."

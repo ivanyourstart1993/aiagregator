@@ -1,5 +1,6 @@
 import NextAuth, { type DefaultSession, type NextAuthConfig, type NextAuthResult } from 'next-auth';
 import Credentials from 'next-auth/providers/credentials';
+import Google from 'next-auth/providers/google';
 import { SignJWT, jwtVerify } from 'jose';
 import { env, getJwtSecretBytes } from './env';
 
@@ -75,6 +76,11 @@ export const authConfig: NextAuthConfig = {
         };
       },
     }),
+    Google({
+      clientId: env.GOOGLE_CLIENT_ID,
+      clientSecret: env.GOOGLE_CLIENT_SECRET,
+      allowDangerousEmailAccountLinking: false,
+    }),
   ],
   jwt: {
     // Custom HS256 encoder — emits a token that the NestJS API
@@ -119,8 +125,52 @@ export const authConfig: NextAuthConfig = {
     },
   },
   callbacks: {
+    /**
+     * For Google sign-in: bridge to the backend to find/create the User row,
+     * then deny if role is not ADMIN/SUPER_ADMIN. Credentials sign-in already
+     * does this in `authorize`, so here we just gate the OAuth path.
+     *
+     * Returning a string redirects the user there. Returning false sends them
+     * to the default error page. We push them back to /login with a query so
+     * the form can render a localised "forbidden" message.
+     */
+    async signIn({ account, profile, user }) {
+      if (account?.provider !== 'google') return true;
+      if (!profile?.email) return false;
+
+      const res = await fetch(`${env.API_URL}/internal/auth/oauth-bridge`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          provider: 'google',
+          providerAccountId: account.providerAccountId,
+          email: profile.email,
+          name: profile.name,
+        }),
+        cache: 'no-store',
+      });
+      if (!res.ok) return '/login?error=oauth';
+
+      const data = (await res.json()) as { user?: InternalUser };
+      const bridged = data.user;
+      if (!bridged) return '/login?error=oauth';
+      if (bridged.role !== 'ADMIN' && bridged.role !== 'SUPER_ADMIN') {
+        return '/login?error=forbidden';
+      }
+
+      // Stuff bridged identity into the `user` arg so jwt() picks it up
+      // without making a second bridge call.
+      Object.assign(user, {
+        id: bridged.id,
+        email: bridged.email,
+        name: bridged.name,
+        role: bridged.role,
+        emailVerified: bridged.emailVerified,
+      });
+      return true;
+    },
     async jwt({ token, user }) {
-      // First sign-in (Credentials): user is provided.
+      // First sign-in (Credentials or Google): user is provided.
       if (user) {
         const u = user as Partial<InternalUser> & { id?: string };
         if (u.id) token.sub = u.id;
