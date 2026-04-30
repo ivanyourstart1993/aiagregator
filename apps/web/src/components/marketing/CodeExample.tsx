@@ -6,7 +6,7 @@ import { useState } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { cn } from '@/lib/utils';
 
-const CURL = `curl https://api.d-crewshop.online/v1/generate \\
+const CURL = `curl https://api.aigenway.com/v1/generate \\
   -H "Authorization: Bearer $AI_AGG_KEY" \\
   -H "Content-Type: application/json" \\
   -d '{
@@ -18,7 +18,7 @@ const CURL = `curl https://api.d-crewshop.online/v1/generate \\
 
 const NODE = `import fetch from 'node-fetch';
 
-const res = await fetch('https://api.d-crewshop.online/v1/generate', {
+const res = await fetch('https://api.aigenway.com/v1/generate', {
   method: 'POST',
   headers: {
     Authorization: \`Bearer \${process.env.AI_AGG_KEY}\`,
@@ -37,7 +37,7 @@ const { taskId, status } = await res.json();`;
 const PYTHON = `import os, requests
 
 res = requests.post(
-    'https://api.d-crewshop.online/v1/generate',
+    'https://api.aigenway.com/v1/generate',
     headers={'Authorization': f'Bearer {os.environ["AI_AGG_KEY"]}'},
     json={
         'provider': 'google_banana',

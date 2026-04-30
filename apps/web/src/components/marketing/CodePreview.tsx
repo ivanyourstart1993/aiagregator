@@ -1,6 +1,6 @@
 import { Terminal } from 'lucide-react';
 
-const SAMPLE = `curl https://api.d-crewshop.online/v1/generate \\
+const SAMPLE = `curl https://api.aigenway.com/v1/generate \\
   -H "Authorization: Bearer $AI_AGG_KEY" \\
   -H "Content-Type: application/json" \\
   -d '{
