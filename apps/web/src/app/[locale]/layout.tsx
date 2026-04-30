@@ -28,7 +28,7 @@ export default async function LocaleLayout({ children, params: { locale } }: Loc
   const messages = await getMessages();
 
   return (
-    <html lang={locale}>
+    <html lang={locale} className="dark" style={{ colorScheme: 'dark' }}>
       <body className="min-h-screen bg-background text-foreground antialiased">
         <NextIntlClientProvider locale={locale} messages={messages}>
           {children}

@@ -104,14 +104,72 @@
   "dashboard": {
     "title": "Dashboard",
     "welcome": "Welcome",
-    "summary": "Quick summary of your account",
-    "balanceCard": "Available balance",
-    "requestsCard": "Requests today",
-    "successRateCard": "Success rate",
+    "welcomeNamed": "Hi, {name}",
+    "summary": "Account snapshot and quick actions.",
+    "balanceCard": "Balance",
+    "balanceHint": "Reserved ${reserved}",
+    "balanceHintEmpty": "Top up to start making requests",
+    "topUpCta": "Top up",
+    "requestsCard": "Total requests",
+    "requestsHint": "{count} below",
+    "requestsHintEmpty": "No requests yet",
+    "keysCard": "Active keys",
+    "keysHint": "of {total}",
+    "keysHintEmpty": "Create your first key",
+    "createKeyCta": "Create",
     "tariffCard": "Tariff",
+    "tariffHintDefault": "Default plan",
+    "tariffHintCustom": "Custom plan",
     "default": "Default",
+    "quickActionsTitle": "Quick actions",
+    "quick": {
+      "createKey": {
+        "title": "Create API key",
+        "description": "Get a key to authenticate /v1/* requests."
+      },
+      "manageKeys": {
+        "title": "API keys",
+        "description": "Manage keys and webhook secrets."
+      },
+      "topUp": {
+        "title": "Top up balance",
+        "description": "Pay with crypto via Cryptomus."
+      },
+      "balance": {
+        "title": "Balance & history",
+        "description": "Transactions, holds and deposits."
+      },
+      "explorer": {
+        "title": "API explorer",
+        "description": "Run a test request right in the browser."
+      },
+      "docs": {
+        "title": "Documentation",
+        "description": "Getting started, auth, methods."
+      }
+    },
+    "recentRequests": {
+      "title": "Recent requests",
+      "subtitle": "Latest /v1/* calls.",
+      "viewAll": "View all",
+      "emptyTitle": "No requests yet",
+      "emptyHint": "Make your first call from the API explorer or curl."
+    },
+    "recentTransactions": {
+      "title": "Recent transactions",
+      "subtitle": "Wallet movements.",
+      "viewAll": "View all",
+      "emptyTitle": "No transactions yet",
+      "emptyHint": "Top up your balance or wait for the first charge."
+    },
+    "navSection": {
+      "workspace": "Workspace",
+      "billing": "Billing",
+      "activity": "Activity",
+      "account": "Account"
+    },
     "nav": {
-      "dashboard": "Dashboard",
+      "dashboard": "Overview",
       "apiKeys": "API keys",
       "balance": "Balance",
       "topUp": "Top up",

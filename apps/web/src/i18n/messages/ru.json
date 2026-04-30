@@ -104,14 +104,72 @@
   "dashboard": {
     "title": "Панель",
     "welcome": "Добро пожаловать",
-    "summary": "Сводка по аккаунту",
-    "balanceCard": "Доступный баланс",
-    "requestsCard": "Запросов сегодня",
-    "successRateCard": "Успешные",
+    "welcomeNamed": "Привет, {name}",
+    "summary": "Текущее состояние аккаунта и быстрые действия.",
+    "balanceCard": "Баланс",
+    "balanceHint": "Резерв ${reserved}",
+    "balanceHintEmpty": "Пополните, чтобы начать запросы",
+    "topUpCta": "Пополнить",
+    "requestsCard": "Запросов всего",
+    "requestsHint": "Последние {count} ниже",
+    "requestsHintEmpty": "Ещё не делали запросов",
+    "keysCard": "Активных ключей",
+    "keysHint": "из {total}",
+    "keysHintEmpty": "Создайте первый ключ",
+    "createKeyCta": "Создать",
     "tariffCard": "Тариф",
+    "tariffHintDefault": "По умолчанию",
+    "tariffHintCustom": "Персональный",
     "default": "По умолчанию",
+    "quickActionsTitle": "Быстрые действия",
+    "quick": {
+      "createKey": {
+        "title": "Создать API-ключ",
+        "description": "Получите ключ для авторизации /v1/* запросов."
+      },
+      "manageKeys": {
+        "title": "API-ключи",
+        "description": "Управляйте ключами и секретами вебхуков."
+      },
+      "topUp": {
+        "title": "Пополнить баланс",
+        "description": "Оплата криптой через Cryptomus."
+      },
+      "balance": {
+        "title": "Баланс и история",
+        "description": "Транзакции, резервы и пополнения."
+      },
+      "explorer": {
+        "title": "API-эксплорер",
+        "description": "Сделать пробный запрос прямо в браузере."
+      },
+      "docs": {
+        "title": "Документация",
+        "description": "Как начать, аутентификация, методы."
+      }
+    },
+    "recentRequests": {
+      "title": "Последние запросы",
+      "subtitle": "Свежие вызовы /v1/*.",
+      "viewAll": "Все",
+      "emptyTitle": "Запросов пока нет",
+      "emptyHint": "Сделайте первый вызов из API-эксплорера или curl."
+    },
+    "recentTransactions": {
+      "title": "Последние операции",
+      "subtitle": "Движения по балансу.",
+      "viewAll": "Все",
+      "emptyTitle": "Операций пока нет",
+      "emptyHint": "Пополните баланс или дождитесь первого списания."
+    },
+    "navSection": {
+      "workspace": "Рабочее пространство",
+      "billing": "Биллинг",
+      "activity": "Активность",
+      "account": "Аккаунт"
+    },
     "nav": {
-      "dashboard": "Панель",
+      "dashboard": "Обзор",
       "apiKeys": "API-ключи",
       "balance": "Баланс",
       "topUp": "Пополнение",
