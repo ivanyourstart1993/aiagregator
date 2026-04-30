@@ -17,6 +17,7 @@ import { MailService } from '../mail/mail.service';
 import type { AuthConfig } from '../../config/configuration';
 import type { LoginDto } from './dto/login.dto';
 import type { RegisterDto } from './dto/register.dto';
+import type { OauthBridgeDto } from './dto/oauth-bridge.dto';
 
 const tokenAlphabet = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
 const generateToken = customAlphabet(tokenAlphabet, 48);
@@ -200,6 +201,96 @@ export class AuthService {
     });
 
     return { user: toSafeUser(user), accessToken };
+  }
+
+  /**
+   * Bridge an OAuth sign-in (currently Google) into a local User row.
+   *
+   * Look up existing Account by (provider, providerAccountId) — if found,
+   * return its user. Otherwise look up User by email and link the OAuth
+   * Account to it; if no User exists at all, create one (already
+   * email-verified since the IdP attests to ownership).
+   *
+   * Idempotent: repeated calls return the same user.
+   */
+  async oauthBridge(dto: OauthBridgeDto): Promise<{ user: SafeUser }> {
+    const email = dto.email.toLowerCase().trim();
+
+    const existingAccount = await this.prisma.account.findUnique({
+      where: {
+        provider_providerAccountId: {
+          provider: dto.provider,
+          providerAccountId: dto.providerAccountId,
+        },
+      },
+      include: { user: true },
+    });
+    if (existingAccount) {
+      if (existingAccount.user.status !== UserStatus.ACTIVE) {
+        throw new UnauthorizedException({
+          code: ErrorCode.USER_BLOCKED,
+          message: 'Account is not active.',
+        });
+      }
+      await this.prisma.user.update({
+        where: { id: existingAccount.user.id },
+        data: { lastLoginAt: new Date() },
+      });
+      return { user: toSafeUser(existingAccount.user) };
+    }
+
+    const existingUser = await this.prisma.user.findUnique({ where: { email } });
+    if (existingUser) {
+      if (existingUser.status !== UserStatus.ACTIVE) {
+        throw new UnauthorizedException({
+          code: ErrorCode.USER_BLOCKED,
+          message: 'Account is not active.',
+        });
+      }
+      const updated = await this.prisma.$transaction(async (tx) => {
+        await tx.account.create({
+          data: {
+            userId: existingUser.id,
+            type: 'oauth',
+            provider: dto.provider,
+            providerAccountId: dto.providerAccountId,
+          },
+        });
+        return tx.user.update({
+          where: { id: existingUser.id },
+          data: {
+            lastLoginAt: new Date(),
+            // If user previously registered without verifying email, trust the IdP.
+            emailVerified: existingUser.emailVerified ?? new Date(),
+            // Backfill display name from Google profile if missing.
+            name: existingUser.name ?? dto.name ?? null,
+          },
+        });
+      });
+      return { user: toSafeUser(updated) };
+    }
+
+    const created = await this.prisma.$transaction(async (tx) => {
+      const user = await tx.user.create({
+        data: {
+          email,
+          name: dto.name ?? null,
+          locale: 'en',
+          emailVerified: new Date(),
+          lastLoginAt: new Date(),
+        },
+      });
+      await tx.account.create({
+        data: {
+          userId: user.id,
+          type: 'oauth',
+          provider: dto.provider,
+          providerAccountId: dto.providerAccountId,
+        },
+      });
+      return user;
+    });
+    return { user: toSafeUser(created) };
   }
 
   private async issueAndSendVerification(email: string, displayName: string): Promise<void> {

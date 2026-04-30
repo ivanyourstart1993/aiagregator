@@ -9,6 +9,7 @@ import {
   verifyEmailSchema,
   type VerifyEmailDto,
 } from './dto/verify-email.dto';
+import { oauthBridgeSchema, type OauthBridgeDto } from './dto/oauth-bridge.dto';
 import { AuthService } from './auth.service';
 
 @Controller('internal/auth')
@@ -45,5 +46,13 @@ export class AuthController {
   @UsePipes(new ZodValidationPipe(loginSchema))
   login(@Body() body: LoginDto) {
     return this.auth.login(body);
+  }
+
+  @Public()
+  @Post('oauth-bridge')
+  @HttpCode(HttpStatus.OK)
+  @UsePipes(new ZodValidationPipe(oauthBridgeSchema))
+  oauthBridge(@Body() body: OauthBridgeDto) {
+    return this.auth.oauthBridge(body);
   }
 }
