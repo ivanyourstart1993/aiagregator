@@ -19,6 +19,7 @@ import {
   updateProxyAction,
   deleteProxyAction,
 } from '@/app/[locale]/(panel)/providers/actions';
+import { ConfirmDialog } from '@/components/ConfirmDialog';
 
 interface Props {
   mode: 'create' | 'edit';
@@ -78,7 +79,6 @@ export function ProxyForm({ mode, proxy }: Props) {
 
   function handleDelete() {
     if (!proxy) return;
-    if (!confirm(`Удалить прокси "${proxy.name}"?`)) return;
     startTransition(async () => {
       const res = await deleteProxyAction(proxy.id);
       if (res.ok) {
@@ -198,15 +198,20 @@ export function ProxyForm({ mode, proxy }: Props) {
 
       <div className="flex justify-between gap-2 pt-2">
         <div>
-          {mode === 'edit' && (
-            <Button
-              type="button"
+          {mode === 'edit' && proxy && (
+            <ConfirmDialog
+              trigger={
+                <Button type="button" variant="destructive" disabled={pending}>
+                  Удалить
+                </Button>
+              }
+              title={`Удалить прокси "${proxy.name}"?`}
+              description="Все ProviderAccount-ы, привязанные к этому прокси, останутся, но их запросы пойдут с публичного IP — пока ты не привяжешь другой прокси."
+              confirmLabel="Удалить"
               variant="destructive"
-              onClick={handleDelete}
-              disabled={pending}
-            >
-              Удалить
-            </Button>
+              onConfirm={handleDelete}
+              pending={pending}
+            />
           )}
         </div>
         <div className="flex gap-2">

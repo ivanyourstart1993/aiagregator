@@ -24,6 +24,7 @@ import {
   updateProviderAccountAction,
   deleteProviderAccountAction,
 } from '@/app/[locale]/(panel)/providers/actions';
+import { ConfirmDialog } from '@/components/ConfirmDialog';
 
 interface Props {
   mode: 'create' | 'edit';
@@ -126,12 +127,6 @@ export function AccountForm({ mode, account, providers, proxies }: Props) {
 
   function handleDelete() {
     if (!account) return;
-    if (
-      !confirm(
-        `Удалить аккаунт "${account.name}"? Все ProviderAttempts и Transaction (агрегаты ROI) останутся как историческая запись.`,
-      )
-    )
-      return;
     startTransition(async () => {
       const res = await deleteProviderAccountAction(account.id);
       if (res.ok) {
@@ -302,15 +297,20 @@ export function AccountForm({ mode, account, providers, proxies }: Props) {
 
       <div className="flex justify-between gap-2 pt-2">
         <div>
-          {mode === 'edit' && (
-            <Button
-              type="button"
+          {mode === 'edit' && account && (
+            <ConfirmDialog
+              trigger={
+                <Button type="button" variant="destructive" disabled={pending}>
+                  Удалить
+                </Button>
+              }
+              title={`Удалить аккаунт "${account.name}"?`}
+              description="Все ProviderAttempts и Transactions (агрегаты ROI) останутся как историческая запись. Балансировщик перестанет выбирать этот аккаунт."
+              confirmLabel="Удалить"
               variant="destructive"
-              onClick={handleDelete}
-              disabled={pending}
-            >
-              Удалить
-            </Button>
+              onConfirm={handleDelete}
+              pending={pending}
+            />
           )}
         </div>
         <div className="flex gap-2">
