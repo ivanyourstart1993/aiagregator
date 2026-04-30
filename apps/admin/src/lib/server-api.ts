@@ -467,13 +467,26 @@ export const serverApi = {
     apiGet<DepositDetail>(`/internal/admin/payments/deposits/${id}`),
 
   // Stage 2 — Admin users
-  adminListUsers: (q?: string) => {
+  adminListUsers: (filters?: {
+    q?: string;
+    role?: string;
+    status?: string;
+    page?: number;
+    pageSize?: number;
+  }) => {
     const usp = new URLSearchParams();
-    if (q) usp.set('q', q);
+    if (filters?.q) usp.set('q', filters.q);
+    if (filters?.role) usp.set('role', filters.role);
+    if (filters?.status) usp.set('status', filters.status);
+    if (filters?.page != null) usp.set('page', String(filters.page));
+    if (filters?.pageSize != null) usp.set('pageSize', String(filters.pageSize));
     const qs = usp.toString();
-    return apiGet<{ items: AdminUserSummary[] } | AdminUserSummary[]>(
-      `/internal/admin/users${qs ? `?${qs}` : ''}`,
-    );
+    return apiGet<{
+      items: AdminUserSummary[];
+      total: number;
+      page: number;
+      pageSize: number;
+    }>(`/internal/admin/users${qs ? `?${qs}` : ''}`);
   },
   adminGetUser: (id: string) => apiGet<AdminUserSummary>(`/internal/admin/users/${id}`),
 

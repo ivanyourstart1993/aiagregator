@@ -27,11 +27,32 @@ export class AdminUsersController {
   async list(
     @Query('page', new DefaultValuePipe(1), ParseIntPipe) page: number,
     @Query('pageSize', new DefaultValuePipe(50), ParseIntPipe) pageSizeRaw: number,
+    @Query('q') q?: string,
+    @Query('role') roleRaw?: string,
+    @Query('status') statusRaw?: string,
   ) {
     const pageSize = Math.min(Math.max(pageSizeRaw, 1), 200);
     const skip = (Math.max(page, 1) - 1) * pageSize;
+    const where: {
+      OR?: Array<{ email?: { contains: string; mode: 'insensitive' }; name?: { contains: string; mode: 'insensitive' } }>;
+      role?: UserRole;
+      status?: UserStatus;
+    } = {};
+    if (q && q.trim().length > 0) {
+      where.OR = [
+        { email: { contains: q.trim(), mode: 'insensitive' } },
+        { name: { contains: q.trim(), mode: 'insensitive' } },
+      ];
+    }
+    if (roleRaw && (Object.values(UserRole) as string[]).includes(roleRaw)) {
+      where.role = roleRaw as UserRole;
+    }
+    if (statusRaw && (Object.values(UserStatus) as string[]).includes(statusRaw)) {
+      where.status = statusRaw as UserStatus;
+    }
     const [items, total] = await Promise.all([
       this.prisma.user.findMany({
+        where,
         skip,
         take: pageSize,
         orderBy: { createdAt: 'desc' },
@@ -46,7 +67,7 @@ export class AdminUsersController {
           lastLoginAt: true,
         },
       }),
-      this.prisma.user.count(),
+      this.prisma.user.count({ where }),
     ]);
     return { items, total, page, pageSize };
   }

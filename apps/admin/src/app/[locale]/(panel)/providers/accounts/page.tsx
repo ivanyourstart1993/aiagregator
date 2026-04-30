@@ -1,15 +1,28 @@
 import Link from 'next/link';
-import { ApiError, serverApi, type ProviderAccountView } from '@/lib/server-api';
+import {
+  ApiError,
+  serverApi,
+  type ProviderAccountView,
+  type ProviderAccountStatus,
+} from '@/lib/server-api';
+import { FilterSelect } from '@/components/data-table/FilterSelect';
+import { Pagination } from '@/components/data-table/Pagination';
 
-async function loadAccounts(): Promise<ProviderAccountView[]> {
-  try {
-    const r = await serverApi.adminListProviderAccounts({ pageSize: 200 });
-    return r.items ?? [];
-  } catch (err) {
-    if (err instanceof ApiError) return [];
-    return [];
-  }
+interface Props {
+  searchParams: Promise<Record<string, string | undefined>>;
 }
+
+const PAGE_SIZE = 50;
+
+const STATUS_OPTIONS = [
+  { value: 'ACTIVE', label: 'ACTIVE' },
+  { value: 'COOLDOWN', label: 'COOLDOWN' },
+  { value: 'QUOTA_EXHAUSTED', label: 'QUOTA_EXHAUSTED' },
+  { value: 'EXCLUDED_BY_BILLING', label: 'EXCLUDED_BY_BILLING' },
+  { value: 'INVALID_CREDENTIALS', label: 'INVALID_CREDENTIALS' },
+  { value: 'MANUALLY_DISABLED', label: 'MANUALLY_DISABLED' },
+  { value: 'INACTIVE', label: 'INACTIVE' },
+];
 
 const BILLING_STATUSES = new Set([
   'EXCLUDED_BY_BILLING',
@@ -63,8 +76,25 @@ function usagePct(used?: number | null, limit?: number | null): string {
   return `${Math.round((u / limit) * 100)}%`;
 }
 
-export default async function ProviderAccountsPage() {
-  const items = await loadAccounts();
+export default async function ProviderAccountsPage({ searchParams }: Props) {
+  const sp = await searchParams;
+  const page = Math.max(1, Number(sp.page ?? 1) || 1);
+  const status = sp.status as ProviderAccountStatus | undefined;
+
+  let items: ProviderAccountView[] = [];
+  let total = 0;
+  try {
+    const r = await serverApi.adminListProviderAccounts({
+      page,
+      pageSize: PAGE_SIZE,
+      status,
+    });
+    items = r.items ?? [];
+    total = r.total ?? items.length;
+  } catch (err) {
+    if (!(err instanceof ApiError)) throw err;
+  }
+
   const noProxyCount = items.filter((a) => !a.proxyId).length;
 
   return (
@@ -81,6 +111,15 @@ export default async function ProviderAccountsPage() {
           + Добавить аккаунт
         </Link>
       </header>
+
+      <div className="flex flex-wrap items-center gap-2">
+        <FilterSelect
+          paramKey="status"
+          options={STATUS_OPTIONS}
+          allLabel="Все статусы"
+          placeholder="Все статусы"
+        />
+      </div>
 
       {noProxyCount > 0 && (
         <div className="rounded-lg border border-yellow-500/30 bg-yellow-500/5 p-4 text-sm">
@@ -209,6 +248,9 @@ export default async function ProviderAccountsPage() {
             ) : null}
           </tbody>
         </table>
+        <div className="border-t border-border p-3">
+          <Pagination page={page} pageSize={PAGE_SIZE} total={total} />
+        </div>
       </div>
     </div>
   );
