@@ -51,9 +51,13 @@ export class DepositService {
   async createDeposit(
     userId: string,
     amountCents: number,
-    providerSlug: PaymentProviderSlug = PaymentProviderEnum.CRYPTOMUS,
+    providerSlug?: PaymentProviderSlug,
     couponCode?: string,
   ): Promise<CreateDepositResult> {
+    const resolvedProvider: PaymentProviderSlug =
+      providerSlug ??
+      ((this.config.get<string>('DEPOSIT_DEFAULT_PROVIDER') as PaymentProviderSlug | undefined) ??
+        PaymentProviderEnum.OXAPAY);
     // Validate coupon up-front so the user gets immediate feedback before the
     // provider invoice is created. Throws on invalid/expired/wrong-context.
     let normalisedCouponCode: string | null = null;
@@ -82,7 +86,7 @@ export class DepositService {
       });
     }
 
-    const provider = this.registry.get(providerSlug);
+    const provider = this.registry.get(resolvedProvider);
     const amountUnits = fromCents(amountCents).units;
     const externalOrderId = `ord_${randomUUID()}`;
     const amountStr = (amountCents / 100).toFixed(2);
@@ -97,7 +101,7 @@ export class DepositService {
       data: {
         id: depositId,
         userId,
-        provider: providerSlug,
+        provider: resolvedProvider,
         externalInvoiceId: `pending_${depositId}`,
         externalOrderId,
         status: DepositStatus.CREATED,
@@ -112,7 +116,7 @@ export class DepositService {
     //    provider receives callbacks on its own controller.
     const callbackUrl = `${(
       this.config.get<string>('WEBHOOK_BASE_URL') ?? 'http://localhost:4000'
-    ).replace(/\/$/, '')}/webhooks/${providerSlug.toLowerCase()}`;
+    ).replace(/\/$/, '')}/webhooks/${resolvedProvider.toLowerCase()}`;
     const returnUrl = this.config.get<string>('WEB_URL')
       ? `${this.config.get<string>('WEB_URL')}/dashboard/top-up/${depositId}`
       : undefined;
