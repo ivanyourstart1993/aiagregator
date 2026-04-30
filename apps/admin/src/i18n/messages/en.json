@@ -35,7 +35,18 @@
     "tasks": "Tasks",
     "load": "Load",
     "settings": "Settings",
-    "signOut": "Sign out"
+    "signOut": "Sign out",
+    "profile": "Profile",
+    "crumb": {
+      "users": "Users",
+      "providers": "Providers",
+      "accounts": "Accounts",
+      "proxies": "Proxies",
+      "tasks": "Tasks",
+      "load": "Load",
+      "settings": "Settings",
+      "new": "New"
+    }
   },
   "dashboard": {
     "title": "Overview",

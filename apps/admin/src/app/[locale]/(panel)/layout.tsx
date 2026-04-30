@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import { redirect } from '@/i18n/navigation';
 import { auth } from '@/lib/auth';
 import { Sidebar } from '@/components/Sidebar';
+import { Header } from '@/components/Header';
 
 export default async function PanelLayout({ children }: { children: ReactNode }) {
   const session = await auth();
@@ -14,13 +15,19 @@ export default async function PanelLayout({ children }: { children: ReactNode })
     redirect('/login');
     return null;
   }
+  const userView = { email: user.email ?? '', name: user.name ?? null };
 
   return (
-    <div className="flex min-h-screen">
-      <Sidebar user={{ email: user.email ?? '', name: user.name ?? null }} />
-      <main className="flex-1 overflow-x-auto">
-        <div className="mx-auto w-full max-w-7xl px-8 py-8">{children}</div>
-      </main>
+    <div className="flex min-h-screen bg-background">
+      <Sidebar />
+      <div className="flex min-h-screen flex-1 flex-col overflow-hidden">
+        <Header user={userView} />
+        <main className="flex-1 overflow-x-auto">
+          <div className="mx-auto w-full max-w-7xl px-4 py-6 md:px-6 md:py-8">
+            {children}
+          </div>
+        </main>
+      </div>
     </div>
   );
 }

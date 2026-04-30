@@ -35,7 +35,18 @@
     "tasks": "Задачи",
     "load": "Нагрузка",
     "settings": "Настройки",
-    "signOut": "Выйти"
+    "signOut": "Выйти",
+    "profile": "Профиль",
+    "crumb": {
+      "users": "Пользователи",
+      "providers": "Провайдеры",
+      "accounts": "Аккаунты",
+      "proxies": "Прокси",
+      "tasks": "Задачи",
+      "load": "Нагрузка",
+      "settings": "Настройки",
+      "new": "Новый"
+    }
   },
   "dashboard": {
     "title": "Обзор",
