@@ -42,8 +42,15 @@
 
 | Job | Schedule | Назначение |
 | --- | --- | --- |
-| `db-migrations` | on deploy | `pnpm db:migrate:deploy` |
-| `db-seed` | manual | `pnpm db:seed` (super_admin bootstrap) |
+| `db-migrations` | manual | `pnpm db:migrate:deploy` (применяет новые миграции, **сохраняет данные**) |
+| `db-seed` | manual | `pnpm db:seed` (super_admin bootstrap, идемпотентен) |
+
+> ⚠️ **db-migrations — НЕ должен запускать `reset.sql`**.
+> Если текущая Northflank job команда — `psql -f packages/db/prisma/reset.sql && prisma migrate deploy`,
+> это **уничтожает БД при каждом запуске**. Поправь команду на просто
+> `prisma migrate deploy`. Сейчас `reset.sql` сделан no-op по умолчанию,
+> чтобы legacy-конфиг не убивал данные, но job-команду всё равно стоит почистить.
+
 | `proxy-health-check` | every 5–10 min | Этап 11 |
 | `provider-account-health-check` | every 10 min | Этап 11 |
 | `expired-task-check` | every 1 min | Этап 10 |
