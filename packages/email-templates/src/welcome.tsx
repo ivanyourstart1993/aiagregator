@@ -1,14 +1,11 @@
-import {
-  Body,
-  Container,
-  Head,
-  Heading,
-  Html,
-  Preview,
-  Section,
-  Text,
-} from '@react-email/components';
 import * as React from 'react';
+import {
+  EmailButton,
+  EmailHeading,
+  EmailLayout,
+  EmailMuted,
+  EmailText,
+} from './EmailLayout';
 
 export interface WelcomeEmailProps {
   name: string;
@@ -17,22 +14,34 @@ export interface WelcomeEmailProps {
 
 export function WelcomeEmail({ name, dashboardUrl }: WelcomeEmailProps) {
   return (
-    <Html>
-      <Head />
-      <Preview>Welcome to AI API Aggregator</Preview>
-      <Body style={{ fontFamily: 'sans-serif', backgroundColor: '#f6f9fc' }}>
-        <Container style={{ margin: '40px auto', padding: '24px', maxWidth: 480, background: '#fff', borderRadius: 8 }}>
-          <Heading>Welcome, {name}!</Heading>
-          <Section>
-            <Text>Your account is ready. Open your dashboard to create an API key and explore the docs.</Text>
-            <Text>
-              <a href={dashboardUrl}>Open dashboard</a>
-            </Text>
-          </Section>
-        </Container>
-      </Body>
-    </Html>
+    <EmailLayout preview="Welcome to AI Aggregator — let's get you started">
+      <EmailHeading>Welcome, {name}!</EmailHeading>
+      <EmailText>
+        Your account is ready. One API key gets you Banana, Veo, Kling and more behind a
+        single stable contract — billed transparently in USD.
+      </EmailText>
+      <EmailButton href={dashboardUrl}>Open dashboard</EmailButton>
+      <EmailText>From the dashboard you can:</EmailText>
+      <ul style={list}>
+        <li style={listItem}>Create your first API key</li>
+        <li style={listItem}>Top up your balance (from $5)</li>
+        <li style={listItem}>Try a request in the API explorer</li>
+      </ul>
+      <EmailMuted>Need help? Reply to this email and we'll get back to you.</EmailMuted>
+    </EmailLayout>
   );
 }
+
+const list: React.CSSProperties = {
+  margin: '8px 0 14px',
+  padding: '0 0 0 20px',
+  fontSize: 14,
+  lineHeight: '22px',
+  color: '#f8fafc',
+};
+
+const listItem: React.CSSProperties = {
+  margin: '4px 0',
+};
 
 export default WelcomeEmail;
