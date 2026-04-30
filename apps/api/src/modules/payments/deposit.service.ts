@@ -108,10 +108,11 @@ export class DepositService {
       },
     });
 
-    // 2. Call provider.
+    // 2. Call provider. Webhook path is derived from the provider slug so each
+    //    provider receives callbacks on its own controller.
     const callbackUrl = `${(
       this.config.get<string>('WEBHOOK_BASE_URL') ?? 'http://localhost:4000'
-    ).replace(/\/$/, '')}/webhooks/cryptomus`;
+    ).replace(/\/$/, '')}/webhooks/${providerSlug.toLowerCase()}`;
     const returnUrl = this.config.get<string>('WEB_URL')
       ? `${this.config.get<string>('WEB_URL')}/dashboard/top-up/${depositId}`
       : undefined;

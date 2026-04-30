@@ -2,14 +2,16 @@ import { Injectable } from '@nestjs/common';
 import { PaymentProvider as PaymentProviderEnum } from '@aiagg/db';
 import type { PaymentProvider, PaymentProviderSlug } from './payment-provider.interface';
 import { CryptomusProvider } from './providers/cryptomus.provider';
+import { OxapayProvider } from './providers/oxapay.provider';
 
 @Injectable()
 export class PaymentProviderRegistry {
   private readonly providers: Map<PaymentProviderSlug, PaymentProvider>;
 
-  constructor(cryptomus: CryptomusProvider) {
+  constructor(cryptomus: CryptomusProvider, oxapay: OxapayProvider) {
     this.providers = new Map<PaymentProviderSlug, PaymentProvider>([
       [PaymentProviderEnum.CRYPTOMUS, cryptomus],
+      [PaymentProviderEnum.OXAPAY, oxapay],
     ]);
   }
 

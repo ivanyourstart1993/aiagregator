@@ -209,6 +209,7 @@ enum DepositStatus {
 
 enum PaymentProvider {
   CRYPTOMUS
+  OXAPAY
 }
 
 model Wallet {

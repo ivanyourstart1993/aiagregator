@@ -24,6 +24,7 @@ async function bootstrap(): Promise<void> {
   // body parsers lazily on first request). The 256KB limit blocks oversized
   // payloads cheaply.
   app.use('/webhooks/cryptomus', express.raw({ type: '*/*', limit: '256kb' }));
+  app.use('/webhooks/oxapay', express.raw({ type: '*/*', limit: '256kb' }));
 
   app.enableCors({
     origin: process.env.WEB_URL ?? 'http://localhost:3000',
