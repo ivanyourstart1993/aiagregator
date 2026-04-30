@@ -1,6 +1,5 @@
 'use client';
 
-import { useEffect, useState } from 'react';
 import {
   LayoutDashboard,
   Users,
@@ -9,8 +8,6 @@ import {
   ListTree,
   Activity,
   Settings,
-  PanelLeftClose,
-  PanelLeftOpen,
   type LucideIcon,
 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
@@ -47,48 +44,20 @@ function isActive(pathname: string, href: string): boolean {
   return pathname.includes(href);
 }
 
-const STORAGE_KEY = 'admin-sidebar-expanded';
-
 /**
- * Desktop sidebar with two states:
- * - Collapsed (default, 56px): icon-only with hover-tooltip
- * - Expanded (pinned via toggle, 224px): icons + labels
- *
- * State persists in localStorage. Hidden on mobile (drawer-served via Header).
+ * Desktop sidebar driven by SidebarShell. Default expanded (224px) with
+ * labels next to icons; collapsed (56px) when toggle button in header
+ * is clicked. Hidden on mobile (drawer-served via Header).
  */
-export function Sidebar() {
+export function Sidebar({ collapsed }: { collapsed: boolean }) {
   const t = useTranslations('nav');
   const pathname = usePathname();
-  const [expanded, setExpanded] = useState(false);
-  // Avoid hydration mismatch — render the default-collapsed shell on first
-  // paint, then expand if localStorage says so.
-  const [hydrated, setHydrated] = useState(false);
-
-  useEffect(() => {
-    try {
-      const stored = window.localStorage.getItem(STORAGE_KEY);
-      if (stored === 'true') setExpanded(true);
-    } catch {
-      // localStorage unavailable (incognito etc) — stay collapsed
-    }
-    setHydrated(true);
-  }, []);
-
-  function toggle() {
-    const next = !expanded;
-    setExpanded(next);
-    try {
-      window.localStorage.setItem(STORAGE_KEY, String(next));
-    } catch {
-      // ignore
-    }
-  }
 
   return (
     <aside
       className={cn(
         'hidden shrink-0 flex-col border-r border-border bg-card transition-[width] duration-200 md:flex',
-        expanded && hydrated ? 'w-56' : 'w-14',
+        collapsed ? 'w-14' : 'w-56',
       )}
     >
       <Link
@@ -99,7 +68,7 @@ export function Sidebar() {
         <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-primary text-xs font-bold text-primary-foreground">
           AI
         </div>
-        {expanded && hydrated && (
+        {!collapsed && (
           <span className="truncate text-sm font-semibold">Panel</span>
         )}
       </Link>
@@ -113,53 +82,28 @@ export function Sidebar() {
             <Link
               key={it.key}
               href={it.href}
-              title={expanded ? undefined : label}
+              title={collapsed ? label : undefined}
               aria-label={label}
               className={cn(
                 'flex h-9 items-center gap-3 rounded-md px-2.5 transition-colors',
-                expanded && hydrated ? 'justify-start' : 'justify-center',
+                collapsed ? 'justify-center' : 'justify-start',
                 active
                   ? 'bg-accent text-accent-foreground'
                   : 'text-muted-foreground hover:bg-accent/50 hover:text-foreground',
               )}
             >
               <Icon className="h-4 w-4 shrink-0" />
-              {expanded && hydrated && (
-                <span className="truncate text-sm">{label}</span>
-              )}
+              {!collapsed && <span className="truncate text-sm">{label}</span>}
             </Link>
           );
         })}
       </nav>
-
-      <div className="border-t border-border p-2">
-        <button
-          type="button"
-          onClick={toggle}
-          aria-label={expanded ? 'Свернуть меню' : 'Развернуть меню'}
-          title={expanded ? 'Свернуть' : 'Развернуть'}
-          className={cn(
-            'flex h-9 w-full items-center gap-3 rounded-md px-2.5 text-muted-foreground transition-colors hover:bg-accent/50 hover:text-foreground',
-            expanded && hydrated ? 'justify-start' : 'justify-center',
-          )}
-        >
-          {expanded && hydrated ? (
-            <>
-              <PanelLeftClose className="h-4 w-4 shrink-0" />
-              <span className="truncate text-sm">Свернуть</span>
-            </>
-          ) : (
-            <PanelLeftOpen className="h-4 w-4" />
-          )}
-        </button>
-      </div>
     </aside>
   );
 }
 
 /**
  * Full-width sidebar content used inside the mobile drawer (Sheet).
- * Identical items, but with text labels visible.
  */
 export function SidebarFull({ onNavigate }: { onNavigate?: () => void }) {
   const t = useTranslations('nav');

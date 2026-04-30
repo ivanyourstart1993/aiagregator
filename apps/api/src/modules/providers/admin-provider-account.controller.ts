@@ -56,6 +56,7 @@ export class AdminProviderAccountController {
         skip: (pageNum - 1) * pageSize,
         take: pageSize,
         orderBy: { createdAt: 'desc' },
+        include: { proxy: true, provider: { select: { code: true } } },
       }),
       this.prisma.providerAccount.count({ where }),
     ]);
@@ -102,7 +103,10 @@ export class AdminProviderAccountController {
 
   @Get(':id')
   async getOne(@Param('id') id: string) {
-    const acc = await this.prisma.providerAccount.findUnique({ where: { id } });
+    const acc = await this.prisma.providerAccount.findUnique({
+      where: { id },
+      include: { proxy: true, provider: { select: { code: true } } },
+    });
     if (!acc) throw new NotFoundException();
     return this.toView(acc);
   }
@@ -346,6 +350,16 @@ export class AdminProviderAccountController {
     lastUsedAt?: Date | null;
     cooldownUntil?: Date | null;
     warmupStartedAt?: Date | null;
+    proxy?: {
+      id: string;
+      name: string;
+      host: string;
+      port: number;
+      protocol: string;
+      country: string | null;
+      status: string;
+    } | null;
+    provider?: { code: string } | null;
     createdAt: Date;
     updatedAt: Date;
   }) {
@@ -389,6 +403,18 @@ export class AdminProviderAccountController {
       lastUsedAt: a.lastUsedAt ?? null,
       cooldownUntil: a.cooldownUntil ?? null,
       warmupStartedAt: a.warmupStartedAt ?? null,
+      proxy: a.proxy
+        ? {
+            id: a.proxy.id,
+            name: a.proxy.name,
+            host: a.proxy.host,
+            port: a.proxy.port,
+            protocol: a.proxy.protocol,
+            country: a.proxy.country,
+            status: a.proxy.status,
+          }
+        : null,
+      providerCode: a.provider?.code ?? null,
       createdAt: a.createdAt,
       updatedAt: a.updatedAt,
     };
