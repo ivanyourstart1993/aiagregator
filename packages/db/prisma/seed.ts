@@ -27,6 +27,13 @@ async function seedSuperAdmin(): Promise<void> {
     parallelism: 1,
   });
 
+  // SEED_RESET_SUPERADMIN_PASSWORD=true → force-rewrite passwordHash on
+  // existing super-admin too (idempotent rescue path when the operator
+  // forgets the password). Default false: seed never overwrites a
+  // human-set password on subsequent runs.
+  const forceResetPassword =
+    process.env.SEED_RESET_SUPERADMIN_PASSWORD === 'true';
+
   const user = await prisma.user.upsert({
     where: { email },
     create: {
@@ -41,10 +48,14 @@ async function seedSuperAdmin(): Promise<void> {
       role: UserRole.SUPER_ADMIN,
       status: UserStatus.ACTIVE,
       emailVerified: new Date(),
+      ...(forceResetPassword ? { passwordHash } : {}),
     },
   });
 
-  console.log(`[seed] super_admin upserted: id=${user.id} email=${user.email}`);
+  console.log(
+    `[seed] super_admin upserted: id=${user.id} email=${user.email}` +
+      (forceResetPassword ? ' (password reset from SEED_SUPERADMIN_PASSWORD)' : ''),
+  );
 }
 
 async function seedCatalog(): Promise<void> {
