@@ -14,7 +14,9 @@
     "search": "Поиск",
     "filter": "Фильтр",
     "actions": "Действия",
-    "refresh": "Обновить"
+    "refresh": "Обновить",
+    "apply": "Применить",
+    "error": "Ошибка"
   },
   "auth": {
     "loginTitle": "Вход в панель",
@@ -35,6 +37,7 @@
     "providerAccounts": "Аккаунты провайдеров",
     "providerProxies": "Прокси",
     "tasks": "Задачи",
+    "coupons": "Купоны",
     "load": "Нагрузка",
     "settings": "Настройки",
     "signOut": "Выйти",
@@ -45,9 +48,98 @@
       "accounts": "Аккаунты",
       "proxies": "Прокси",
       "tasks": "Задачи",
+      "coupons": "Купоны",
       "load": "Нагрузка",
       "settings": "Настройки",
-      "new": "Новый"
+      "new": "Новый",
+      "edit": "Изменить",
+      "redemptions": "Применения"
+    }
+  },
+  "coupons": {
+    "context": {
+      "standalone": "Пополнение баланса",
+      "request": "API-запрос",
+      "topup": "Бонус к пополнению"
+    }
+  },
+  "admin": {
+    "coupons": {
+      "title": "Купоны",
+      "subtitle": "Управление промокодами: пополнения, бонусы и скидки.",
+      "newCta": "Новый купон",
+      "newTitle": "Создать купон",
+      "editTitle": "Изменить купон",
+      "filterAllTypes": "Все типы",
+      "filterAllStatuses": "Все статусы",
+      "searchPlaceholder": "Поиск по коду…",
+      "tableCode": "Код",
+      "tableType": "Тип",
+      "tableValue": "Значение",
+      "tableStatus": "Статус",
+      "tableValidTo": "Действует до",
+      "tableUses": "Использовано",
+      "tablePerUser": "На юзера",
+      "tableActions": "Действия",
+      "noCoupons": "Купонов пока нет.",
+      "viewRedemptions": "Применения",
+      "redemptionsTitle": "Применения купона",
+      "redemptionsSubtitle": "Кто и когда применял купон, и сколько он начислил.",
+      "globalRedemptionsTitle": "Все применения",
+      "globalRedemptionsSubtitle": "Глобальный фид использования купонов.",
+      "filterCouponId": "ID купона",
+      "filterUserId": "ID пользователя",
+      "tableUser": "Пользователь",
+      "tableCoupon": "Купон",
+      "tableAmount": "Сумма",
+      "tableContext": "Контекст",
+      "tableCreated": "Создано",
+      "noRedemptions": "Применений пока нет.",
+      "form": {
+        "code": "Код",
+        "codePlaceholder": "WELCOME5",
+        "type": "Тип",
+        "typeHint": "Определяет, что начисляет или какую скидку даёт купон.",
+        "valueAmount": "Сумма (USD)",
+        "valueAmountHint": "Сумма в USD. При сохранении переводится в нано-USD.",
+        "valuePercent": "Скидка (%)",
+        "valuePercentHint": "Процент. При сохранении хранится в базисных пунктах (1% = 100 bps).",
+        "methodCode": "Код метода",
+        "methodCodePlaceholder": "google_banana/banana-1/text_to_image",
+        "methodCodeHint": "Скидка применяется только к запросам с этим методом.",
+        "bundleId": "Bundle ID",
+        "bundleIdHint": "Конкретный bundle, к которому применяется скидка. ID можно скопировать из каталога.",
+        "minTopupUnits": "Минимальное пополнение (USD)",
+        "minTopupUnitsHint": "Опционально. Купон активируется только при сумме не меньше указанной.",
+        "maxUses": "Максимум применений",
+        "maxUsesHint": "Оставьте пустым для без ограничений.",
+        "maxUsesPerUser": "Максимум на пользователя",
+        "validFrom": "Действует с",
+        "validTo": "Действует до",
+        "validToHint": "Оставьте пустым, чтобы без ограничений по сроку.",
+        "status": "Статус",
+        "comment": "Внутренний комментарий",
+        "commentPlaceholder": "Использован для весенней кампании…",
+        "saved": "Купон сохранён.",
+        "saveFailed": "Не удалось сохранить купон.",
+        "deleted": "Купон удалён.",
+        "deleteFailed": "Не удалось удалить купон.",
+        "confirmDelete": "Удалить купон? История применений будет сохранена."
+      },
+      "type": {
+        "FIXED_AMOUNT": "Денежный бонус",
+        "BONUS_MONEY": "Бонусные деньги",
+        "DISCOUNT_METHOD_PERCENT": "Скидка на метод %",
+        "DISCOUNT_BUNDLE_AMOUNT": "Скидка на bundle $",
+        "DISCOUNT_TOPUP": "Бонус к пополнению %"
+      },
+      "status": {
+        "DRAFT": "Черновик",
+        "ACTIVE": "Активен",
+        "PAUSED": "На паузе",
+        "EXPIRED": "Истёк",
+        "EXHAUSTED": "Исчерпан"
+      }
     }
   },
   "dashboard": {

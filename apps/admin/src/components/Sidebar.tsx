@@ -8,6 +8,7 @@ import {
   ListTree,
   Activity,
   Settings,
+  Ticket,
   type LucideIcon,
 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
@@ -23,6 +24,7 @@ interface Item {
     | 'providerAccounts'
     | 'providerProxies'
     | 'tasks'
+    | 'coupons'
     | 'load'
     | 'settings';
 }
@@ -33,6 +35,7 @@ export const NAV_ITEMS: Item[] = [
   { href: '/providers/accounts', icon: Boxes, key: 'providerAccounts' },
   { href: '/providers/proxies', icon: Shield, key: 'providerProxies' },
   { href: '/tasks', icon: ListTree, key: 'tasks' },
+  { href: '/coupons', icon: Ticket, key: 'coupons' },
   { href: '/load', icon: Activity, key: 'load' },
   { href: '/settings', icon: Settings, key: 'settings' },
 ];

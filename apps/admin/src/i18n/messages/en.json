@@ -14,7 +14,9 @@
     "search": "Search",
     "filter": "Filter",
     "actions": "Actions",
-    "refresh": "Refresh"
+    "refresh": "Refresh",
+    "apply": "Apply",
+    "error": "Error"
   },
   "auth": {
     "loginTitle": "Sign in to the panel",
@@ -35,6 +37,7 @@
     "providerAccounts": "Provider accounts",
     "providerProxies": "Proxies",
     "tasks": "Tasks",
+    "coupons": "Coupons",
     "load": "Load",
     "settings": "Settings",
     "signOut": "Sign out",
@@ -45,9 +48,98 @@
       "accounts": "Accounts",
       "proxies": "Proxies",
       "tasks": "Tasks",
+      "coupons": "Coupons",
       "load": "Load",
       "settings": "Settings",
-      "new": "New"
+      "new": "New",
+      "edit": "Edit",
+      "redemptions": "Redemptions"
+    }
+  },
+  "coupons": {
+    "context": {
+      "standalone": "Wallet top-up",
+      "request": "API request",
+      "topup": "Top-up bonus"
+    }
+  },
+  "admin": {
+    "coupons": {
+      "title": "Coupons",
+      "subtitle": "Manage promo codes: top-ups, bonuses and discounts.",
+      "newCta": "New coupon",
+      "newTitle": "Create coupon",
+      "editTitle": "Edit coupon",
+      "filterAllTypes": "All types",
+      "filterAllStatuses": "All statuses",
+      "searchPlaceholder": "Search by code…",
+      "tableCode": "Code",
+      "tableType": "Type",
+      "tableValue": "Value",
+      "tableStatus": "Status",
+      "tableValidTo": "Valid until",
+      "tableUses": "Uses",
+      "tablePerUser": "Per user",
+      "tableActions": "Actions",
+      "noCoupons": "No coupons yet.",
+      "viewRedemptions": "Redemptions",
+      "redemptionsTitle": "Coupon redemptions",
+      "redemptionsSubtitle": "Who redeemed it, when and how much it credited.",
+      "globalRedemptionsTitle": "All redemptions",
+      "globalRedemptionsSubtitle": "Global feed of coupon usage.",
+      "filterCouponId": "Coupon ID",
+      "filterUserId": "User ID",
+      "tableUser": "User",
+      "tableCoupon": "Coupon",
+      "tableAmount": "Amount",
+      "tableContext": "Context",
+      "tableCreated": "Created",
+      "noRedemptions": "No redemptions yet.",
+      "form": {
+        "code": "Code",
+        "codePlaceholder": "WELCOME5",
+        "type": "Type",
+        "typeHint": "Determines what the coupon credits or discounts.",
+        "valueAmount": "Amount (USD)",
+        "valueAmountHint": "Amount in USD. Stored as nano-USD.",
+        "valuePercent": "Discount (%)",
+        "valuePercentHint": "Percent. Stored in basis points (1% = 100 bps).",
+        "methodCode": "Method code",
+        "methodCodePlaceholder": "google_banana/banana-1/text_to_image",
+        "methodCodeHint": "Discount applies only to requests with this method.",
+        "bundleId": "Bundle ID",
+        "bundleIdHint": "Specific bundle the discount applies to. Copy ID from catalog.",
+        "minTopupUnits": "Minimum top-up (USD)",
+        "minTopupUnitsHint": "Optional. Coupon activates only when top-up amount is at least this much.",
+        "maxUses": "Max uses",
+        "maxUsesHint": "Leave empty for unlimited.",
+        "maxUsesPerUser": "Max uses per user",
+        "validFrom": "Valid from",
+        "validTo": "Valid to",
+        "validToHint": "Leave empty for no expiry.",
+        "status": "Status",
+        "comment": "Internal note",
+        "commentPlaceholder": "Used for spring campaign…",
+        "saved": "Coupon saved.",
+        "saveFailed": "Failed to save coupon.",
+        "deleted": "Coupon deleted.",
+        "deleteFailed": "Failed to delete coupon.",
+        "confirmDelete": "Delete coupon? Redemption history will be preserved."
+      },
+      "type": {
+        "FIXED_AMOUNT": "Fixed cash bonus",
+        "BONUS_MONEY": "Bonus money",
+        "DISCOUNT_METHOD_PERCENT": "Method discount %",
+        "DISCOUNT_BUNDLE_AMOUNT": "Bundle discount $",
+        "DISCOUNT_TOPUP": "Top-up bonus %"
+      },
+      "status": {
+        "DRAFT": "Draft",
+        "ACTIVE": "Active",
+        "PAUSED": "Paused",
+        "EXPIRED": "Expired",
+        "EXHAUSTED": "Exhausted"
+      }
     }
   },
   "dashboard": {
