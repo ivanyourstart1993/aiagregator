@@ -3,8 +3,8 @@ import type { ReactNode } from 'react';
 import './globals.css';
 
 export const metadata: Metadata = {
-  title: 'AI API Aggregator — Panel',
-  description: 'Admin panel for AI API Aggregator.',
+  title: 'Aigenway — Panel',
+  description: 'Admin panel for Aigenway.',
   robots: 'noindex, nofollow',
 };
 

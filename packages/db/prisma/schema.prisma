@@ -1,4 +1,4 @@
-// AI API Aggregator — единый источник Prisma-схемы.
+// Aigenway — единый источник Prisma-схемы.
 // Stage 1 — User/Account/Session/VerificationToken/ApiKey/AdminAction.
 // Дальнейшие этапы расширят схему (Wallet, Transaction, Reservation, Deposit,
 // Bundle, Tariff, Coupon, Provider/Model/Method, ApiRequest, Task и т.д.).

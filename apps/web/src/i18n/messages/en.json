@@ -14,7 +14,7 @@
     "failed": "Failed to send: {error}"
   },
   "common": {
-    "appName": "AI API Aggregator",
+    "appName": "Aigenway",
     "loading": "Loading...",
     "save": "Save",
     "cancel": "Cancel",
@@ -53,7 +53,7 @@
     "copied": "Copied"
   },
   "marketing": {
-    "heroTitle": "AI API Aggregator",
+    "heroTitle": "Aigenway",
     "heroTitleLine1": "One API.",
     "heroTitleAccent": "Every AI provider.",
     "heroSubtitle": "Banana, Veo, Kling and dozens more behind one stable contract. Predictable USD pricing, idempotent requests, queue and callbacks — out of the box.",
@@ -1311,7 +1311,7 @@
     "navMethods": "Methods",
     "navAllProviders": "All providers",
     "navOverview": "Overview",
-    "introTitle": "AI API Aggregator",
+    "introTitle": "Aigenway",
     "introBody": "A unified API gateway for AI image and video providers. Browse methods, integrate against /v1, and pay in real USD. Pricing is private to your account — see your dashboard.",
     "ctaStart": "Start with /v1/methods",
     "methodsIndexTitle": "Methods",

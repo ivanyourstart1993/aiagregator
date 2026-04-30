@@ -16,7 +16,7 @@ export async function MarketingHeader() {
           <span className="flex h-7 w-7 items-center justify-center rounded-md bg-info/15 text-info">
             <Sparkles className="h-4 w-4" />
           </span>
-          AI Aggregator
+          Aigenway
         </Link>
 
         <nav className="hidden items-center gap-1 md:flex">

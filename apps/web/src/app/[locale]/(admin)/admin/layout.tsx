@@ -16,7 +16,7 @@ export default async function AdminLayout({ children }: { children: ReactNode })
   return (
     <div className="flex min-h-screen flex-col bg-muted/30">
       <header className="flex items-center justify-between border-b bg-background px-6 py-3">
-        <span className="text-sm font-semibold tracking-tight">AI API Aggregator — Admin</span>
+        <span className="text-sm font-semibold tracking-tight">Aigenway — Admin</span>
         <UserMenu email={user.email} name={user.name} />
       </header>
       <div className="flex flex-1">

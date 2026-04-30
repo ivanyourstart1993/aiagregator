@@ -13,7 +13,7 @@ export async function MarketingFooter() {
             <span className="flex h-7 w-7 items-center justify-center rounded-md bg-info/15 text-info">
               <Sparkles className="h-4 w-4" />
             </span>
-            AI Aggregator
+            Aigenway
           </Link>
           <p className="text-xs leading-relaxed text-muted-foreground">{t('tagline')}</p>
         </div>
@@ -41,7 +41,7 @@ export async function MarketingFooter() {
 
       <div className="border-t border-border/40">
         <div className="mx-auto flex w-full max-w-6xl flex-col items-center justify-between gap-2 px-4 py-5 text-xs text-muted-foreground sm:flex-row md:px-6">
-          <span>© {year} AI API Aggregator</span>
+          <span>© {year} Aigenway</span>
           <span>{t('madeWith')}</span>
         </div>
       </div>

@@ -45,7 +45,7 @@ export function EmailLayout({ preview, children }: EmailLayoutProps) {
               <tbody>
                 <tr>
                   <td style={brandLogo}>✦</td>
-                  <td style={brandName}>AI Aggregator</td>
+                  <td style={brandName}>Aigenway</td>
                 </tr>
               </tbody>
             </table>
@@ -65,7 +65,7 @@ export function EmailLayout({ preview, children }: EmailLayoutProps) {
             </Text>
             <Hr style={footerHr} />
             <Text style={footerSmall}>
-              © {new Date().getFullYear()} AI API Aggregator · Single API gateway over leading
+              © {new Date().getFullYear()} Aigenway · Single API gateway over leading
               AI providers.
             </Text>
           </Section>

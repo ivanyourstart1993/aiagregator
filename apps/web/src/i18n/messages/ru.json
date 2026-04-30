@@ -14,7 +14,7 @@
     "failed": "Не удалось отправить: {error}"
   },
   "common": {
-    "appName": "AI API Aggregator",
+    "appName": "Aigenway",
     "loading": "Загрузка...",
     "save": "Сохранить",
     "cancel": "Отмена",
@@ -53,7 +53,7 @@
     "copied": "Скопировано"
   },
   "marketing": {
-    "heroTitle": "AI API Aggregator",
+    "heroTitle": "Aigenway",
     "heroTitleLine1": "Один API.",
     "heroTitleAccent": "Все AI-провайдеры.",
     "heroSubtitle": "Banana, Veo, Kling и десятки других через стабильный контракт. Прозрачные цены в USD, идемпотентные запросы, очередь и колбэки — из коробки.",
@@ -1311,7 +1311,7 @@
     "navMethods": "Методы",
     "navAllProviders": "Все провайдеры",
     "navOverview": "Обзор",
-    "introTitle": "AI API Aggregator",
+    "introTitle": "Aigenway",
     "introBody": "Единый API-шлюз для AI-генерации изображений и видео. Просматривайте методы, интегрируйтесь по /v1, оплачивайте в реальных USD. Цены индивидуальны — смотрите в кабинете.",
     "ctaStart": "Начать с /v1/methods",
     "methodsIndexTitle": "Методы",

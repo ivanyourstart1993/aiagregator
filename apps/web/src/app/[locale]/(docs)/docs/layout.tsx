@@ -39,7 +39,7 @@ export default async function DocsLayout({ children }: { children: ReactNode }) 
       <header className="border-b">
         <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-4">
           <Link href="/" className="text-sm font-semibold">
-            AI API Aggregator
+            Aigenway
           </Link>
           <span className="text-sm text-muted-foreground">{t('title')}</span>
         </div>

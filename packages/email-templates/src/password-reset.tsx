@@ -20,11 +20,11 @@ export function PasswordResetEmail({
   ttlHours = 1,
 }: PasswordResetEmailProps) {
   return (
-    <EmailLayout preview="Reset your AI Aggregator password">
+    <EmailLayout preview="Reset your Aigenway password">
       <EmailHeading>Reset your password</EmailHeading>
       <EmailText>Hi {name},</EmailText>
       <EmailText>
-        Someone requested a password reset for your AI Aggregator account. Click the button
+        Someone requested a password reset for your Aigenway account. Click the button
         below to choose a new password. The link expires in {ttlHours} hour
         {ttlHours === 1 ? '' : 's'}.
       </EmailText>

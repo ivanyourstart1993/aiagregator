@@ -3,7 +3,7 @@ import type { ReactNode } from 'react';
 import './globals.css';
 
 export const metadata: Metadata = {
-  title: 'AI API Aggregator',
+  title: 'Aigenway',
   description: 'Single API gateway over external AI providers.',
 };
 

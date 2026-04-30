@@ -14,7 +14,7 @@ export interface WelcomeEmailProps {
 
 export function WelcomeEmail({ name, dashboardUrl }: WelcomeEmailProps) {
   return (
-    <EmailLayout preview="Welcome to AI Aggregator — let's get you started">
+    <EmailLayout preview="Welcome to Aigenway — let's get you started">
       <EmailHeading>Welcome, {name}!</EmailHeading>
       <EmailText>
         Your account is ready. One API key gets you Banana, Veo, Kling and more behind a

@@ -15,11 +15,11 @@ export interface VerifyEmailProps {
 
 export function VerifyEmail({ name, verifyUrl }: VerifyEmailProps) {
   return (
-    <EmailLayout preview="Confirm your email — AI Aggregator">
+    <EmailLayout preview="Confirm your email — Aigenway">
       <EmailHeading>Confirm your email</EmailHeading>
       <EmailText>Hi {name},</EmailText>
       <EmailText>
-        Welcome to AI Aggregator. Tap the button below to activate your account and start
+        Welcome to Aigenway. Tap the button below to activate your account and start
         making API calls.
       </EmailText>
       <EmailButton href={verifyUrl}>Verify email</EmailButton>

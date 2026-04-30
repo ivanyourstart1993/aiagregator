@@ -6,7 +6,7 @@ export default function AuthLayout({ children }: { children: ReactNode }) {
     <div className="flex min-h-screen flex-col bg-muted/30">
       <header className="px-6 py-6">
         <Link href="/" className="text-sm font-medium text-muted-foreground hover:text-foreground">
-          AI API Aggregator
+          Aigenway
         </Link>
       </header>
       <main className="flex flex-1 items-center justify-center px-6 pb-16">

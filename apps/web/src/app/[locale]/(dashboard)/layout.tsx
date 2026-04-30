@@ -25,7 +25,7 @@ export default async function DashboardLayout({ children }: { children: ReactNod
           <span className="flex h-7 w-7 items-center justify-center rounded-md bg-info/15 text-info">
             <Sparkles className="h-4 w-4" />
           </span>
-          AI Aggregator
+          Aigenway
         </Link>
         <div className="flex-1 overflow-y-auto">
           <SidebarNav />
@@ -43,7 +43,7 @@ export default async function DashboardLayout({ children }: { children: ReactNod
               <span className="flex h-6 w-6 items-center justify-center rounded-md bg-info/15 text-info">
                 <Sparkles className="h-3.5 w-3.5" />
               </span>
-              AI Aggregator
+              Aigenway
             </Link>
           </div>
           <div className="flex items-center gap-1">

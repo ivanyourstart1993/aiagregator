@@ -27,7 +27,7 @@ export function MobileSidebar() {
       </SheetTrigger>
       <SheetContent side="left" className="w-72 p-0">
         <div className="flex h-12 items-center border-b border-border/60 px-4 text-sm font-semibold">
-          AI API Aggregator
+          Aigenway
         </div>
         <SidebarNav />
       </SheetContent>

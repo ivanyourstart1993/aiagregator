@@ -38,7 +38,7 @@ export class MailService {
     const text = `Hi ${name}, please verify your email: ${verifyUrl}`;
     await this.send({
       to,
-      subject: 'Verify your email — AI API Aggregator',
+      subject: 'Verify your email — Aigenway',
       html,
       text,
     });
@@ -54,7 +54,7 @@ export class MailService {
     const text = `Hi ${name}, reset your password: ${resetUrl} (link expires in ${ttlHours}h)`;
     await this.send({
       to,
-      subject: 'Reset your password — AI API Aggregator',
+      subject: 'Reset your password — Aigenway',
       html,
       text,
     });
