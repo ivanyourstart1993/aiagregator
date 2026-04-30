@@ -341,6 +341,11 @@ export class AdminProviderAccountController {
     lastErrorMessage: string | null;
     excludedReason: string | null;
     acquisitionCostUnits?: bigint | null;
+    todayRequestsCount?: number;
+    monthRequestsCount?: number;
+    lastUsedAt?: Date | null;
+    cooldownUntil?: Date | null;
+    warmupStartedAt?: Date | null;
     createdAt: Date;
     updatedAt: Date;
   }) {
@@ -379,6 +384,11 @@ export class AdminProviderAccountController {
       lastErrorMessage: a.lastErrorMessage,
       excludedReason: a.excludedReason,
       acquisitionCostUnits: (a.acquisitionCostUnits ?? 0n).toString(),
+      todayUsed: a.todayRequestsCount ?? null,
+      monthUsed: a.monthRequestsCount ?? null,
+      lastUsedAt: a.lastUsedAt ?? null,
+      cooldownUntil: a.cooldownUntil ?? null,
+      warmupStartedAt: a.warmupStartedAt ?? null,
       createdAt: a.createdAt,
       updatedAt: a.updatedAt,
     };

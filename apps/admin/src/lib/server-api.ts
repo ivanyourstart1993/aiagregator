@@ -855,6 +855,10 @@ export interface ProviderAccountView {
   lastErrorMessage?: string | null;
   lastErrorAt?: string | null;
   acquisitionCostUnits?: string | null;
+  // Anti-ban balancer fields (Stage post-16)
+  lastUsedAt?: string | null;
+  cooldownUntil?: string | null;
+  warmupStartedAt?: string | null;
   createdAt?: string;
   updatedAt?: string;
 }

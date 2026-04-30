@@ -873,6 +873,19 @@ model ProviderAccount {
   // key from a marketplace, virtual card + SMS for trial farming, etc.
   // Used for per-account ROI calculation.
   acquisitionCostUnits BigInt?              @default(0)
+  // Anti-ban balancer fields ---------------------------------------------
+  // lastUsedAt — set every time pickAccount() selects this account, used
+  // for least-recently-used rotation. Differs from lastSuccessAt which
+  // only moves on success (so failed accounts wouldn't be deprioritized).
+  lastUsedAt          DateTime?
+  // cooldownUntil — temporary backoff after transient rate-limit (429
+  // requests_per_minute). Selector skips accounts where now() < cooldownUntil.
+  // Lazily expires (status flips back to ACTIVE on next selection).
+  cooldownUntil       DateTime?
+  // warmupStartedAt — defaults to createdAt; effective dailyLimit is scaled
+  // down for the first 7 days to avoid trial-abuse fingerprinting.
+  warmupStartedAt     DateTime?
+  // -----------------------------------------------------------------------
   createdAt           DateTime              @default(now())
   updatedAt           DateTime              @updatedAt
 
@@ -882,6 +895,8 @@ model ProviderAccount {
 
   @@index([providerId, status])
   @@index([status, rotationEnabled])
+  @@index([status, cooldownUntil])
+  @@index([lastUsedAt])
   @@map("provider_account")
 }
 

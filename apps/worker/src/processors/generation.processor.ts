@@ -126,6 +126,32 @@ function reasonFromKind(kind: AdapterError['kind']): string {
   }
 }
 
+// Anti-ban balancer config. Override via env if needed.
+const SOFT_DAILY_CAP_PCT = Number(process.env.BALANCER_SOFT_DAILY_PCT ?? 0.85);
+const SOFT_HOURLY_CAP_PCT = Number(process.env.BALANCER_SOFT_HOURLY_PCT ?? 0.8);
+const SOFT_MINUTE_CAP_PCT = Number(process.env.BALANCER_SOFT_MINUTE_PCT ?? 0.7);
+// Warmup ramp-up: scale daily limit on day N since warmupStartedAt.
+// 0.10 → 10% of dailyLimit on day 1, 0.30 days 2–3, 0.60 days 4–7, 1.00 day 8+.
+const WARMUP_RAMP: { days: number; factor: number }[] = [
+  { days: 1, factor: 0.1 },
+  { days: 3, factor: 0.3 },
+  { days: 7, factor: 0.6 },
+];
+// PROXY_REQUIRED — when true, accounts without an active proxy are skipped.
+// Default ON: routing every Google call through one fixed shared IP
+// (Northflank cluster) is the #1 fingerprinting signal. Override only
+// when debugging.
+const PROXY_REQUIRED = (process.env.BALANCER_PROXY_REQUIRED ?? 'true') === 'true';
+
+function warmupFactor(warmupStartedAt: Date | null): number {
+  if (!warmupStartedAt) return 1;
+  const days = (Date.now() - warmupStartedAt.getTime()) / (24 * 60 * 60 * 1000);
+  for (const step of WARMUP_RAMP) {
+    if (days < step.days) return step.factor;
+  }
+  return 1;
+}
+
 async function pickAccount(
   prisma: PrismaClient,
   providerId: string,
@@ -137,16 +163,43 @@ async function pickAccount(
   credentials: Record<string, unknown>;
   proxyId: string | null;
 } | null> {
+  const now = new Date();
+
+  // Selector predicate:
+  // - status ACTIVE, OR status COOLDOWN with cooldown expired → eligible
+  //   (we'll flip COOLDOWN→ACTIVE atomically below before returning)
+  // - rotationEnabled
+  // - excluded ids (already-tried in this task)
+  // - if PROXY_REQUIRED: proxyId set AND linked Proxy is ACTIVE
+  // - cooldownUntil null OR <= now (lazy expiry — no cron needed)
   const candidates = await prisma.providerAccount.findMany({
     where: {
       providerId,
-      status: ProviderAccountStatus.ACTIVE,
       rotationEnabled: true,
       ...(excludeIds.length > 0 ? { id: { notIn: excludeIds } } : {}),
+      OR: [
+        { status: ProviderAccountStatus.ACTIVE },
+        {
+          status: ProviderAccountStatus.COOLDOWN,
+          cooldownUntil: { lte: now },
+        },
+      ],
+      ...(PROXY_REQUIRED
+        ? {
+            proxyId: { not: null },
+            proxy: { status: ProxyStatus.ACTIVE },
+          }
+        : {}),
     },
-    orderBy: { createdAt: 'asc' },
+    // LRU: least-recently-used first. NULL lastUsedAt sorts first by Postgres
+    // default; that's intended (newly added accounts get first pick — but
+    // their warmup factor caps them low so they ramp gradually).
+    orderBy: [{ lastUsedAt: 'asc' }, { createdAt: 'asc' }],
   });
+
   for (const a of candidates) {
+    // Model/method scope filter (in-memory because Prisma can't filter on
+    // array contains across two columns cleanly).
     if (
       a.supportedModelIds.length > 0 &&
       !a.supportedModelIds.includes(modelId)
@@ -159,6 +212,64 @@ async function pickAccount(
     ) {
       continue;
     }
+
+    // Warmup ramp + soft cap on dailyLimit.
+    const factor = warmupFactor(a.warmupStartedAt ?? a.createdAt);
+    if (a.dailyLimit != null) {
+      const effectiveDaily = Math.floor(
+        a.dailyLimit * factor * SOFT_DAILY_CAP_PCT,
+      );
+      if (a.todayRequestsCount >= effectiveDaily) continue;
+    }
+    // maxRequestsPerDay (raw, no warmup) — same soft cap.
+    if (a.maxRequestsPerDay != null) {
+      const cap = Math.floor(a.maxRequestsPerDay * SOFT_DAILY_CAP_PCT);
+      if (a.todayRequestsCount >= cap) continue;
+    }
+    // Hourly / per-minute caps require recent attempts count. Computing
+    // those from ProviderAttempt costs a query per account; cap at first 5
+    // candidates we actually need to check to keep the hot path fast.
+    if (
+      (a.maxRequestsPerHour != null && a.maxRequestsPerHour > 0) ||
+      (a.maxRequestsPerMinute != null && a.maxRequestsPerMinute > 0)
+    ) {
+      const since = new Date(now.getTime() - 60 * 60 * 1000);
+      const recent = await prisma.providerAttempt.findMany({
+        where: { providerAccountId: a.id, startedAt: { gte: since } },
+        select: { startedAt: true },
+      });
+      if (a.maxRequestsPerHour != null) {
+        const hourCap = Math.floor(a.maxRequestsPerHour * SOFT_HOURLY_CAP_PCT);
+        if (recent.length >= hourCap) continue;
+      }
+      if (a.maxRequestsPerMinute != null) {
+        const minuteAgo = now.getTime() - 60 * 1000;
+        const inLastMinute = recent.filter(
+          (r) => r.startedAt.getTime() >= minuteAgo,
+        ).length;
+        const minCap = Math.floor(
+          a.maxRequestsPerMinute * SOFT_MINUTE_CAP_PCT,
+        );
+        if (inLastMinute >= minCap) continue;
+      }
+    }
+
+    // Atomic claim: stamp lastUsedAt and bump out of COOLDOWN if expired.
+    // We don't use FOR UPDATE SKIP LOCKED here because Prisma doesn't
+    // expose it; the `WHERE updatedAt = a.updatedAt` clause makes the
+    // update fail if another worker beat us, then we fall through to the
+    // next candidate.
+    const claimed = await prisma.providerAccount.updateMany({
+      where: { id: a.id, updatedAt: a.updatedAt },
+      data: {
+        lastUsedAt: now,
+        ...(a.status === ProviderAccountStatus.COOLDOWN
+          ? { status: ProviderAccountStatus.ACTIVE, cooldownUntil: null }
+          : {}),
+      },
+    });
+    if (claimed.count === 0) continue;
+
     return {
       id: a.id,
       credentials: (a.credentials ?? {}) as Record<string, unknown>,
@@ -823,12 +934,26 @@ export function createGenerationWorker(opts: {
           // Non-fatal adapter errors (rate-limit, validation, content) — still
           // record the latest error on the account so the admin UI surfaces
           // the diagnostic without manual log diving.
+          // Per-minute rate limit (transient): put account in COOLDOWN so the
+          // balancer skips it for N minutes, then auto-revives. This is
+          // distinct from QUOTA_EXHAUSTED (hard limit, manual unfreeze).
+          const rateLimitCooldownMs = Number(
+            process.env.BALANCER_RATE_LIMIT_COOLDOWN_MS ?? 5 * 60 * 1000,
+          );
           await prisma.providerAccount
             .update({
               where: { id: acc.id },
               data: {
                 lastErrorAt: finishedAt,
                 lastErrorMessage: `[${c.publicCode}] ${c.message}`.slice(0, 1000),
+                ...(c.kind === 'rate_limit'
+                  ? {
+                      status: ProviderAccountStatus.COOLDOWN,
+                      cooldownUntil: new Date(
+                        finishedAt.getTime() + rateLimitCooldownMs,
+                      ),
+                    }
+                  : {}),
               },
             })
             .catch(() => undefined);
