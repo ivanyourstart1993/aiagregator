@@ -1,0 +1,48 @@
+{
+  "common": {
+    "appName": "AI API Aggregator — Panel",
+    "loading": "Loading…",
+    "save": "Save",
+    "cancel": "Cancel",
+    "delete": "Delete",
+    "edit": "Edit",
+    "create": "Create",
+    "back": "Back",
+    "submit": "Submit",
+    "yes": "Yes",
+    "no": "No",
+    "search": "Search",
+    "filter": "Filter",
+    "actions": "Actions",
+    "refresh": "Refresh"
+  },
+  "auth": {
+    "loginTitle": "Sign in to the panel",
+    "loginSubtitle": "Administrators only",
+    "email": "Email",
+    "password": "Password",
+    "signIn": "Sign in",
+    "signingIn": "Signing in…",
+    "errorInvalid": "Invalid email or password",
+    "errorForbidden": "Forbidden. Admins only.",
+    "errorGeneric": "Sign-in failed. Try again later."
+  },
+  "nav": {
+    "dashboard": "Overview",
+    "users": "Users",
+    "providerAccounts": "Provider accounts",
+    "providerProxies": "Proxies",
+    "tasks": "Tasks",
+    "load": "Load",
+    "settings": "Settings",
+    "signOut": "Sign out"
+  },
+  "dashboard": {
+    "title": "Overview",
+    "totalUsers": "Users",
+    "totalTasks": "Tasks",
+    "succeeded": "Succeeded",
+    "failed": "Failed",
+    "activeAccounts": "Active accounts"
+  }
+}

@@ -1,0 +1,48 @@
+{
+  "common": {
+    "appName": "AI API Aggregator — Panel",
+    "loading": "Загрузка…",
+    "save": "Сохранить",
+    "cancel": "Отмена",
+    "delete": "Удалить",
+    "edit": "Редактировать",
+    "create": "Создать",
+    "back": "Назад",
+    "submit": "Отправить",
+    "yes": "Да",
+    "no": "Нет",
+    "search": "Поиск",
+    "filter": "Фильтр",
+    "actions": "Действия",
+    "refresh": "Обновить"
+  },
+  "auth": {
+    "loginTitle": "Вход в панель",
+    "loginSubtitle": "Только для администраторов",
+    "email": "Email",
+    "password": "Пароль",
+    "signIn": "Войти",
+    "signingIn": "Входим…",
+    "errorInvalid": "Неверный email или пароль",
+    "errorForbidden": "Доступ запрещён. Только для админов.",
+    "errorGeneric": "Ошибка входа. Попробуйте позже."
+  },
+  "nav": {
+    "dashboard": "Обзор",
+    "users": "Пользователи",
+    "providerAccounts": "Аккаунты провайдеров",
+    "providerProxies": "Прокси",
+    "tasks": "Задачи",
+    "load": "Нагрузка",
+    "settings": "Настройки",
+    "signOut": "Выйти"
+  },
+  "dashboard": {
+    "title": "Обзор",
+    "totalUsers": "Пользователи",
+    "totalTasks": "Задачи",
+    "succeeded": "Успешных",
+    "failed": "Неудачных",
+    "activeAccounts": "Активные аккаунты"
+  }
+}
