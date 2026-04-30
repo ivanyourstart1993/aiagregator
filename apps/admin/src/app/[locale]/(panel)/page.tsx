@@ -8,6 +8,20 @@ import type {
   ProviderAccountView,
   TopUserRow,
 } from '@/lib/server-api';
+import { DateRangePicker } from '@/components/dashboard/DateRangePicker';
+import { RefreshButton } from '@/components/dashboard/RefreshButton';
+import { InteractiveSparkline } from '@/components/dashboard/InteractiveSparkline';
+
+interface PageProps {
+  searchParams: Promise<Record<string, string | undefined>>;
+}
+
+const RANGE_DAYS: Record<string, number> = {
+  '1d': 1,
+  '7d': 7,
+  '30d': 30,
+  '90d': 90,
+};
 
 const NANO = 1_000_000_000;
 
@@ -62,8 +76,11 @@ function fmtNum(n: number): string {
   return n.toLocaleString('ru-RU');
 }
 
-export default async function DashboardPage() {
-  const from = isoDaysAgo(30);
+export default async function DashboardPage({ searchParams }: PageProps) {
+  const sp = await searchParams;
+  const range = sp.range ?? '30d';
+  const days = RANGE_DAYS[range] ?? 30;
+  const from = isoDaysAgo(days);
   const to = new Date().toISOString();
   const filter = { from, to };
 
@@ -143,12 +160,18 @@ export default async function DashboardPage() {
 
   return (
     <div className="space-y-8">
-      <header>
-        <h1 className="text-2xl font-semibold tracking-tight">Доходность</h1>
-        <p className="text-sm text-muted-foreground">
-          За последние 30 дней · с {new Date(from).toLocaleDateString('ru-RU')} по{' '}
-          {new Date(to).toLocaleDateString('ru-RU')}
-        </p>
+      <header className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight">Доходность</h1>
+          <p className="text-sm text-muted-foreground">
+            За {range} · с {new Date(from).toLocaleDateString('ru-RU')} по{' '}
+            {new Date(to).toLocaleDateString('ru-RU')}
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <DateRangePicker />
+          <RefreshButton />
+        </div>
       </header>
 
       {/* KPI tiles */}
@@ -225,7 +248,7 @@ export default async function DashboardPage() {
               </span>
             </div>
           </div>
-          <Sparkline
+          <InteractiveSparkline
             revenue={dailyRevenueValues}
             cost={dailyCostValues}
             labels={daily.map((d) => d.date)}
@@ -433,71 +456,3 @@ function StatusPill({ status }: { status: string }) {
   return <span className={`rounded px-2 py-0.5 ${cls}`}>{status}</span>;
 }
 
-function Sparkline({
-  revenue,
-  cost,
-  labels,
-}: {
-  revenue: number[];
-  cost: number[];
-  labels: string[];
-}) {
-  if (revenue.length === 0) return null;
-  const W = 800;
-  const H = 140;
-  const PAD = 8;
-  const max = Math.max(...revenue, ...cost, 0.01);
-  const xStep = (W - PAD * 2) / Math.max(revenue.length - 1, 1);
-  const toPath = (vals: number[]) =>
-    vals
-      .map((v, i) => {
-        const x = PAD + i * xStep;
-        const y = H - PAD - (v / max) * (H - PAD * 2);
-        return `${i === 0 ? 'M' : 'L'} ${x.toFixed(1)} ${y.toFixed(1)}`;
-      })
-      .join(' ');
-  const totalRev = revenue.reduce((s, v) => s + v, 0);
-  const totalCost = cost.reduce((s, v) => s + v, 0);
-  const lastRev = revenue[revenue.length - 1] ?? 0;
-  const lastCost = cost[cost.length - 1] ?? 0;
-  return (
-    <div>
-      <svg
-        viewBox={`0 0 ${W} ${H}`}
-        preserveAspectRatio="none"
-        className="h-32 w-full"
-        role="img"
-        aria-label="revenue and cost over time"
-      >
-        <path
-          d={toPath(cost)}
-          fill="none"
-          stroke="rgb(244 63 94)"
-          strokeWidth="1.5"
-          opacity="0.7"
-        />
-        <path
-          d={toPath(revenue)}
-          fill="none"
-          stroke="rgb(16 185 129)"
-          strokeWidth="2"
-        />
-      </svg>
-      <div className="mt-2 grid grid-cols-2 gap-4 text-xs text-muted-foreground">
-        <div>
-          сумма revenue:{' '}
-          <span className="font-mono text-emerald-500">{fmtUSD(totalRev)}</span> · последний:{' '}
-          <span className="font-mono">{fmtUSD(lastRev)}</span>
-        </div>
-        <div className="text-right">
-          сумма cost: <span className="font-mono text-rose-500">{fmtUSD(totalCost)}</span> ·
-          последний: <span className="font-mono">{fmtUSD(lastCost)}</span>
-        </div>
-      </div>
-      <div className="mt-1 flex justify-between text-[10px] text-muted-foreground/70">
-        <span>{labels[0]}</span>
-        <span>{labels[labels.length - 1]}</span>
-      </div>
-    </div>
-  );
-}
