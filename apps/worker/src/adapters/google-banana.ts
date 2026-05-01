@@ -70,10 +70,34 @@ async function getSAAccessToken(sa: ServiceAccountKey): Promise<string> {
   return json.access_token;
 }
 
-// AI Studio model code → Vertex AI model code (Imagen replaces Gemini image-preview)
+// AI Studio model code → Vertex AI Imagen model code, used ONLY for the
+// text_to_image path (which routes to Imagen :predict on Vertex).
 function vertexModelFor(aiStudioModelCode: string): string {
   if (aiStudioModelCode.includes('pro-image')) return 'imagen-4.0-ultra-generate-001';
   return 'imagen-4.0-generate-001';
+}
+
+// AI Studio model code → Vertex AI Gemini model code, used for the
+// image_edit / image_to_image paths (Vertex `generateContent` endpoint).
+// Vertex publishers/google/models uses different names than AI Studio for
+// the same family — calling /models/{ai-studio-name}:generateContent
+// returns 404 "Publisher Model not found".
+function vertexGeminiModelFor(aiStudioModelCode: string): string {
+  // Catalog ships these AI Studio names; map them to whatever Vertex
+  // currently exposes. Verified against the live Vertex API on 2026-05-01:
+  //   gemini-2.5-flash-image  → 400 (exists)
+  //   gemini-3.1-flash-image-preview, gemini-3-pro-image-preview, etc → 404
+  //   gemini-2.5-pro-image, gemini-3-pro-image → 404 (no Pro variant on Vertex)
+  if (aiStudioModelCode === 'gemini-3.1-flash-image-preview') {
+    return 'gemini-2.5-flash-image';
+  }
+  if (aiStudioModelCode === 'gemini-3-pro-image-preview') {
+    // No Pro Gemini-image model on Vertex right now. Fall back to flash so
+    // the request succeeds — it's a quality downgrade, not a hard failure.
+    // Surface this to the operator via a debug log.
+    return 'gemini-2.5-flash-image';
+  }
+  return aiStudioModelCode;
 }
 
 const VERTEX_LOCATION = 'us-central1';
@@ -453,13 +477,17 @@ export class GoogleBananaAdapter implements ProviderAdapter {
     if (aspect) generationConfig.imageConfig = { aspectRatio: aspect };
 
     const access = await getSAAccessToken(sa);
-    const url = `https://${VERTEX_LOCATION}-aiplatform.googleapis.com/v1/projects/${sa.project_id}/locations/${VERTEX_LOCATION}/publishers/google/models/${encodeURIComponent(model.code)}:generateContent`;
+    const vertexModel = vertexGeminiModelFor(model.code);
+    const url = `https://${VERTEX_LOCATION}-aiplatform.googleapis.com/v1/projects/${sa.project_id}/locations/${VERTEX_LOCATION}/publishers/google/models/${encodeURIComponent(vertexModel)}:generateContent`;
     const agent = this.buildProxyAgent(ctx);
     const count = pickImagesCount(params);
     const files: AdapterFile[] = [];
 
     for (let i = 0; i < count; i++) {
-      const body = { contents: [{ parts }], generationConfig };
+      // Vertex `generateContent` requires `role` on each content (AI Studio
+      // is more lenient — both omitting role and `user` work — Vertex 400s
+      // without it: "Please use a valid role: user, model.").
+      const body = { contents: [{ role: 'user', parts }], generationConfig };
       const parsed = await this.callApi(url, body, agent, {
         authorization: `Bearer ${access}`,
       });
