@@ -28,6 +28,19 @@ export interface MarginResult {
   costUnits: bigint;
   marginUnits: bigint;
   marginPercent: number;
+  // Coupon-credits redeemed in the period (FIXED_AMOUNT + BONUS_MONEY + DISCOUNT_TOPUP).
+  // These credits inflate gross revenue but represent no real cash inflow.
+  couponCreditsUnits: bigint;
+  // revenueUnits − couponCreditsUnits. Best-effort proxy for "real" cash revenue
+  // when lot-level wallet accounting is unavailable.
+  cashRevenueUnits: bigint;
+  cashMarginUnits: bigint;
+  cashMarginPercent: number;
+}
+
+export interface CouponCreditsResult {
+  creditUnits: bigint;
+  redemptionCount: number;
 }
 
 export interface DailyRevenueRow {
@@ -161,20 +174,62 @@ export class AnalyticsService {
   }
 
   async getMargin(filter: AnalyticsFilter): Promise<MarginResult> {
-    const [rev, cost] = await Promise.all([
+    const [rev, cost, credits] = await Promise.all([
       this.getRevenue(filter),
       this.getProviderCost(filter),
+      this.getCouponCredits(filter),
     ]);
     const marginUnits = rev.revenueUnits - cost.costUnits;
     const marginPercent =
       rev.revenueUnits > 0n
         ? Number((marginUnits * 10000n) / rev.revenueUnits) / 100
         : 0;
+    const cashRevenueUnits = rev.revenueUnits - credits.creditUnits;
+    const cashMarginUnits = cashRevenueUnits - cost.costUnits;
+    const cashMarginPercent =
+      cashRevenueUnits > 0n
+        ? Number((cashMarginUnits * 10000n) / cashRevenueUnits) / 100
+        : 0;
     return {
       revenueUnits: rev.revenueUnits,
       costUnits: cost.costUnits,
       marginUnits,
       marginPercent,
+      couponCreditsUnits: credits.creditUnits,
+      cashRevenueUnits,
+      cashMarginUnits,
+      cashMarginPercent,
+    };
+  }
+
+  /**
+   * Sum of coupon-funded credits added to user wallets in the period.
+   *
+   * Includes coupons whose effect is to grant balance:
+   *   - FIXED_AMOUNT (standalone redemption credits N nano-USD)
+   *   - BONUS_MONEY (standalone bonus credit)
+   *   - DISCOUNT_TOPUP (bonus added on top of a paid deposit)
+   *
+   * Excludes:
+   *   - DISCOUNT_METHOD_PERCENT, DISCOUNT_BUNDLE_AMOUNT — these reduce the capture
+   *     amount directly so the discounted portion is already not in revenue.
+   */
+  async getCouponCredits(filter: AnalyticsFilter): Promise<CouponCreditsResult> {
+    const rows = await this.prisma.$queryRaw<
+      Array<{ total: bigint | null; cnt: bigint }>
+    >`
+      SELECT SUM(cr."amountUnits") AS total,
+             COUNT(*)::bigint AS cnt
+      FROM "coupon_redemption" cr
+      JOIN "coupon" c ON c."id" = cr."couponId"
+      WHERE cr."createdAt" >= ${filter.from}
+        AND cr."createdAt" <= ${filter.to}
+        AND c."type" IN ('FIXED_AMOUNT', 'BONUS_MONEY', 'DISCOUNT_TOPUP')
+    `;
+    const row = rows[0];
+    return {
+      creditUnits: row?.total ?? 0n,
+      redemptionCount: row ? Number(row.cnt) : 0,
     };
   }
 

@@ -71,6 +71,10 @@ export class AdminAnalyticsController {
       costUnits: margin.costUnits.toString(),
       marginUnits: margin.marginUnits.toString(),
       marginPercent: margin.marginPercent,
+      couponCreditsUnits: margin.couponCreditsUnits.toString(),
+      cashRevenueUnits: margin.cashRevenueUnits.toString(),
+      cashMarginUnits: margin.cashMarginUnits.toString(),
+      cashMarginPercent: margin.cashMarginPercent,
     };
   }
 
@@ -126,6 +130,10 @@ export class AdminAnalyticsController {
       costUnits: m.costUnits.toString(),
       marginUnits: m.marginUnits.toString(),
       marginPercent: m.marginPercent,
+      couponCreditsUnits: m.couponCreditsUnits.toString(),
+      cashRevenueUnits: m.cashRevenueUnits.toString(),
+      cashMarginUnits: m.cashMarginUnits.toString(),
+      cashMarginPercent: m.cashMarginPercent,
     };
   }
 

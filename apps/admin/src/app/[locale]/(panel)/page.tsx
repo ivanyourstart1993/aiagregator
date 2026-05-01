@@ -143,13 +143,22 @@ export default async function DashboardPage({ searchParams }: PageProps) {
 
   // KPI numbers
   const revenue = bigToNum(summary?.revenueUnits);
+  const couponCredits = bigToNum(summary?.couponCreditsUnits);
+  // Prefer server-computed cashRevenue; fall back to client-side subtraction for
+  // older API revisions that don't yet emit the field.
+  const cashRevenue =
+    summary?.cashRevenueUnits != null
+      ? bigToNum(summary.cashRevenueUnits)
+      : revenue - couponCredits;
   const providerCost = bigToNum(summary?.costUnits);
   const acquisitionCostTotal = accounts.reduce(
     (s, a) => s + bigToNum(a.acquisitionCostUnits),
     0,
   );
-  const netProfit = revenue - providerCost - acquisitionCostTotal;
-  const netMarginPct = revenue > 0 ? (netProfit / revenue) * 100 : 0;
+  // Net Profit is now based on cash revenue (excluding coupon-funded captures),
+  // since coupon credits are not real cash inflow.
+  const netProfit = cashRevenue - providerCost - acquisitionCostTotal;
+  const netMarginPct = cashRevenue > 0 ? (netProfit / cashRevenue) * 100 : 0;
   const grossMarginBps = summary?.marginBps ?? null;
 
   // Sparkline
@@ -177,12 +186,22 @@ export default async function DashboardPage({ searchParams }: PageProps) {
       </header>
 
       {/* KPI tiles */}
-      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-4 lg:grid-cols-5">
         <Kpi
-          label="Revenue"
+          label="Revenue (gross)"
           value={fmtUSD(revenue)}
           sub={`${summary?.requestCount ?? 0} запросов`}
           tone="positive"
+        />
+        <Kpi
+          label="Revenue (cash)"
+          value={fmtUSD(cashRevenue)}
+          sub={
+            couponCredits > 0
+              ? `купоны −${fmtUSD(couponCredits)}`
+              : 'без купонных списаний'
+          }
+          tone={cashRevenue > 0 ? 'positive' : 'muted'}
         />
         <Kpi
           label="Provider cost"
@@ -196,9 +215,9 @@ export default async function DashboardPage({ searchParams }: PageProps) {
           tone="muted"
         />
         <Kpi
-          label="Net profit (30д)"
+          label="Net profit"
           value={fmtUSD(netProfit)}
-          sub={`Net margin ${netMarginPct.toFixed(1)}%`}
+          sub={`Net margin ${netMarginPct.toFixed(1)}% · от cash`}
           tone={netProfit >= 0 ? 'positive' : 'negative'}
         />
       </div>

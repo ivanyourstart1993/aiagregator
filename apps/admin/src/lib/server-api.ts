@@ -1017,6 +1017,12 @@ export interface AnalyticsSummary {
   marginBps?: number;
   /** Margin percentage as a plain number (e.g. 100 for 100%). */
   marginPercent?: number;
+  /** Sum of coupon-funded credits redeemed in the period (FIXED_AMOUNT + BONUS_MONEY + DISCOUNT_TOPUP). */
+  couponCreditsUnits?: string;
+  /** revenueUnits − couponCreditsUnits — proxy for real cash inflow. */
+  cashRevenueUnits?: string;
+  cashMarginUnits?: string;
+  cashMarginPercent?: number;
   /** Optional — only some endpoints surface counts on the summary. */
   requestCount?: number;
   tasksCount?: number;
