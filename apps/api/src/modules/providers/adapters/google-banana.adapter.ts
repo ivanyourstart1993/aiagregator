@@ -223,27 +223,120 @@ export class GoogleBananaAdapter implements ProviderAdapter {
   async validateAccount(
     credentials: Record<string, unknown>,
   ): Promise<{ ok: boolean; reason?: string }> {
+    // API key path — AI Studio. List a single model to confirm the key works.
     const apiKey =
       (credentials['apiKey'] as string | undefined) ??
       (credentials['api_key'] as string | undefined) ??
       (credentials['key'] as string | undefined);
-    if (!apiKey) return { ok: false, reason: 'missing apiKey' };
-    try {
-      const res = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(apiKey)}&pageSize=1`,
-        { method: 'GET' },
-      );
-      if (res.status === 401 || res.status === 403) {
+    if (apiKey) {
+      try {
+        const res = await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(apiKey)}&pageSize=1`,
+          { method: 'GET' },
+        );
+        if (res.status === 401 || res.status === 403) {
+          return { ok: false, reason: `http ${res.status}` };
+        }
+        if (res.status >= 200 && res.status < 300) return { ok: true };
         return { ok: false, reason: `http ${res.status}` };
+      } catch (err) {
+        return {
+          ok: false,
+          reason: err instanceof Error ? err.message : String(err),
+        };
       }
-      if (res.status >= 200 && res.status < 300) return { ok: true };
-      return { ok: false, reason: `http ${res.status}` };
-    } catch (err) {
-      return {
-        ok: false,
-        reason: err instanceof Error ? err.message : String(err),
-      };
     }
+
+    // Service Account path — Vertex AI. The cheapest probe is the OAuth2
+    // JWT-bearer exchange itself: if Google issues an access_token, the
+    // SA's private key + email are valid and the project is reachable.
+    // We don't call any aiplatform endpoint here so the cron stays cheap
+    // and doesn't burn quota on probes.
+    const sa = this.extractServiceAccount(credentials);
+    if (sa) {
+      try {
+        const ok = await this.probeServiceAccountToken(sa);
+        return ok ? { ok: true } : { ok: false, reason: 'sa token exchange failed' };
+      } catch (err) {
+        return {
+          ok: false,
+          reason: err instanceof Error ? err.message : String(err),
+        };
+      }
+    }
+
+    return { ok: false, reason: 'missing apiKey or serviceAccount' };
+  }
+
+  private extractServiceAccount(
+    credentials: Record<string, unknown>,
+  ): { client_email: string; private_key: string; project_id: string; token_uri?: string } | null {
+    let raw: unknown =
+      credentials['serviceAccount'] ??
+      credentials['service_account'] ??
+      credentials['serviceAccountKey'] ??
+      credentials['serviceAccountJson'];
+    if (typeof raw === 'string') {
+      try {
+        raw = JSON.parse(raw);
+      } catch {
+        return null;
+      }
+    }
+    if (!raw || typeof raw !== 'object') return null;
+    const obj = raw as Record<string, unknown>;
+    const email = obj['client_email'];
+    const key = obj['private_key'];
+    const project = obj['project_id'];
+    if (
+      typeof email !== 'string' ||
+      typeof key !== 'string' ||
+      typeof project !== 'string'
+    ) {
+      return null;
+    }
+    return {
+      client_email: email,
+      private_key: key,
+      project_id: project,
+      token_uri:
+        typeof obj['token_uri'] === 'string'
+          ? (obj['token_uri'] as string)
+          : undefined,
+    };
+  }
+
+  private async probeServiceAccountToken(sa: {
+    client_email: string;
+    private_key: string;
+    token_uri?: string;
+  }): Promise<boolean> {
+    const { createSign } = await import('node:crypto');
+    const enc = (o: object) => Buffer.from(JSON.stringify(o)).toString('base64url');
+    const tokenUri = sa.token_uri ?? 'https://oauth2.googleapis.com/token';
+    const now = Math.floor(Date.now() / 1000);
+    const header = { alg: 'RS256', typ: 'JWT' };
+    const payload = {
+      iss: sa.client_email,
+      scope: 'https://www.googleapis.com/auth/cloud-platform',
+      aud: tokenUri,
+      exp: now + 600,
+      iat: now,
+    };
+    const data = `${enc(header)}.${enc(payload)}`;
+    const sig = createSign('RSA-SHA256').update(data).sign(sa.private_key, 'base64url');
+    const jwt = `${data}.${sig}`;
+    const res = await fetch(tokenUri, {
+      method: 'POST',
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer',
+        assertion: jwt,
+      }).toString(),
+    });
+    if (!res.ok) return false;
+    const j = (await res.json()) as { access_token?: string };
+    return typeof j.access_token === 'string' && j.access_token.length > 0;
   }
 
   private extractApiKey(ctx: AdapterContext): string | null {
