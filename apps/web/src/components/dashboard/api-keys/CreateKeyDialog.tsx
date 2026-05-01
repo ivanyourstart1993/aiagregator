@@ -81,7 +81,7 @@ export function CreateKeyDialog() {
               <DialogDescription>{t('secretWarningDescription')}</DialogDescription>
             </DialogHeader>
             <div className="space-y-1">
-              <Label>{t('fullKey')}</Label>
+              <Label>{t('name')}</Label>
               <div className="rounded-md border bg-muted px-3 py-2 font-mono text-sm break-all">
                 {plaintext}
               </div>
@@ -95,15 +95,15 @@ export function CreateKeyDialog() {
                 <p className="text-xs text-muted-foreground">{t('webhookSecretHint')}</p>
               </div>
             ) : null}
-            <DialogFooter className="flex-col gap-2 sm:flex-row">
+            <DialogFooter className="gap-2">
               <Button type="button" variant="outline" onClick={handleCopy}>
                 <Copy className="h-4 w-4" />
-                {t('copyKey')}
+                {t('copy')}
               </Button>
               {webhookSecret ? (
                 <Button type="button" variant="outline" onClick={handleCopyWebhook}>
                   <Copy className="h-4 w-4" />
-                  {t('copyWebhook')}
+                  {t('webhookSecretLabel')}
                 </Button>
               ) : null}
               <Button type="button" onClick={() => handleClose(false)}>
