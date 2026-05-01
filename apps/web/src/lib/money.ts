@@ -12,8 +12,14 @@
 const NANO_PER_DOLLAR = 100_000_000n; // 1 USD * 100 cents * 1e6 nano = 1e8 units
 const NANO_PER_CENT = 1_000_000n;
 
-function parseNano(nanoStr: string): bigint {
-  const s = nanoStr.trim();
+function parseNano(nanoStr: string | null | undefined): bigint {
+  // Defensive: API serialisation drift / missing fields used to crash
+  // server components with `Cannot read properties of undefined (reading
+  // 'trim')`. Treat absent/empty input as zero so a single bad row no
+  // longer brings down a whole dashboard panel.
+  if (nanoStr == null) return 0n;
+  const s = String(nanoStr).trim();
+  if (s === '') return 0n;
   // Accept either an integer string ("1230000") or a decimal string ("1.230000").
   // Internal API spec says decimal string with 6 fractional digits, but be lenient.
   if (/^-?\d+$/.test(s)) {
@@ -51,7 +57,10 @@ function roundCentsHalfUp(nano: bigint): bigint {
  * Default 2 fractional digits (cents), rounded half-up.
  * Returns just the numeric string — not the currency.
  */
-export function formatNanoToUSD(nanoStr: string, fractionDigits = 2): string {
+export function formatNanoToUSD(
+  nanoStr: string | null | undefined,
+  fractionDigits = 2,
+): string {
   const units = parseNano(nanoStr);
   if (fractionDigits === 2) {
     const cents = roundCentsHalfUp(units);
@@ -81,7 +90,7 @@ export function formatNanoToUSD(nanoStr: string, fractionDigits = 2): string {
  * Convert a nano-USD string to integer cents (number).
  * Rounds half-up at the cent boundary.
  */
-export function nanoToCents(nanoStr: string): number {
+export function nanoToCents(nanoStr: string | null | undefined): number {
   const units = parseNano(nanoStr);
   const cents = roundCentsHalfUp(units);
   // Cents should fit in Number for any realistic balance (<$90,071,992,547,409.91).
@@ -102,7 +111,10 @@ export function dollarsToCents(dollars: number): number {
  * Convenience: nano-USD string → "$12.34" with sign.
  * Use when you want a single string with the dollar sign.
  */
-export function formatNanoUSDWithSign(nanoStr: string, fractionDigits = 2): string {
+export function formatNanoUSDWithSign(
+  nanoStr: string | null | undefined,
+  fractionDigits = 2,
+): string {
   const formatted = formatNanoToUSD(nanoStr, fractionDigits);
   if (formatted.startsWith('-')) return `-$${formatted.slice(1)}`;
   return `$${formatted}`;

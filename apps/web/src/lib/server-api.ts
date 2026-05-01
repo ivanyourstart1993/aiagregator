@@ -644,10 +644,29 @@ export const serverApi = {
     apiPost<{ ok: true }>(`/internal/admin/catalog/methods/${id}/availability`, body),
 
   // ---- Stage 6: API requests & tasks (user) ----
-  listApiRequests: (filters?: { page?: number; pageSize?: number }) =>
-    apiGet<ApiRequestsPage>(`/internal/api-requests${qs({ ...filters })}`),
-  getApiRequest: (id: string) =>
-    apiGet<ApiRequestDetailView>(`/internal/api-requests/${id}`),
+  // The internal API serialises ApiRequest fields as snake_case (and uses
+  // BigInt-as-string for price units), but UI components consume the
+  // camelCase shape declared in ApiRequestView. We normalise on read so
+  // a single deserialisation drift doesn't crash whole dashboard panels
+  // (the previous symptom was `Cannot read properties of undefined
+  // (reading 'trim')` from money.ts when clientPriceUnits arrived as
+  // undefined under its snake_case key).
+  listApiRequests: async (filters?: { page?: number; pageSize?: number }) => {
+    const raw = await apiGet<{
+      items: unknown[];
+      total: number;
+      page: number;
+      pageSize: number;
+    }>(`/internal/api-requests${qs({ ...filters })}`);
+    return {
+      ...raw,
+      items: raw.items.map(normalizeApiRequest),
+    } satisfies ApiRequestsPage;
+  },
+  getApiRequest: async (id: string) => {
+    const raw = await apiGet<unknown>(`/internal/api-requests/${id}`);
+    return normalizeApiRequestDetail(raw);
+  },
   listTasks: (filters?: { status?: TaskStatus; page?: number; pageSize?: number }) =>
     apiGet<TasksPage>(`/internal/tasks${qs({ ...filters })}`),
   getTask: (id: string) => apiGet<TaskView>(`/internal/tasks/${id}`),
@@ -1623,3 +1642,65 @@ export interface TasksPage {
 }
 
 export { ApiError };
+
+// ---------------------------------------------------------------------------
+// Normalisers for /internal/api-requests
+// API serialises snake_case + BigInt-as-string and exposes only method_id
+// (no resolved provider/model/method codes). UI components consume the
+// camelCase ApiRequestView shape and want display strings. Resolve once at
+// the boundary so component code never deals with the mismatch.
+// ---------------------------------------------------------------------------
+function pickStr(o: Record<string, unknown>, ...keys: string[]): string | undefined {
+  for (const k of keys) {
+    const v = o[k];
+    if (v == null) continue;
+    if (typeof v === 'string' || typeof v === 'number' || typeof v === 'bigint') {
+      return String(v);
+    }
+  }
+  return undefined;
+}
+
+function pickStrOrNull(
+  o: Record<string, unknown>,
+  ...keys: string[]
+): string | null {
+  return pickStr(o, ...keys) ?? null;
+}
+
+function normalizeApiRequest(raw: unknown): ApiRequestView {
+  const o = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>;
+  return {
+    id: pickStr(o, 'id') ?? '',
+    methodCode: pickStr(o, 'methodCode', 'method_code', 'method_id') ?? '',
+    providerCode: pickStr(o, 'providerCode', 'provider_code') ?? '',
+    modelCode: pickStr(o, 'modelCode', 'model_code') ?? '',
+    status: (pickStr(o, 'status') as ApiRequestStatus) ?? 'ACCEPTED',
+    clientPriceUnits: pickStr(o, 'clientPriceUnits', 'client_price_units') ?? '0',
+    currency: 'USD',
+    errorCode: pickStrOrNull(o, 'errorCode', 'error_code'),
+    callbackUrl: pickStrOrNull(o, 'callbackUrl', 'callback_url'),
+    taskId: pickStrOrNull(o, 'taskId', 'task_id'),
+    taskStatus:
+      (pickStr(o, 'taskStatus', 'task_status') as TaskStatus | undefined) ?? null,
+    createdAt: pickStr(o, 'createdAt', 'created_at') ?? new Date().toISOString(),
+    finalizedAt: pickStrOrNull(o, 'finalizedAt', 'finalized_at'),
+  };
+}
+
+function normalizeApiRequestDetail(raw: unknown): ApiRequestDetailView {
+  const o = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>;
+  const base = normalizeApiRequest(raw);
+  return {
+    ...base,
+    paramsRaw: o['paramsRaw'] ?? o['params_raw'] ?? null,
+    pricingSnapshotId: pickStrOrNull(o, 'pricingSnapshotId', 'pricing_snapshot_id'),
+    reservationId: pickStrOrNull(o, 'reservationId', 'reservation_id'),
+    couponId: pickStrOrNull(o, 'couponId', 'coupon_id'),
+    basePriceUnits: pickStrOrNull(o, 'basePriceUnits', 'base_price_units'),
+    discountUnits: pickStrOrNull(o, 'discountUnits', 'discount_units'),
+    errorMessage: pickStrOrNull(o, 'errorMessage', 'error_message'),
+    ipAddress: pickStrOrNull(o, 'ipAddress', 'ip_address'),
+    userAgent: pickStrOrNull(o, 'userAgent', 'user_agent'),
+  };
+}
