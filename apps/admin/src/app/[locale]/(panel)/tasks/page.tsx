@@ -69,7 +69,7 @@ export default async function TasksPage({ searchParams }: Props) {
         </p>
       </header>
 
-      <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
+      <div className="flex flex-wrap items-center gap-2">
         <SearchInput placeholder="Поиск по email юзера…" />
         <FilterSelect
           paramKey="status"

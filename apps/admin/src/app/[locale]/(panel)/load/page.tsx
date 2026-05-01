@@ -49,7 +49,7 @@ export default async function LoadPage() {
       {redis ? (
         <section>
           <h2 className="mb-3 text-sm font-semibold">Redis</h2>
-          <div className="grid grid-cols-1 gap-3 rounded-lg border border-border bg-card p-4 text-xs sm:grid-cols-2 md:grid-cols-4">
+          <div className="grid grid-cols-2 gap-3 rounded-lg border border-border bg-card p-4 text-xs md:grid-cols-4">
             <Stat label="OK" value={redis.ok ? '●' : '○'} />
             <Stat label="memory" value={redis.usedMemoryHuman ?? '—'} />
             <Stat label="clients" value={redis.connectedClients ?? '—'} />

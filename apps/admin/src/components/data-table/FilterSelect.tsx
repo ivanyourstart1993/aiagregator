@@ -48,7 +48,7 @@ export function FilterSelect({
 
   return (
     <Select value={current} onValueChange={onChange}>
-      <SelectTrigger className="h-9 w-full text-xs sm:w-44" aria-label={paramKey}>
+      <SelectTrigger className="h-9 w-44 text-xs" aria-label={paramKey}>
         <SelectValue placeholder={placeholder} />
       </SelectTrigger>
       <SelectContent>

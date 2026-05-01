@@ -196,7 +196,7 @@ export function ProxyForm({ mode, proxy }: Props) {
         </div>
       </div>
 
-      <div className="flex flex-col gap-2 pt-2 sm:flex-row sm:justify-between">
+      <div className="flex justify-between gap-2 pt-2">
         <div>
           {mode === 'edit' && proxy && (
             <ConfirmDialog

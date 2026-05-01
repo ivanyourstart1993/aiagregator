@@ -71,7 +71,7 @@ export default async function AdminCouponsPage({ searchParams }: Props) {
         </Button>
       </header>
 
-      <form className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-4" action="">
+      <form className="grid grid-cols-1 gap-2 sm:grid-cols-4" action="">
         <select
           name="type"
           defaultValue={sp.type ?? ''}

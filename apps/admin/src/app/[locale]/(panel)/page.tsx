@@ -160,7 +160,7 @@ export default async function DashboardPage({ searchParams }: PageProps) {
 
   return (
     <div className="space-y-8">
-      <header className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+      <header className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Доходность</h1>
           <p className="text-sm text-muted-foreground">
@@ -168,7 +168,7 @@ export default async function DashboardPage({ searchParams }: PageProps) {
             {new Date(to).toLocaleDateString('ru-RU')}
           </p>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex items-center gap-2">
           <DateRangePicker />
           <RefreshButton />
         </div>
