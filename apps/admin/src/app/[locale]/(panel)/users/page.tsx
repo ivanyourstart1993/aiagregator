@@ -69,7 +69,7 @@ export default async function UsersPage({ searchParams }: Props) {
         </p>
       </header>
 
-      <div className="flex flex-wrap items-center gap-2">
+      <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
         <SearchInput placeholder="Поиск по email или имени…" />
         <FilterSelect
           paramKey="role"

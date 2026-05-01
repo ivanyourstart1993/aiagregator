@@ -16,19 +16,20 @@ export default async function ProxiesPage() {
   const items = await load();
   return (
     <div className="space-y-6">
-      <header className="flex items-center justify-between">
+      <header className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Прокси</h1>
           <p className="text-sm text-muted-foreground">Всего: {items.length}</p>
         </div>
         <Link
           href="/providers/proxies/new"
-          className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
+          className="self-start rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 sm:self-auto"
         >
           + Добавить прокси
         </Link>
       </header>
       <div className="overflow-hidden rounded-lg border border-border bg-card">
+        <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead className="border-b border-border bg-muted/30 text-xs uppercase tracking-wide text-muted-foreground">
             <tr>
@@ -92,6 +93,7 @@ export default async function ProxiesPage() {
             ) : null}
           </tbody>
         </table>
+        </div>
       </div>
     </div>
   );

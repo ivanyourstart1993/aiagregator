@@ -295,7 +295,7 @@ export function AccountForm({ mode, account, providers, proxies }: Props) {
         />
       </div>
 
-      <div className="flex justify-between gap-2 pt-2">
+      <div className="flex flex-col gap-2 pt-2 sm:flex-row sm:justify-between">
         <div>
           {mode === 'edit' && account && (
             <ConfirmDialog

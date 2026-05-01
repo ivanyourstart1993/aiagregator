@@ -107,6 +107,7 @@ export default async function SettingsPage() {
             Прочие настройки
           </h2>
           <div className="overflow-hidden rounded-lg border border-border bg-card">
+            <div className="overflow-x-auto">
             <table className="w-full text-xs">
               <thead className="border-b border-border bg-muted/30 uppercase tracking-wide text-muted-foreground">
                 <tr>
@@ -118,7 +119,7 @@ export default async function SettingsPage() {
               <tbody className="divide-y divide-border">
                 {otherSettings.map((s) => (
                   <tr key={s.key}>
-                    <td className="px-4 py-3 font-mono">{s.key}</td>
+                    <td className="px-4 py-3 font-mono whitespace-nowrap">{s.key}</td>
                     <td className="px-4 py-3 font-mono">
                       {JSON.stringify(s.value)}
                     </td>
@@ -129,6 +130,7 @@ export default async function SettingsPage() {
                 ))}
               </tbody>
             </table>
+            </div>
           </div>
           <p className="text-xs text-muted-foreground">
             Редактирование произвольных настроек: PUT
