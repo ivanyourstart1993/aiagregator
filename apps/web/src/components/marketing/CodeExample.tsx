@@ -6,19 +6,19 @@ import { useState } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { cn } from '@/lib/utils';
 
-const CURL = `curl https://api.aigenway.com/v1/generate \\
+const CURL = `curl https://api.aigenway.com/v1/generations \\
   -H "Authorization: Bearer $AI_AGG_KEY" \\
   -H "Content-Type: application/json" \\
   -d '{
     "provider": "google_banana",
-    "model":    "imagen-3",
-    "method":   "generate_image",
+    "model":    "gemini-3.1-flash-image-preview",
+    "method":   "text_to_image",
     "params":   { "prompt": "neon city at night", "aspect_ratio": "16:9" }
   }'`;
 
 const NODE = `import fetch from 'node-fetch';
 
-const res = await fetch('https://api.aigenway.com/v1/generate', {
+const res = await fetch('https://api.aigenway.com/v1/generations', {
   method: 'POST',
   headers: {
     Authorization: \`Bearer \${process.env.AI_AGG_KEY}\`,
@@ -26,8 +26,8 @@ const res = await fetch('https://api.aigenway.com/v1/generate', {
   },
   body: JSON.stringify({
     provider: 'google_banana',
-    model:    'imagen-3',
-    method:   'generate_image',
+    model:    'gemini-3.1-flash-image-preview',
+    method:   'text_to_image',
     params:   { prompt: 'neon city at night', aspect_ratio: '16:9' },
   }),
 });
@@ -37,12 +37,12 @@ const { taskId, status } = await res.json();`;
 const PYTHON = `import os, requests
 
 res = requests.post(
-    'https://api.aigenway.com/v1/generate',
+    'https://api.aigenway.com/v1/generations',
     headers={'Authorization': f'Bearer {os.environ["AI_AGG_KEY"]}'},
     json={
         'provider': 'google_banana',
-        'model':    'imagen-3',
-        'method':   'generate_image',
+        'model':    'gemini-3.1-flash-image-preview',
+        'method':   'text_to_image',
         'params':   {'prompt': 'neon city at night', 'aspect_ratio': '16:9'},
     },
 )

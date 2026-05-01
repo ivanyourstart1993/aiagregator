@@ -1,12 +1,12 @@
 import { Terminal } from 'lucide-react';
 
-const SAMPLE = `curl https://api.aigenway.com/v1/generate \\
+const SAMPLE = `curl https://api.aigenway.com/v1/generations \\
   -H "Authorization: Bearer $AI_AGG_KEY" \\
   -H "Content-Type: application/json" \\
   -d '{
     "provider": "google_banana",
-    "model":    "imagen-3",
-    "method":   "generate_image",
+    "model":    "gemini-3.1-flash-image-preview",
+    "method":   "text_to_image",
     "params":   {
       "prompt": "neon city at night, cinematic",
       "aspect_ratio": "16:9"

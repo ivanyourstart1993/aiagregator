@@ -1357,6 +1357,7 @@
     "errorsGroupBilling": "Billing",
     "errorsGroupCatalog": "Catalog",
     "errorsGroupTasks": "Tasks",
+    "errorsGroupTaskFailures": "Generation failures",
     "errorsGroupRequest": "Request",
     "errorsGroupCoupons": "Coupons",
     "errorsGroupGeneric": "Generic",
@@ -1387,7 +1388,11 @@
       "coupon_invalid": "Coupon code is invalid.",
       "coupon_expired": "Coupon is expired.",
       "coupon_already_used": "Coupon was already redeemed.",
-      "internal_error": "Unexpected internal error. Try again later."
+      "internal_error": "Unexpected internal error. Try again later.",
+      "service_unavailable": "Service is temporarily unavailable. Retry in a few seconds.",
+      "provider_outage": "No provider capacity available right now. Retry in 30–60 seconds.",
+      "provider_rejected": "The provider rejected the request. Adjust parameters before retrying — a blind retry will not succeed.",
+      "content_rejected": "The provider's safety filter rejected the prompt or input images."
     }
   }
 }

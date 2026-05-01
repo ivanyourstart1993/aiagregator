@@ -17,23 +17,27 @@ export default async function GettingStartedPage() {
 
       <h2 className="mt-8 text-xl font-semibold">{t('gsEstimateTitle')}</h2>
       <pre className="overflow-x-auto rounded-md border bg-muted p-4 text-xs">
-        <code>{`curl -X POST https://api.example.com/v1/estimate \\
+        <code>{`curl -X POST https://api.aigenway.com/v1/estimate \\
   -H "Authorization: Bearer sk_live_..." \\
   -H "Content-Type: application/json" \\
   -d '{
-    "method": "google_banana/banana-1/text_to_image",
+    "provider": "google_banana",
+    "model": "gemini-3.1-flash-image-preview",
+    "method": "text_to_image",
     "params": { "prompt": "a cat" }
   }'`}</code>
       </pre>
 
       <h2 className="mt-8 text-xl font-semibold">{t('gsGenerationsTitle')}</h2>
       <pre className="overflow-x-auto rounded-md border bg-muted p-4 text-xs">
-        <code>{`curl -X POST https://api.example.com/v1/generations \\
+        <code>{`curl -X POST https://api.aigenway.com/v1/generations \\
   -H "Authorization: Bearer sk_live_..." \\
   -H "Idempotency-Key: $(uuidgen)" \\
   -H "Content-Type: application/json" \\
   -d '{
-    "method": "google_banana/banana-1/text_to_image",
+    "provider": "google_banana",
+    "model": "gemini-3.1-flash-image-preview",
+    "method": "text_to_image",
     "params": { "prompt": "a cat" }
   }'`}</code>
       </pre>

@@ -45,6 +45,15 @@ const ERROR_GROUPS: Array<{ titleKey: string; codes: string[] }> = [
     ],
   },
   {
+    titleKey: 'errorsGroupTaskFailures',
+    codes: [
+      ErrorCode.PROVIDER_OUTAGE,
+      ErrorCode.PROVIDER_REJECTED,
+      ErrorCode.CONTENT_REJECTED,
+      ErrorCode.SERVICE_UNAVAILABLE,
+    ],
+  },
+  {
     titleKey: 'errorsGroupRequest',
     codes: [
       ErrorCode.INVALID_REQUEST,

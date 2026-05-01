@@ -72,6 +72,15 @@ export const ErrorCode = {
 
   // Generic
   INTERNAL_ERROR: 'internal_error',
+
+  // Sanitised public-facing task error codes (returned to API consumers
+  // by sanitizeTaskError; never used as the internal cause). Documented
+  // here so the docs page can surface them and clients can write retry
+  // logic against stable identifiers.
+  SERVICE_UNAVAILABLE: 'service_unavailable',
+  PROVIDER_OUTAGE: 'provider_outage',
+  PROVIDER_REJECTED: 'provider_rejected',
+  CONTENT_REJECTED: 'content_rejected',
 } as const;
 
 export type ErrorCode = (typeof ErrorCode)[keyof typeof ErrorCode];

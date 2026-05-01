@@ -42,7 +42,19 @@ export function MethodPage({ method, providerName, modelName }: Props) {
       {method.exampleRequest !== undefined ? (
         <section className="space-y-3">
           <h2 className="text-xl font-semibold">{t('exampleRequest')}</h2>
-          <JsonCodeBlock value={method.exampleRequest} />
+          {/* Wrap the seeded params in the actual request envelope expected
+              by POST /v1/generations — provider/model/method are sibling
+              fields, not slash-joined into method. Seed only stores params
+              so the same snippet works for both /v1/estimate and
+              /v1/generations. */}
+          <JsonCodeBlock
+            value={{
+              provider: method.providerCode,
+              model: method.modelCode,
+              method: method.code,
+              params: method.exampleRequest as Record<string, unknown>,
+            }}
+          />
         </section>
       ) : null}
 
