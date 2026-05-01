@@ -43,6 +43,24 @@ export function DocsSidebar({ providers }: Props) {
       >
         {t('authentication')}
       </Link>
+      <Link
+        href="/docs/idempotency"
+        className={linkClass(pathname === '/docs/idempotency')}
+      >
+        {t('idempotency')}
+      </Link>
+      <Link
+        href="/docs/task-lifecycle"
+        className={linkClass(pathname === '/docs/task-lifecycle')}
+      >
+        {t('taskLifecycle')}
+      </Link>
+      <Link
+        href="/docs/webhooks"
+        className={linkClass(pathname === '/docs/webhooks')}
+      >
+        {t('webhooks')}
+      </Link>
       <Link href="/docs/errors" className={linkClass(pathname === '/docs/errors')}>
         {t('errors')}
       </Link>
