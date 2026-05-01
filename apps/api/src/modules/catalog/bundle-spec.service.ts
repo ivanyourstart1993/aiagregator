@@ -21,6 +21,7 @@ const KNOWN_DIM_FIELDS = new Set([
 interface SchemaProp {
   'x-bundle-dim'?: boolean;
   type?: string | string[];
+  default?: unknown;
 }
 
 interface ParametersSchema {
@@ -45,7 +46,15 @@ function pickDimensionsFromSchema(
   for (const [key, def] of Object.entries(props)) {
     if (!def || def['x-bundle-dim'] !== true) continue;
     if (!KNOWN_DIM_FIELDS.has(key)) continue;
-    const raw = params[key];
+    let raw: unknown = params[key];
+    // Fall back to the schema's `default` if the caller omitted this dim.
+    // Otherwise an optional-but-priced dimension (e.g. resolution) collapses
+    // to null in the bundle key and the pricing lookup fails with
+    // price_not_configured even though the catalogue has prices for the
+    // canonical buckets (0.5K/1K/2K/4K).
+    if ((raw === undefined || raw === null) && def.default !== undefined) {
+      raw = def.default;
+    }
     if (raw === undefined || raw === null) continue;
     switch (key) {
       case 'mode':
