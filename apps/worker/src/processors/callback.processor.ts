@@ -41,23 +41,27 @@ export interface CallbackProcessorHandle {
 }
 
 interface ResultFileLite {
-  fileUrl: string;
+  id: string;
   mimeType: string;
   fileType: string;
   expiresAt: Date;
 }
 
-function buildResultPayload(files: ResultFileLite[]): unknown | null {
+function buildResultPayload(
+  files: ResultFileLite[],
+  publicBaseUrl: string,
+): unknown | null {
   if (files.length === 0) return null;
+  const toUrl = (id: string) => `${publicBaseUrl}/v1/files/${id}`;
   const f = files[0];
   return {
     type: f.fileType,
-    url: f.fileUrl,
+    url: toUrl(f.id),
     mime_type: f.mimeType,
     available_until: f.expiresAt.toISOString(),
     files: files.map((x) => ({
       type: x.fileType,
-      url: x.fileUrl,
+      url: toUrl(x.id),
       mime_type: x.mimeType,
       available_until: x.expiresAt.toISOString(),
     })),
@@ -134,12 +138,17 @@ export function createCallbackWorker(opts: {
         where: { taskId: task.id },
         orderBy: { createdAt: 'asc' },
         select: {
-          fileUrl: true,
+          id: true,
           mimeType: true,
           fileType: true,
           expiresAt: true,
         },
       });
+      const publicBaseUrl = (
+        process.env.PUBLIC_API_BASE_URL ??
+        process.env.WEBHOOK_BASE_URL ??
+        'http://localhost:4000'
+      ).replace(/\/+$/, '');
 
       const payload = {
         event: 'generation.completed',
@@ -152,7 +161,7 @@ export function createCallbackWorker(opts: {
         currency: 'USD',
         result:
           task.status === TaskStatus.SUCCEEDED
-            ? buildResultPayload(files)
+            ? buildResultPayload(files, publicBaseUrl)
             : null,
         error:
           task.status === TaskStatus.FAILED || task.status === TaskStatus.CANCELLED

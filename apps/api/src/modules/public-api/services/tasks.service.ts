@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { TaskStatus } from '@aiagg/db';
 import { PrismaService } from '../../../common/prisma/prisma.service';
 import {
@@ -9,9 +10,59 @@ import {
 import type { TaskView } from '../dto/views';
 import { sanitizeTaskError } from '@aiagg/shared';
 
+interface PublicResultFile {
+  id: string;
+  url: string;
+  mime_type: string;
+  file_type: string;
+  file_size: string;
+  width: number | null;
+  height: number | null;
+  duration_seconds: string | null;
+}
+
 @Injectable()
 export class TasksService {
-  constructor(private readonly prisma: PrismaService) {}
+  private readonly publicBaseUrl: string;
+
+  constructor(
+    private readonly prisma: PrismaService,
+    config: ConfigService,
+  ) {
+    this.publicBaseUrl = (
+      config.get<string>('PUBLIC_API_BASE_URL') ??
+      config.get<string>('WEBHOOK_BASE_URL') ??
+      'http://localhost:4000'
+    ).replace(/\/+$/, '');
+  }
+
+  /**
+   * Replace internal storage URLs (cluster-only MinIO host) with the public
+   * /v1/files/:id proxy. We always emit the proxy URL so result hostnames
+   * never leak to clients.
+   */
+  private toPublicResultFiles(
+    files: Array<{
+      id: string;
+      mimeType: string;
+      fileType: string;
+      fileSize: bigint;
+      width: number | null;
+      height: number | null;
+      durationSeconds: { toString(): string } | null;
+    }>,
+  ): PublicResultFile[] {
+    return files.map((f) => ({
+      id: f.id,
+      url: `${this.publicBaseUrl}/v1/files/${f.id}`,
+      mime_type: f.mimeType,
+      file_type: f.fileType,
+      file_size: f.fileSize.toString(),
+      width: f.width,
+      height: f.height,
+      duration_seconds: f.durationSeconds ? f.durationSeconds.toString() : null,
+    }));
+  }
 
   async get(taskId: string, userId: string): Promise<TaskView> {
     const task = await this.prisma.task.findUnique({
@@ -31,6 +82,23 @@ export class TasksService {
     if (!task) throw new TaskNotFoundError(taskId);
     if (task.apiRequest.userId !== userId) throw new TaskNotOwnedError(taskId);
 
+    const files =
+      task.status === TaskStatus.SUCCEEDED
+        ? await this.prisma.resultFile.findMany({
+            where: { taskId: task.id },
+            orderBy: { createdAt: 'asc' },
+            select: {
+              id: true,
+              mimeType: true,
+              fileType: true,
+              fileSize: true,
+              width: true,
+              height: true,
+              durationSeconds: true,
+            },
+          })
+        : [];
+
     const sanitized = sanitizeTaskError(
       task.errorCode ?? task.apiRequest.errorCode,
       task.errorMessage ?? task.apiRequest.errorMessage,
@@ -42,7 +110,7 @@ export class TasksService {
       bundle_key: task.apiRequest.bundleKey,
       reserved_amount: task.apiRequest.clientPriceUnits,
       result: task.resultData ?? undefined,
-      result_files: task.resultFiles ?? undefined,
+      result_files: files.length ? this.toPublicResultFiles(files) : undefined,
       error_code: sanitized.code,
       error_message: sanitized.message,
       created_at: task.createdAt,
@@ -59,7 +127,7 @@ export class TasksService {
     task_id: string;
     status: TaskStatus;
     result: unknown;
-    result_files: unknown;
+    result_files: PublicResultFile[];
   }> {
     const task = await this.prisma.task.findUnique({
       where: { id: taskId },
@@ -70,12 +138,25 @@ export class TasksService {
     if (task.status !== TaskStatus.SUCCEEDED) {
       throw new TaskResultNotReadyError(taskId);
     }
+    const files = await this.prisma.resultFile.findMany({
+      where: { taskId: task.id },
+      orderBy: { createdAt: 'asc' },
+      select: {
+        id: true,
+        mimeType: true,
+        fileType: true,
+        fileSize: true,
+        width: true,
+        height: true,
+        durationSeconds: true,
+      },
+    });
     return {
       success: true,
       task_id: task.id,
       status: task.status,
       result: task.resultData,
-      result_files: task.resultFiles,
+      result_files: this.toPublicResultFiles(files),
     };
   }
 
@@ -114,11 +195,37 @@ export class TasksService {
       }),
       this.prisma.task.count({ where }),
     ]);
+
+    const succeededIds = rows.filter((r) => r.status === TaskStatus.SUCCEEDED).map((r) => r.id);
+    const allFiles = succeededIds.length
+      ? await this.prisma.resultFile.findMany({
+          where: { taskId: { in: succeededIds } },
+          orderBy: { createdAt: 'asc' },
+          select: {
+            id: true,
+            taskId: true,
+            mimeType: true,
+            fileType: true,
+            fileSize: true,
+            width: true,
+            height: true,
+            durationSeconds: true,
+          },
+        })
+      : [];
+    const filesByTask = new Map<string, typeof allFiles>();
+    for (const f of allFiles) {
+      const arr = filesByTask.get(f.taskId);
+      if (arr) arr.push(f);
+      else filesByTask.set(f.taskId, [f]);
+    }
+
     const items = rows.map<TaskView>((task) => {
       const sanitized = sanitizeTaskError(
         task.errorCode ?? task.apiRequest.errorCode,
         task.errorMessage ?? task.apiRequest.errorMessage,
       );
+      const files = filesByTask.get(task.id) ?? [];
       return {
         id: task.id,
         status: task.status,
@@ -126,7 +233,7 @@ export class TasksService {
         bundle_key: task.apiRequest.bundleKey,
         reserved_amount: task.apiRequest.clientPriceUnits,
         result: task.resultData ?? undefined,
-        result_files: task.resultFiles ?? undefined,
+        result_files: files.length ? this.toPublicResultFiles(files) : undefined,
         error_code: sanitized.code,
         error_message: sanitized.message,
         created_at: task.createdAt,

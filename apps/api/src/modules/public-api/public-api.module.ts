@@ -3,12 +3,14 @@ import { BillingModule } from '../billing/billing.module';
 import { CatalogModule } from '../catalog/catalog.module';
 import { CouponsModule } from '../coupons/coupons.module';
 import { PricingModule } from '../pricing/pricing.module';
+import { StorageModule } from '../../common/storage/storage.module';
 import { MethodsController } from './v1/methods.controller';
 import { PricesController } from './v1/prices.controller';
 import { EstimateController } from './v1/estimate.controller';
 import { GenerationsController } from './v1/generations.controller';
 import { TasksController } from './v1/tasks.controller';
 import { BalanceController } from './v1/balance.controller';
+import { FilesController } from './v1/files.controller';
 import { InternalApiRequestsController } from './internal/api-requests.controller';
 import { InternalTasksController } from './internal/internal-tasks.controller';
 import { EstimateService } from './services/estimate.service';
@@ -21,7 +23,7 @@ import { IdempotencyInterceptor } from './interceptors/idempotency.interceptor';
 import { TaskSweeperCron } from './crons/task-sweeper.cron';
 
 @Module({
-  imports: [BillingModule, CatalogModule, CouponsModule, PricingModule],
+  imports: [BillingModule, CatalogModule, CouponsModule, PricingModule, StorageModule],
   controllers: [
     MethodsController,
     PricesController,
@@ -29,6 +31,7 @@ import { TaskSweeperCron } from './crons/task-sweeper.cron';
     GenerationsController,
     TasksController,
     BalanceController,
+    FilesController,
     InternalApiRequestsController,
     InternalTasksController,
   ],
