@@ -113,7 +113,7 @@ export function TransactionsTable({
           {t('noTransactions')}
         </div>
       ) : (
-        <div className="overflow-x-auto rounded-md border bg-background">
+        <div className="rounded-md border bg-background">
           <Table>
             <TableHeader>
               <TableRow>

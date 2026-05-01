@@ -77,7 +77,7 @@ export function PricingTable({ prices }: Props) {
         onMethod={setMethod}
         onSearch={setSearch}
       />
-      <div className="overflow-x-auto rounded-lg border bg-background">
+      <div className="rounded-lg border bg-background">
         <Table>
           <TableHeader>
             <TableRow>

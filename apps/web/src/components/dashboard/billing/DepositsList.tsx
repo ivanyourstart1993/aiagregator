@@ -31,7 +31,7 @@ export function DepositsList({ deposits }: Props) {
   }
 
   return (
-    <div className="overflow-x-auto rounded-md border bg-background">
+    <div className="rounded-md border bg-background">
       <Table>
         <TableHeader>
           <TableRow>

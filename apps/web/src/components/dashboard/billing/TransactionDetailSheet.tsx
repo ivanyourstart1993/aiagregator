@@ -125,9 +125,9 @@ export function TransactionDetailSheet({ open, onOpenChange, tx }: Props) {
 
 function DetailRow({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div className="grid grid-cols-1 gap-1 sm:grid-cols-3 sm:gap-2">
+    <div className="grid grid-cols-3 gap-2">
       <span className="text-xs uppercase tracking-wide text-muted-foreground">{label}</span>
-      <div className="break-all sm:col-span-2">{children}</div>
+      <div className="col-span-2 break-all">{children}</div>
     </div>
   );
 }

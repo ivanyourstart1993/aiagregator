@@ -145,7 +145,7 @@ export function NewTopUpForm() {
 
       <div className="space-y-2">
         <Label htmlFor="coupon">{t('couponLabel')}</Label>
-        <div className="flex flex-col gap-2 sm:flex-row">
+        <div className="flex gap-2">
           <Input
             id="coupon"
             value={couponCode}

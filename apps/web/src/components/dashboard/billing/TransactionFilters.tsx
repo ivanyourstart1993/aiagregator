@@ -69,7 +69,7 @@ export function TransactionFilters({ value, onChange, onApply, showUserId }: Pro
   }
 
   return (
-    <div className="flex flex-col items-stretch gap-3 sm:flex-row sm:flex-wrap sm:items-end">
+    <div className="flex flex-wrap items-end gap-3">
       <div className="space-y-1">
         <Label className="text-xs uppercase tracking-wide text-muted-foreground">
           {t('filterType')}
@@ -78,7 +78,7 @@ export function TransactionFilters({ value, onChange, onApply, showUserId }: Pro
           value={value.type}
           onValueChange={(v) => onChange({ ...value, type: v as TransactionType | 'ALL' })}
         >
-          <SelectTrigger className="w-full sm:w-56">
+          <SelectTrigger className="w-56">
             <SelectValue placeholder={t('filterTypeAll')} />
           </SelectTrigger>
           <SelectContent>
@@ -98,7 +98,7 @@ export function TransactionFilters({ value, onChange, onApply, showUserId }: Pro
         </Label>
         <Popover open={open} onOpenChange={setOpen}>
           <PopoverTrigger asChild>
-            <Button variant="outline" type="button" className="w-full justify-start font-normal sm:min-w-[14rem]">
+            <Button variant="outline" type="button" className="min-w-[14rem] justify-start font-normal">
               <CalendarRange className="h-4 w-4" />
               {dateRangeLabel}
             </Button>

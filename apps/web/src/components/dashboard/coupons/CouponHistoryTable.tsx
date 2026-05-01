@@ -33,7 +33,7 @@ export async function CouponHistoryTable({ items }: Props) {
   }
 
   return (
-    <div className="overflow-x-auto rounded-lg border bg-background">
+    <div className="rounded-lg border bg-background">
       <Table>
         <TableHeader>
           <TableRow>
