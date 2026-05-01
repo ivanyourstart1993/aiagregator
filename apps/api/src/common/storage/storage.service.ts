@@ -12,9 +12,7 @@ import {
   PutObjectCommand,
   DeleteObjectCommand,
   HeadObjectCommand,
-  GetObjectCommand,
 } from '@aws-sdk/client-s3';
-import type { Readable } from 'node:stream';
 import { randomBytes } from 'node:crypto';
 
 export interface UploadInput {
@@ -169,31 +167,6 @@ export class StorageService implements OnModuleInit {
     await this.client.send(
       new DeleteObjectCommand({ Bucket: this.bucket, Key: key }),
     );
-  }
-
-  /**
-   * Stream an object's body. Used by the public file proxy
-   * (`GET /v1/files/:id`) so clients never see the internal MinIO host.
-   * Returns the readable body plus content-type/length when known.
-   */
-  async getObjectStream(key: string): Promise<{
-    body: Readable;
-    contentType: string | undefined;
-    contentLength: number | undefined;
-    etag: string | undefined;
-  }> {
-    const res = await this.client.send(
-      new GetObjectCommand({ Bucket: this.bucket, Key: key }),
-    );
-    if (!res.Body) {
-      throw new Error(`empty body for key=${key}`);
-    }
-    return {
-      body: res.Body as Readable,
-      contentType: res.ContentType,
-      contentLength: res.ContentLength,
-      etag: res.ETag,
-    };
   }
 
   async headObject(key: string): Promise<boolean> {
