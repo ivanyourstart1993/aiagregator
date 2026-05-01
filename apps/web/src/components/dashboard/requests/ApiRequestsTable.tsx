@@ -55,7 +55,7 @@ export function ApiRequestsTable({ initialPage }: Props) {
           {t('empty')}
         </div>
       ) : (
-        <div className="rounded-md border bg-background">
+        <div className="overflow-x-auto rounded-md border bg-background">
           <Table>
             <TableHeader>
               <TableRow>

@@ -40,7 +40,7 @@ export default async function BalancePage() {
 
   return (
     <div className="space-y-8">
-      <header className="flex flex-wrap items-start justify-between gap-4">
+      <header className="flex flex-col items-start justify-between gap-4 sm:flex-row sm:flex-wrap">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">{t('title')}</h1>
           <p className="text-sm text-muted-foreground">{t('subtitle')}</p>

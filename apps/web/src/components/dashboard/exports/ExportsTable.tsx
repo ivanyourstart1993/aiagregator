@@ -23,7 +23,7 @@ export function ExportsTable({ items }: { items: ExportView[] }) {
     );
   }
   return (
-    <div className="rounded-lg border bg-background">
+    <div className="overflow-x-auto rounded-lg border bg-background">
       <Table>
         <TableHeader>
           <TableRow>

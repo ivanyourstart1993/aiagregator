@@ -29,7 +29,7 @@ export function UserMenu({ email, name }: UserMenuProps) {
           {display}
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="min-w-56">
+      <DropdownMenuContent align="end" className="min-w-56 max-w-[90vw]">
         <DropdownMenuLabel>{email}</DropdownMenuLabel>
         <DropdownMenuSeparator />
         <DropdownMenuItem

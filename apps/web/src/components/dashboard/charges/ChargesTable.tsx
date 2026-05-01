@@ -65,7 +65,7 @@ export function ChargesTable({ initialPage }: Props) {
           {tCharges('empty')}
         </div>
       ) : (
-        <div className="rounded-md border bg-background">
+        <div className="overflow-x-auto rounded-md border bg-background">
           <Table>
             <TableHeader>
               <TableRow>
