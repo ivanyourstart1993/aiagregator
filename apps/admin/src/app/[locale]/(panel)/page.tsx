@@ -59,7 +59,8 @@ function bigToNum(s: string | null | undefined): number {
   }
 }
 
-function fmtUSD(n: number): string {
+function fmtUSD(n: number | null | undefined): string {
+  if (n == null || !Number.isFinite(n)) return '$0.00';
   return n.toLocaleString('en-US', {
     style: 'currency',
     currency: 'USD',
@@ -72,29 +73,12 @@ function fmtPct(bps?: number | null): string {
   return `${(bps / 100).toFixed(1)}%`;
 }
 
-function fmtNum(n: number): string {
+function fmtNum(n: number | null | undefined): string {
+  if (n == null || !Number.isFinite(n)) return '0';
   return n.toLocaleString('ru-RU');
 }
 
-export default async function DashboardPage(props: PageProps) {
-  try {
-    return await renderDashboard(props);
-  } catch (err) {
-    // TEMP DIAGNOSTIC — render the actual error so we can see what's
-    // crashing the dashboard in prod. Remove once debugged.
-    const e = err instanceof Error ? err : new Error(String(err));
-    return (
-      <div className="space-y-4 p-6">
-        <h1 className="text-xl font-semibold text-destructive">Dashboard render error</h1>
-        <pre className="overflow-auto rounded-md border border-destructive/30 bg-destructive/5 p-4 text-xs">
-{`${e.name}: ${e.message}\n\n${e.stack ?? '(no stack)'}`}
-        </pre>
-      </div>
-    );
-  }
-}
-
-async function renderDashboard({ searchParams }: PageProps) {
+export default async function DashboardPage({ searchParams }: PageProps) {
   const sp = await searchParams;
   const range = sp.range ?? '30d';
   const days = RANGE_DAYS[range] ?? 30;
@@ -197,7 +181,7 @@ async function renderDashboard({ searchParams }: PageProps) {
         <Kpi
           label="Revenue"
           value={fmtUSD(revenue)}
-          sub={`${summary?.requestsCount ?? 0} запросов`}
+          sub={`${summary?.requestCount ?? 0} запросов`}
           tone="positive"
         />
         <Kpi
@@ -298,7 +282,7 @@ async function renderDashboard({ searchParams }: PageProps) {
                   return (
                     <tr key={row.providerCode}>
                       <td className="py-2 font-mono text-xs">{row.providerCode}</td>
-                      <td className="py-2 text-right font-mono">{fmtNum(row.requestsCount)}</td>
+                      <td className="py-2 text-right font-mono">{fmtNum(row.requestCount)}</td>
                       <td className="py-2 text-right font-mono">{fmtUSD(c)}</td>
                       <td className="py-2 text-right text-xs text-muted-foreground">
                         {share.toFixed(1)}%
@@ -331,9 +315,9 @@ async function renderDashboard({ searchParams }: PageProps) {
                     <td className="py-2 max-w-[220px] truncate font-mono text-xs">
                       {row.email ?? row.userId}
                     </td>
-                    <td className="py-2 text-right font-mono">{fmtNum(row.requestsCount)}</td>
+                    <td className="py-2 text-right font-mono">{fmtNum(row.requestCount)}</td>
                     <td className="py-2 text-right font-mono">
-                      {fmtUSD(bigToNum(row.revenueUnits))}
+                      {fmtUSD(bigToNum(row.spendUnits))}
                     </td>
                   </tr>
                 ))}

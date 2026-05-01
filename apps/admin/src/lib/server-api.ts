@@ -1015,7 +1015,10 @@ export interface AnalyticsSummary {
   costUnits: string;
   marginUnits: string;
   marginBps?: number;
-  requestsCount: number;
+  /** Margin percentage as a plain number (e.g. 100 for 100%). */
+  marginPercent?: number;
+  /** Optional — only some endpoints surface counts on the summary. */
+  requestCount?: number;
   tasksCount?: number;
   successRate?: number;
   from: string;
@@ -1027,13 +1030,13 @@ export interface DailyPoint {
   revenueUnits: string;
   costUnits?: string;
   marginUnits?: string;
-  requestsCount?: number;
+  requestCount?: number;
 }
 
 export interface CostByProviderRow {
   providerCode: string;
   costUnits: string;
-  requestsCount: number;
+  requestCount: number;
 }
 
 export interface MarginRow {
@@ -1046,8 +1049,9 @@ export interface MarginRow {
 export interface TopUserRow {
   userId: string;
   email?: string | null;
-  revenueUnits: string;
-  requestsCount: number;
+  /** Total spend by user across the period, in nano-USD. */
+  spendUnits: string;
+  requestCount: number;
 }
 
 export interface TopMethodRow {
