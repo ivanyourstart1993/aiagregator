@@ -9,6 +9,24 @@ import { LocaleSwitcher } from '@/components/dashboard/LocaleSwitcher';
 import { MobileSidebar } from '@/components/dashboard/MobileSidebar';
 
 export default async function DashboardLayout({ children }: { children: ReactNode }) {
+  try {
+    return await renderDashboardLayout({ children });
+  } catch (err) {
+    // TEMP DIAGNOSTIC — surface server-side stack on the page itself.
+    // Remove once debugged.
+    const e = err instanceof Error ? err : new Error(String(err));
+    return (
+      <div className="space-y-4 p-6">
+        <h1 className="text-xl font-semibold text-destructive">Layout render error</h1>
+        <pre className="overflow-auto rounded-md border border-destructive/30 bg-destructive/5 p-4 text-xs">
+{`${e.name}: ${e.message}\n\n${e.stack ?? '(no stack)'}`}
+        </pre>
+      </div>
+    );
+  }
+}
+
+async function renderDashboardLayout({ children }: { children: ReactNode }) {
   const session = await auth();
   if (!session?.user) {
     redirect('/login');
