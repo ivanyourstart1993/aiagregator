@@ -76,7 +76,25 @@ function fmtNum(n: number): string {
   return n.toLocaleString('ru-RU');
 }
 
-export default async function DashboardPage({ searchParams }: PageProps) {
+export default async function DashboardPage(props: PageProps) {
+  try {
+    return await renderDashboard(props);
+  } catch (err) {
+    // TEMP DIAGNOSTIC — render the actual error so we can see what's
+    // crashing the dashboard in prod. Remove once debugged.
+    const e = err instanceof Error ? err : new Error(String(err));
+    return (
+      <div className="space-y-4 p-6">
+        <h1 className="text-xl font-semibold text-destructive">Dashboard render error</h1>
+        <pre className="overflow-auto rounded-md border border-destructive/30 bg-destructive/5 p-4 text-xs">
+{`${e.name}: ${e.message}\n\n${e.stack ?? '(no stack)'}`}
+        </pre>
+      </div>
+    );
+  }
+}
+
+async function renderDashboard({ searchParams }: PageProps) {
   const sp = await searchParams;
   const range = sp.range ?? '30d';
   const days = RANGE_DAYS[range] ?? 30;
