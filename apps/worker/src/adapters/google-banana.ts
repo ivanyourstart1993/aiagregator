@@ -301,12 +301,20 @@ export class GoogleBananaAdapter implements ProviderAdapter {
     ctx: AdapterContext,
     sa: ServiceAccountKey,
   ): Promise<AdapterResult> {
-    const { method, model, params } = ctx;
+    const { method } = ctx;
     if (!SUPPORTED_METHODS.has(method.code)) {
       throw new AdapterError('validation', `unsupported method: ${method.code}`);
     }
+
+    // image_edit / image_to_image / multi_reference_image: use Gemini generateContent
+    // on Vertex (supports image input+output). Imagen predict is text-to-image only.
+    if (method.code !== 'text_to_image') {
+      return this.executeVertexGemini(ctx, sa);
+    }
+
+    const { model, params } = ctx;
     const prompt = typeof params['prompt'] === 'string' ? params['prompt'] : '';
-    if (!prompt && method.code === 'text_to_image') {
+    if (!prompt) {
       throw new AdapterError('validation', 'prompt is required');
     }
 
@@ -421,6 +429,73 @@ export class GoogleBananaAdapter implements ProviderAdapter {
     return { files };
   }
 
+  private async executeVertexGemini(
+    ctx: AdapterContext,
+    sa: ServiceAccountKey,
+  ): Promise<AdapterResult> {
+    const { model, params } = ctx;
+    const prompt = typeof params['prompt'] === 'string' ? params['prompt'] : '';
+
+    const parts: unknown[] = [];
+    parts.push(...(await buildInlineImages(params)));
+    if (prompt) parts.push({ text: prompt });
+    if (parts.length === 0) {
+      throw new AdapterError(
+        'validation',
+        'request must include prompt and/or input images',
+      );
+    }
+
+    const generationConfig: Record<string, unknown> = {
+      responseModalities: ['IMAGE'],
+    };
+    const aspect = pickAspect(params);
+    if (aspect) generationConfig.imageConfig = { aspectRatio: aspect };
+
+    const access = await getSAAccessToken(sa);
+    const url = `https://${VERTEX_LOCATION}-aiplatform.googleapis.com/v1/projects/${sa.project_id}/locations/${VERTEX_LOCATION}/publishers/google/models/${encodeURIComponent(model.code)}:generateContent`;
+    const agent = this.buildProxyAgent(ctx);
+    const count = pickImagesCount(params);
+    const files: AdapterFile[] = [];
+
+    for (let i = 0; i < count; i++) {
+      const body = { contents: [{ parts }], generationConfig };
+      const parsed = await this.callApi(url, body, agent, {
+        authorization: `Bearer ${access}`,
+      });
+      const extracted = this.extractFiles(parsed);
+      if (extracted.length === 0) {
+        throw new AdapterError(
+          'unknown',
+          `vertex gemini response contained no images (candidate ${i})`,
+        );
+      }
+      for (const item of extracted) {
+        const ext = mimeToExt(item.mimeType);
+        const key = this.storage.buildKey({
+          userId: ctx.userId,
+          taskId: ctx.taskId,
+          filename: `image_${i}.${ext}`,
+        });
+        const uploaded = await this.storage.upload({
+          key,
+          body: Buffer.from(item.data, 'base64'),
+          contentType: item.mimeType || 'image/png',
+        });
+        files.push({
+          url: uploaded.url,
+          mimeType: item.mimeType || 'image/png',
+          bucket: uploaded.bucket,
+          key: uploaded.key,
+          size: uploaded.size,
+          fileType: 'image',
+        });
+      }
+    }
+
+    return { files };
+  }
+
   private extractApiKey(ctx: AdapterContext): string | null {
     const c = ctx.account.credentials ?? {};
     const v =
@@ -456,12 +531,13 @@ export class GoogleBananaAdapter implements ProviderAdapter {
     url: string,
     body: unknown,
     agent: HttpsProxyAgent<string> | undefined,
+    extraHeaders?: Record<string, string>,
   ): Promise<GeminiResponse> {
     let res: Response;
     try {
       const init: RequestInit & { agent?: unknown } = {
         method: 'POST',
-        headers: { 'content-type': 'application/json' },
+        headers: { 'content-type': 'application/json', ...extraHeaders },
         body: JSON.stringify(body),
       };
       if (agent) init.agent = agent;
