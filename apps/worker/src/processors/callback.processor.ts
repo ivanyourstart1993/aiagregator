@@ -11,6 +11,7 @@ import {
   type Prisma,
   type PrismaClient,
 } from '@aiagg/db';
+import { sanitizeTaskError } from '@aiagg/shared';
 
 const QUEUE = 'callback';
 const DLQ = 'callback-dead-letter';
@@ -155,13 +156,16 @@ export function createCallbackWorker(opts: {
             : null,
         error:
           task.status === TaskStatus.FAILED || task.status === TaskStatus.CANCELLED
-            ? {
-                code: task.errorCode ?? apiRequest.errorCode ?? 'unknown_error',
-                message:
-                  task.errorMessage ??
-                  apiRequest.errorMessage ??
-                  'Task did not complete successfully',
-              }
+            ? (() => {
+                const s = sanitizeTaskError(
+                  task.errorCode ?? apiRequest.errorCode,
+                  task.errorMessage ?? apiRequest.errorMessage,
+                );
+                return {
+                  code: s.code ?? 'unknown_error',
+                  message: s.message ?? 'Task did not complete successfully',
+                };
+              })()
             : null,
       };
 

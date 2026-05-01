@@ -7,6 +7,7 @@ import {
   TaskResultNotReadyError,
 } from '../../../common/errors/public-api.errors';
 import type { TaskView } from '../dto/views';
+import { sanitizeTaskError } from '@aiagg/shared';
 
 @Injectable()
 export class TasksService {
@@ -30,6 +31,10 @@ export class TasksService {
     if (!task) throw new TaskNotFoundError(taskId);
     if (task.apiRequest.userId !== userId) throw new TaskNotOwnedError(taskId);
 
+    const sanitized = sanitizeTaskError(
+      task.errorCode ?? task.apiRequest.errorCode,
+      task.errorMessage ?? task.apiRequest.errorMessage,
+    );
     return {
       id: task.id,
       status: task.status,
@@ -38,8 +43,8 @@ export class TasksService {
       reserved_amount: task.apiRequest.clientPriceUnits,
       result: task.resultData ?? undefined,
       result_files: task.resultFiles ?? undefined,
-      error_code: task.errorCode ?? task.apiRequest.errorCode ?? null,
-      error_message: task.errorMessage ?? task.apiRequest.errorMessage ?? null,
+      error_code: sanitized.code,
+      error_message: sanitized.message,
       created_at: task.createdAt,
       started_at: task.startedAt,
       finished_at: task.finishedAt,
@@ -109,20 +114,26 @@ export class TasksService {
       }),
       this.prisma.task.count({ where }),
     ]);
-    const items = rows.map<TaskView>((task) => ({
-      id: task.id,
-      status: task.status,
-      mode: task.mode,
-      bundle_key: task.apiRequest.bundleKey,
-      reserved_amount: task.apiRequest.clientPriceUnits,
-      result: task.resultData ?? undefined,
-      result_files: task.resultFiles ?? undefined,
-      error_code: task.errorCode ?? task.apiRequest.errorCode ?? null,
-      error_message: task.errorMessage ?? task.apiRequest.errorMessage ?? null,
-      created_at: task.createdAt,
-      started_at: task.startedAt,
-      finished_at: task.finishedAt,
-    }));
+    const items = rows.map<TaskView>((task) => {
+      const sanitized = sanitizeTaskError(
+        task.errorCode ?? task.apiRequest.errorCode,
+        task.errorMessage ?? task.apiRequest.errorMessage,
+      );
+      return {
+        id: task.id,
+        status: task.status,
+        mode: task.mode,
+        bundle_key: task.apiRequest.bundleKey,
+        reserved_amount: task.apiRequest.clientPriceUnits,
+        result: task.resultData ?? undefined,
+        result_files: task.resultFiles ?? undefined,
+        error_code: sanitized.code,
+        error_message: sanitized.message,
+        created_at: task.createdAt,
+        started_at: task.startedAt,
+        finished_at: task.finishedAt,
+      };
+    });
     return { items, total, page, pageSize };
   }
 }
