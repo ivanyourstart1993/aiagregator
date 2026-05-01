@@ -23,7 +23,21 @@ function isCredit(t: TransactionView): boolean {
   return !t.amountUnits.startsWith('-');
 }
 
-export async function RecentTransactions({ items }: Props) {
+export async function RecentTransactions(props: Props) {
+  try {
+    return await renderRecentTransactions(props);
+  } catch (err) {
+    const e = err instanceof Error ? err : new Error(String(err));
+    return (
+      <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-4 text-xs">
+        <div className="font-semibold text-destructive">RecentTransactions error</div>
+        <pre className="overflow-auto whitespace-pre-wrap">{`${e.name}: ${e.message}\n${e.stack ?? ''}`}</pre>
+      </div>
+    );
+  }
+}
+
+async function renderRecentTransactions({ items }: Props) {
   const t = await getTranslations('dashboard.recentTransactions');
   const tType = await getTranslations('billing.type');
   const format = await getFormatter();

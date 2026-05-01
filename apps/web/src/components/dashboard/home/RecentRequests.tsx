@@ -9,7 +9,21 @@ interface Props {
   items: ApiRequestView[];
 }
 
-export async function RecentRequests({ items }: Props) {
+export async function RecentRequests(props: Props) {
+  try {
+    return await renderRecentRequests(props);
+  } catch (err) {
+    const e = err instanceof Error ? err : new Error(String(err));
+    return (
+      <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-4 text-xs">
+        <div className="font-semibold text-destructive">RecentRequests error</div>
+        <pre className="overflow-auto whitespace-pre-wrap">{`${e.name}: ${e.message}\n${e.stack ?? ''}`}</pre>
+      </div>
+    );
+  }
+}
+
+async function renderRecentRequests({ items }: Props) {
   const t = await getTranslations('dashboard.recentRequests');
   const format = await getFormatter();
 
