@@ -70,41 +70,38 @@ async function getSAAccessToken(sa: ServiceAccountKey): Promise<string> {
   return json.access_token;
 }
 
-// AI Studio model code → Vertex AI Imagen model code, used ONLY for the
-// text_to_image path (which routes to Imagen :predict on Vertex).
-function vertexModelFor(aiStudioModelCode: string): string {
-  if (aiStudioModelCode.includes('pro-image')) return 'imagen-4.0-ultra-generate-001';
-  return 'imagen-4.0-generate-001';
-}
-
-// AI Studio model code → Vertex AI Gemini model code, used for the
-// image_edit / image_to_image paths (Vertex `generateContent` endpoint).
+// Catalog model code → Vertex AI Gemini model code for `generateContent`.
 // Vertex publishers/google/models uses different names than AI Studio for
 // the same family — calling /models/{ai-studio-name}:generateContent
-// returns 404 "Publisher Model not found".
-function vertexGeminiModelFor(aiStudioModelCode: string): string {
-  // Catalog ships these AI Studio names; map them to whatever Vertex
-  // currently exposes. Verified against the live Vertex API on 2026-05-01:
-  //   gemini-2.5-flash-image  → 400 (exists)
-  //   gemini-3.1-flash-image-preview, gemini-3-pro-image-preview, etc → 404
-  //   gemini-2.5-pro-image, gemini-3-pro-image → 404 (no Pro variant on Vertex)
-  if (aiStudioModelCode === 'gemini-3.1-flash-image-preview') {
+// returns 404 "Publisher Model not found". Verified against the live
+// Vertex API on 2026-05-01: only `gemini-2.5-flash-image` is reachable;
+// no `*-pro-image` variant is published yet, so Pro falls back to Flash.
+function vertexGeminiModelFor(catalogModelCode: string): string {
+  if (catalogModelCode === 'gemini-3.1-flash-image-preview') {
     return 'gemini-2.5-flash-image';
   }
-  if (aiStudioModelCode === 'gemini-3-pro-image-preview') {
-    // No Pro Gemini-image model on Vertex right now. Fall back to flash so
-    // the request succeeds — it's a quality downgrade, not a hard failure.
-    // Surface this to the operator via a debug log.
-    return 'gemini-2.5-flash-image';
+  if (catalogModelCode === 'gemini-3-pro-image-preview') {
+    return 'gemini-2.5-flash-image'; // Vertex has no Pro Gemini-image yet.
   }
-  return aiStudioModelCode;
+  return catalogModelCode;
+}
+
+function isImagenModel(catalogModelCode: string): boolean {
+  return catalogModelCode.startsWith('imagen-');
 }
 
 const VERTEX_LOCATION = 'us-central1';
 
 const SUPPORTED_MODELS = new Set([
+  // Gemini family (Nano Banana). text_to_image and image_edit go through
+  // Vertex `generateContent` on Vertex SA path or AI Studio on key path.
   'gemini-3.1-flash-image-preview',
   'gemini-3-pro-image-preview',
+  // Imagen family (Vertex SA only). text_to_image via Vertex `:predict`.
+  // image_edit/image_to_image are NOT supported on these — Imagen edit
+  // uses a different endpoint shape we don't model yet.
+  'imagen-4.0-generate-001',
+  'imagen-4.0-ultra-generate-001',
 ]);
 
 const SUPPORTED_METHODS = new Set([
@@ -330,21 +327,40 @@ export class GoogleBananaAdapter implements ProviderAdapter {
       throw new AdapterError('validation', `unsupported method: ${method.code}`);
     }
 
-    // image_edit / image_to_image / multi_reference_image: use Gemini generateContent
-    // on Vertex (supports image input+output). Imagen predict is text-to-image only.
-    if (method.code !== 'text_to_image') {
+    const { model } = ctx;
+
+    // Routing: which Vertex API to hit depends on BOTH method and model family.
+    //
+    //   gemini-* + any image method  → Vertex `generateContent` (one path,
+    //                                  reused for text_to_image and edits)
+    //   imagen-* + text_to_image     → Vertex `:predict` (Imagen-native API)
+    //   imagen-* + image_edit/etc.   → unsupported here (Imagen edit uses a
+    //                                  different request shape we don't model)
+    //
+    // Historically text_to_image on a `gemini-*` catalog code silently
+    // routed to Imagen :predict — clients asking for Gemini Flash actually
+    // got Imagen 4 outputs. That's now fixed: Gemini codes always hit Gemini.
+    if (!isImagenModel(model.code)) {
       return this.executeVertexGemini(ctx, sa);
     }
 
-    const { model, params } = ctx;
+    if (method.code !== 'text_to_image') {
+      throw new AdapterError(
+        'validation',
+        `imagen models support only text_to_image via this adapter; got ${method.code}`,
+      );
+    }
+
+    const { params } = ctx;
     const prompt = typeof params['prompt'] === 'string' ? params['prompt'] : '';
     if (!prompt) {
       throw new AdapterError('validation', 'prompt is required');
     }
 
     const access = await getSAAccessToken(sa);
-    const vertexModel = vertexModelFor(model.code);
-    const url = `https://${VERTEX_LOCATION}-aiplatform.googleapis.com/v1/projects/${sa.project_id}/locations/${VERTEX_LOCATION}/publishers/google/models/${vertexModel}:predict`;
+    // Imagen catalog codes are already valid Vertex publisher model names
+    // (`imagen-4.0-generate-001` etc.) — no mapping needed.
+    const url = `https://${VERTEX_LOCATION}-aiplatform.googleapis.com/v1/projects/${sa.project_id}/locations/${VERTEX_LOCATION}/publishers/google/models/${encodeURIComponent(model.code)}:predict`;
 
     const count = pickImagesCount(params);
     const aspect = pickAspect(params);

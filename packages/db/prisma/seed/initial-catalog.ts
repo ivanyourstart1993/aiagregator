@@ -502,6 +502,34 @@ export const initialCatalog: ProviderSeed[] = [
         sortOrder: 20,
         methods: bananaMethods.map((m, i) => ({ ...m, sortOrder: (i + 1) * 10 })),
       },
+      {
+        // Imagen 4 — Vertex-native text-to-image. Different model family
+        // from Gemini (Nano Banana), exposed separately so callers can
+        // pick deterministically. text_to_image only; Imagen edit lives
+        // on a different endpoint we don't wire up yet.
+        code: 'imagen-4.0-generate-001',
+        publicName: 'Imagen 4',
+        description: 'Vertex-native text-to-image (standard tier).',
+        sortOrder: 30,
+        methods: [
+          {
+            ...bananaMethods[0]!, // text_to_image
+            sortOrder: 10,
+          },
+        ],
+      },
+      {
+        code: 'imagen-4.0-ultra-generate-001',
+        publicName: 'Imagen 4 Ultra',
+        description: 'Vertex-native text-to-image (ultra tier — higher fidelity).',
+        sortOrder: 40,
+        methods: [
+          {
+            ...bananaMethods[0]!, // text_to_image
+            sortOrder: 10,
+          },
+        ],
+      },
     ],
   },
   {

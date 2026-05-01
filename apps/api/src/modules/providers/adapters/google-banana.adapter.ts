@@ -12,6 +12,10 @@ import {
 const SUPPORTED_MODELS = new Set([
   'gemini-3.1-flash-image-preview',
   'gemini-3-pro-image-preview',
+  // Imagen on Vertex (Service Account only). text_to_image only — Imagen
+  // edit uses a different request shape we don't model in this adapter.
+  'imagen-4.0-generate-001',
+  'imagen-4.0-ultra-generate-001',
 ]);
 
 const SUPPORTED_METHODS = new Set([
