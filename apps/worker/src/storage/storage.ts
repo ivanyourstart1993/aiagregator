@@ -17,12 +17,14 @@ export interface WorkerStorageConfig {
   secretAccessKey: string;
   bucket: string;
   forcePathStyle: boolean;
+  publicBaseUrl?: string | null;
 }
 
 export class WorkerStorage {
   private readonly client: S3Client;
   public readonly bucket: string;
   private readonly endpoint: string;
+  private readonly publicBaseUrl: string | null;
   private readonly forcePathStyle: boolean;
   private bucketEnsured = false;
 
@@ -30,6 +32,7 @@ export class WorkerStorage {
     this.endpoint = cfg.endpoint;
     this.bucket = cfg.bucket;
     this.forcePathStyle = cfg.forcePathStyle;
+    this.publicBaseUrl = cfg.publicBaseUrl?.replace(/\/+$/, '') ?? null;
     this.client = new S3Client({
       endpoint: cfg.endpoint,
       region: cfg.region,
@@ -49,6 +52,7 @@ export class WorkerStorage {
       secretAccessKey: process.env.S3_SECRET_KEY ?? 'minioadmin',
       bucket: process.env.S3_BUCKET ?? 'aiagg-results',
       forcePathStyle: (process.env.S3_FORCE_PATH_STYLE ?? 'true') === 'true',
+      publicBaseUrl: process.env.S3_PUBLIC_BASE_URL ?? null,
     });
   }
 
@@ -115,6 +119,13 @@ export class WorkerStorage {
   }
 
   getObjectUrl(key: string): string {
+    if (this.publicBaseUrl) {
+      // S3_PUBLIC_BASE_URL routes downloads through the public API proxy
+      // (FilesController). Required because S3_ENDPOINT is the
+      // cluster-internal addon host, not resolvable from the public
+      // internet — clients hitting the raw URL get NXDOMAIN.
+      return `${this.publicBaseUrl}/${key}`;
+    }
     const ep = this.endpoint.replace(/\/+$/, '');
     if (this.forcePathStyle) return `${ep}/${this.bucket}/${key}`;
     try {

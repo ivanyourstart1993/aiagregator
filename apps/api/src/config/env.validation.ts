@@ -46,6 +46,12 @@ export const envSchema = z
     S3_SECRET_KEY: z.string().default('minioadmin'),
     S3_BUCKET: z.string().default('aiagg-results'),
     S3_FORCE_PATH_STYLE: z.string().default('true'),
+    // Public-facing base URL for result file downloads. Set this when
+    // S3_ENDPOINT points at a cluster-internal addon that's not reachable
+    // from the public internet (e.g. Northflank's *.addon.code.run). Files
+    // are served by FilesController under this prefix.
+    // Example: https://api.aigenway.com/v1/files
+    S3_PUBLIC_BASE_URL: z.string().optional(),
 
     // Stage 7 — single-key fallback (later moved into ProviderAccount.credentials)
     GOOGLE_BANANA_API_KEY: z.string().optional().or(z.literal('').transform(() => undefined)),

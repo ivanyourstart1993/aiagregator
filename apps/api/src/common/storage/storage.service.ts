@@ -12,6 +12,8 @@ import {
   PutObjectCommand,
   DeleteObjectCommand,
   HeadObjectCommand,
+  GetObjectCommand,
+  type GetObjectCommandOutput,
 } from '@aws-sdk/client-s3';
 import { randomBytes } from 'node:crypto';
 
@@ -36,10 +38,22 @@ export class StorageService implements OnModuleInit {
   private readonly client: S3Client;
   private readonly bucket: string;
   private readonly endpoint: string;
+  private readonly publicBaseUrl: string | null;
   private readonly forcePathStyle: boolean;
 
   constructor(private readonly config: ConfigService) {
     this.endpoint = this.config.get<string>('S3_ENDPOINT') ?? 'http://localhost:9000';
+    // Public-facing base URL used to build URLs returned to API consumers.
+    // Required because S3_ENDPOINT is typically the cluster-internal addon
+    // host (e.g. Northflank's *.addon.code.run) which is NOT resolvable from
+    // the public internet. When set, getObjectUrl returns
+    //   ${S3_PUBLIC_BASE_URL}/${key}
+    // and a public proxy endpoint (FilesController) streams the bytes from
+    // the internal MinIO. Leave unset only in local dev with a directly
+    // exposed MinIO.
+    this.publicBaseUrl =
+      this.config.get<string>('S3_PUBLIC_BASE_URL')?.replace(/\/+$/, '') ??
+      null;
     const region = this.config.get<string>('S3_REGION') ?? 'us-east-1';
     const accessKeyId =
       this.config.get<string>('S3_ACCESS_KEY') ?? 'minioadmin';
@@ -152,6 +166,9 @@ export class StorageService implements OnModuleInit {
   }
 
   getObjectUrl(key: string): string {
+    if (this.publicBaseUrl) {
+      return `${this.publicBaseUrl}/${key}`;
+    }
     const ep = this.endpoint.replace(/\/+$/, '');
     if (this.forcePathStyle) return `${ep}/${this.bucket}/${key}`;
     // Virtual-hosted style: bucket as subdomain (best-effort)
@@ -161,6 +178,17 @@ export class StorageService implements OnModuleInit {
     } catch {
       return `${ep}/${this.bucket}/${key}`;
     }
+  }
+
+  /**
+   * Fetch an object's body + metadata so a public controller can stream it
+   * to the caller. The S3 client itself talks to the internal addon over
+   * cluster networking; we just re-emit the bytes through the public API.
+   */
+  async getObject(key: string): Promise<GetObjectCommandOutput> {
+    return this.client.send(
+      new GetObjectCommand({ Bucket: this.bucket, Key: key }),
+    );
   }
 
   async delete(key: string): Promise<void> {
