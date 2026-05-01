@@ -1,27 +1,72 @@
 import {
+  BadRequestException,
+  Body,
   Controller,
   DefaultValuePipe,
   Get,
   HttpCode,
   HttpStatus,
+  Inject,
   Param,
   ParseIntPipe,
+  Patch,
   Post,
   Query,
   UseGuards,
 } from '@nestjs/common';
+import type { Redis } from 'ioredis';
 import { UserRole, UserStatus } from '@aiagg/db';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { LogAdminAction } from '../../common/decorators/log-admin-action.decorator';
 import { PrismaService } from '../../common/prisma/prisma.service';
+import { IOREDIS_CLIENT } from '../../common/redis/redis.module';
+
+interface RateLimitsBody {
+  rateLimitPerMin?: number | null;
+  rateLimitPerDay?: number | null;
+  maxConcurrentTasks?: number | null;
+  maxRequestsPerDayPerUser?: number | null;
+}
+
+function normaliseLimit(v: unknown, field: string): number | null | undefined {
+  if (v === undefined) return undefined;
+  if (v === null) return null;
+  if (typeof v !== 'number' || !Number.isFinite(v) || !Number.isInteger(v)) {
+    throw new BadRequestException(`${field} must be an integer or null`);
+  }
+  if (v <= 0 || v > 1_000_000) {
+    throw new BadRequestException(`${field} out of range (1..1_000_000)`);
+  }
+  return v;
+}
 
 @Controller('internal/admin/users')
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)
 export class AdminUsersController {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    @Inject(IOREDIS_CLIENT) private readonly redis: Redis,
+  ) {}
+
+  private async invalidateApiKeyCache(userId: string): Promise<void> {
+    // PublicApiKeyGuard caches per-user data on the prefix key
+    // `apikey:<prefix>` for ~minutes. Drop those keys so the rate-limit
+    // override takes effect on the very next request.
+    try {
+      const keys = await this.prisma.apiKey.findMany({
+        where: { userId },
+        select: { prefix: true },
+      });
+      if (keys.length === 0) return;
+      const cacheKeys = keys.map((k) => `apikey:${k.prefix}`);
+      await this.redis.del(...cacheKeys);
+    } catch {
+      // best-effort
+    }
+  }
 
   @Get()
   async list(
@@ -104,6 +149,78 @@ export class AdminUsersController {
       select: { id: true, email: true, sandboxEnabled: true },
     });
     return user;
+  }
+
+  // Per-user rate-limit overrides. Pass `null` to clear an override and
+  // fall back to the env default. Any integer accepted; null means "use
+  // global default".
+  @Get(':id/rate-limits')
+  async getRateLimits(@Param('id') id: string) {
+    const u = await this.prisma.user.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        email: true,
+        rateLimitPerMin: true,
+        rateLimitPerDay: true,
+        maxConcurrentTasks: true,
+        maxRequestsPerDayPerUser: true,
+      },
+    });
+    return {
+      ...u,
+      // Surface env defaults so the admin UI can show "current effective"
+      // numbers next to overrides.
+      defaults: {
+        rateLimitPerMin: Number(process.env.RATE_LIMIT_PER_MIN ?? 60),
+        rateLimitPerDay: Number(process.env.RATE_LIMIT_PER_DAY ?? 1000),
+        maxConcurrentTasks: Number(process.env.MAX_CONCURRENT_PER_USER ?? 10),
+        maxRequestsPerDayPerUser: Number(
+          process.env.MAX_REQUESTS_PER_DAY_PER_USER ?? 10000,
+        ),
+      },
+    };
+  }
+
+  @Patch(':id/rate-limits')
+  @LogAdminAction({
+    action: 'users.rate-limits.update',
+    targetType: 'user',
+    targetIdFrom: 'params.id',
+  })
+  async setRateLimits(
+    @Param('id') id: string,
+    @Body() body: RateLimitsBody,
+  ) {
+    const data: RateLimitsBody = {};
+    const m = normaliseLimit(body.rateLimitPerMin, 'rateLimitPerMin');
+    const d = normaliseLimit(body.rateLimitPerDay, 'rateLimitPerDay');
+    const c = normaliseLimit(body.maxConcurrentTasks, 'maxConcurrentTasks');
+    const dp = normaliseLimit(
+      body.maxRequestsPerDayPerUser,
+      'maxRequestsPerDayPerUser',
+    );
+    if (m !== undefined) data.rateLimitPerMin = m;
+    if (d !== undefined) data.rateLimitPerDay = d;
+    if (c !== undefined) data.maxConcurrentTasks = c;
+    if (dp !== undefined) data.maxRequestsPerDayPerUser = dp;
+    if (Object.keys(data).length === 0) {
+      throw new BadRequestException('no fields to update');
+    }
+    const updated = await this.prisma.user.update({
+      where: { id },
+      data,
+      select: {
+        id: true,
+        email: true,
+        rateLimitPerMin: true,
+        rateLimitPerDay: true,
+        maxConcurrentTasks: true,
+        maxRequestsPerDayPerUser: true,
+      },
+    });
+    await this.invalidateApiKeyCache(id);
+    return updated;
   }
 
   // Soft-anonymize: free up the unique email so the address can re-register,

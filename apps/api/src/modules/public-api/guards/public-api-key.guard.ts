@@ -31,6 +31,12 @@ interface CachedApiKey {
   role: string;
   emailVerifiedTs: number | null;
   expiresAtTs: number | null;
+  // Per-user rate-limit overrides loaded once into the cache so the hot
+  // path doesn't need a User row read per request.
+  rateLimitPerMin: number | null;
+  rateLimitPerDay: number | null;
+  maxConcurrentTasks: number | null;
+  maxRequestsPerDayPerUser: number | null;
 }
 
 let dummyHash: string | null = null;
@@ -129,6 +135,10 @@ export class PublicApiKeyGuard implements CanActivate {
         role: cached.role,
         status: cached.userStatus,
         emailVerified: cached.emailVerifiedTs ? new Date(cached.emailVerifiedTs) : null,
+        rateLimitPerMin: cached.rateLimitPerMin,
+        rateLimitPerDay: cached.rateLimitPerDay,
+        maxConcurrentTasks: cached.maxConcurrentTasks,
+        maxRequestsPerDayPerUser: cached.maxRequestsPerDayPerUser,
       },
       apiKey: {
         id: cached.apiKeyId,
@@ -150,7 +160,11 @@ export class PublicApiKeyGuard implements CanActivate {
       where: { prefix },
       include: {
         user: {
-          select: { id: true, email: true, role: true, status: true, emailVerified: true },
+          select: {
+            id: true, email: true, role: true, status: true, emailVerified: true,
+            rateLimitPerMin: true, rateLimitPerDay: true,
+            maxConcurrentTasks: true, maxRequestsPerDayPerUser: true,
+          },
         },
       },
     });
@@ -167,6 +181,10 @@ export class PublicApiKeyGuard implements CanActivate {
         ? apiKey.user.emailVerified.getTime()
         : null,
       expiresAtTs: apiKey.expiresAt ? apiKey.expiresAt.getTime() : null,
+      rateLimitPerMin: apiKey.user.rateLimitPerMin,
+      rateLimitPerDay: apiKey.user.rateLimitPerDay,
+      maxConcurrentTasks: apiKey.user.maxConcurrentTasks,
+      maxRequestsPerDayPerUser: apiKey.user.maxRequestsPerDayPerUser,
     };
     try {
       await this.redis.set(

@@ -46,6 +46,14 @@ model User {
   role          UserRole   @default(USER)
   status        UserStatus @default(ACTIVE)
   sandboxEnabled Boolean   @default(false)
+  // Per-user rate-limit overrides. NULL → use the global env defaults
+  // (RATE_LIMIT_PER_MIN, RATE_LIMIT_PER_DAY, MAX_CONCURRENT_PER_USER,
+  // MAX_REQUESTS_PER_DAY_PER_USER). Admin can raise them for trusted
+  // customers without restarting the service.
+  rateLimitPerMin             Int?
+  rateLimitPerDay             Int?
+  maxConcurrentTasks          Int?
+  maxRequestsPerDayPerUser    Int?
   lastLoginAt   DateTime?
   createdAt     DateTime   @default(now())
   updatedAt     DateTime   @updatedAt

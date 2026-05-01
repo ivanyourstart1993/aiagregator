@@ -48,9 +48,21 @@ export class RateLimitGuard implements CanActivate {
     const apiKeyId = auth.apiKey.id;
     const now = Date.now();
 
+    // Per-user override beats env default. Useful for trusted/paying
+    // customers who legitimately need higher throughput than the
+    // conservative system-wide cap.
+    const minuteLimit =
+      typeof auth.user.rateLimitPerMin === 'number' && auth.user.rateLimitPerMin > 0
+        ? auth.user.rateLimitPerMin
+        : this.minuteLimit;
+    const dayLimit =
+      typeof auth.user.rateLimitPerDay === 'number' && auth.user.rateLimitPerDay > 0
+        ? auth.user.rateLimitPerDay
+        : this.dayLimit;
+
     const windows: WindowSpec[] = [
-      { suffix: '1m', windowMs: 60_000, limit: this.minuteLimit },
-      { suffix: '1d', windowMs: 86_400_000, limit: this.dayLimit },
+      { suffix: '1m', windowMs: 60_000, limit: minuteLimit },
+      { suffix: '1d', windowMs: 86_400_000, limit: dayLimit },
     ];
 
     let tightest: { remaining: number; limit: number; resetMs: number } | null = null;

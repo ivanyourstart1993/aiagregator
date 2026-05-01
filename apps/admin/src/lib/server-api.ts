@@ -781,6 +781,42 @@ export const serverApi = {
   adminDisableSandbox: (userId: string) =>
     apiPost<{ ok: true }>(`/internal/admin/users/${userId}/sandbox/disable`, {}),
 
+  // Per-user rate-limit overrides. GET returns current overrides + env
+  // defaults so the admin UI can show "current effective" numbers.
+  // PATCH accepts integers (override) or null (clear → fall back to env).
+  adminGetUserRateLimits: (userId: string) =>
+    apiGet<{
+      id: string;
+      email: string;
+      rateLimitPerMin: number | null;
+      rateLimitPerDay: number | null;
+      maxConcurrentTasks: number | null;
+      maxRequestsPerDayPerUser: number | null;
+      defaults: {
+        rateLimitPerMin: number;
+        rateLimitPerDay: number;
+        maxConcurrentTasks: number;
+        maxRequestsPerDayPerUser: number;
+      };
+    }>(`/internal/admin/users/${userId}/rate-limits`),
+  adminSetUserRateLimits: (
+    userId: string,
+    body: {
+      rateLimitPerMin?: number | null;
+      rateLimitPerDay?: number | null;
+      maxConcurrentTasks?: number | null;
+      maxRequestsPerDayPerUser?: number | null;
+    },
+  ) =>
+    apiPatch<{
+      id: string;
+      email: string;
+      rateLimitPerMin: number | null;
+      rateLimitPerDay: number | null;
+      maxConcurrentTasks: number | null;
+      maxRequestsPerDayPerUser: number | null;
+    }>(`/internal/admin/users/${userId}/rate-limits`, body),
+
   // ---- Stage 16: Exports (user-facing) ----
   listExports: () => apiGet<ExportView[] | { items: ExportView[] }>('/internal/exports'),
   getExport: (id: string) => apiGet<ExportView>(`/internal/exports/${id}`),

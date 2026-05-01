@@ -7,6 +7,13 @@ export interface AuthContext {
     role: string;
     status: string;
     emailVerified: Date | null;
+    // Per-user rate-limit overrides. NULL → guards fall back to env
+    // defaults. Loaded by PublicApiKeyGuard so guards downstream can
+    // read them without an extra DB hit per request.
+    rateLimitPerMin: number | null;
+    rateLimitPerDay: number | null;
+    maxConcurrentTasks: number | null;
+    maxRequestsPerDayPerUser: number | null;
   };
   apiKey: {
     id: string;

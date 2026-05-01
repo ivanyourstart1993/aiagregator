@@ -51,19 +51,30 @@ export class GenerationsService {
 
   private async enforceAntiAbuse(userId: string, sandbox: boolean): Promise<void> {
     // 1) User status: SUSPENDED / DELETED → user_blocked.
+    // We also pull the per-user rate-limit overrides here in the same
+    // round-trip so the rest of the function can apply them without an
+    // extra query.
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
-      select: { status: true, sandboxEnabled: true },
+      select: {
+        status: true,
+        sandboxEnabled: true,
+        maxConcurrentTasks: true,
+        maxRequestsPerDayPerUser: true,
+      },
     });
     if (!user || user.status !== UserStatus.ACTIVE) {
       throw new UserBlockedError(userId);
     }
     if (sandbox) return; // sandbox bypasses concurrency / daily caps
 
-    // 2) Per-user concurrency cap.
+    // 2) Per-user concurrency cap (override > env default).
+    const concurrentEnv = Number(process.env.MAX_CONCURRENT_PER_USER ?? 10);
     const concurrentLimit = Math.max(
       1,
-      Number(process.env.MAX_CONCURRENT_PER_USER ?? 10),
+      typeof user.maxConcurrentTasks === 'number' && user.maxConcurrentTasks > 0
+        ? user.maxConcurrentTasks
+        : concurrentEnv,
     );
     const concurrent = await this.prisma.task.count({
       where: {
@@ -76,9 +87,12 @@ export class GenerationsService {
     }
 
     // 3) Daily request cap, tracked in Redis (per UTC day).
+    const dailyEnv = Number(process.env.MAX_REQUESTS_PER_DAY_PER_USER ?? 10000);
     const dailyLimit = Math.max(
       1,
-      Number(process.env.MAX_REQUESTS_PER_DAY_PER_USER ?? 10000),
+      typeof user.maxRequestsPerDayPerUser === 'number' && user.maxRequestsPerDayPerUser > 0
+        ? user.maxRequestsPerDayPerUser
+        : dailyEnv,
     );
     const day = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
     const key = `user:${userId}:gen-day:${day}`;
