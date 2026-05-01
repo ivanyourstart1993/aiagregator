@@ -44,6 +44,24 @@ async function safe<T>(fn: () => Promise<T>, fallback: T): Promise<T> {
 }
 
 export default async function DashboardHomePage() {
+  try {
+    return await renderDashboardHome();
+  } catch (err) {
+    // TEMP DIAGNOSTIC — render the actual error so we can see what's
+    // crashing the user dashboard in prod. Remove once debugged.
+    const e = err instanceof Error ? err : new Error(String(err));
+    return (
+      <div className="space-y-4 p-6">
+        <h1 className="text-xl font-semibold text-destructive">Dashboard render error</h1>
+        <pre className="overflow-auto rounded-md border border-destructive/30 bg-destructive/5 p-4 text-xs">
+{`${e.name}: ${e.message}\n\n${e.stack ?? '(no stack)'}`}
+        </pre>
+      </div>
+    );
+  }
+}
+
+async function renderDashboardHome() {
   const t = await getTranslations('dashboard');
   const format = await getFormatter();
   const session = await auth();
