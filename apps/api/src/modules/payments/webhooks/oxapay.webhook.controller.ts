@@ -9,6 +9,7 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PaymentProvider as PaymentProviderEnum } from '@aiagg/db';
+import { isIpAllowed } from '@aiagg/shared';
 import type { Request } from 'express';
 import { Public } from '../../../common/decorators/public.decorator';
 import { DepositService } from '../deposit.service';
@@ -32,15 +33,14 @@ export class OxapayWebhookController {
   @Post('oxapay')
   @HttpCode(HttpStatus.OK)
   async receive(@Req() req: Request): Promise<{ ok: boolean; reason?: string }> {
+    // IP allowlist (optional). See comment in cryptomus.webhook.controller.ts:
+    // we now trust only `req.ip` (resolved by Express via `trust proxy`),
+    // never raw XFF, and use exact / CIDR matching.
     const allowlist = (this.config.get<string>('OXAPAY_IP_ALLOWLIST') ?? '').trim();
     if (allowlist.length > 0) {
-      const remoteIp = (req.ip ?? '').trim();
-      const xff = (req.header('x-forwarded-for') ?? '').split(',')[0]?.trim() ?? '';
-      const candidates = [remoteIp, xff].filter(Boolean);
-      const allowed = allowlist.split(',').map((s) => s.trim()).filter(Boolean);
-      const match = candidates.some((c) => allowed.some((a) => c === a));
-      if (!match) {
-        this.logger.warn(`OxaPay webhook from disallowed IP: ${candidates.join(',')}`);
+      const subject = (req.ip ?? '').trim();
+      if (!isIpAllowed(subject, allowlist)) {
+        this.logger.warn(`OxaPay webhook from disallowed IP: ${subject}`);
         throw new BadRequestException({ message: 'forbidden_ip' });
       }
     }

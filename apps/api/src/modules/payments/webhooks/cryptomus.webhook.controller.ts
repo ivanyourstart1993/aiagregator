@@ -9,6 +9,7 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PaymentProvider as PaymentProviderEnum } from '@aiagg/db';
+import { isIpAllowed } from '@aiagg/shared';
 import type { Request } from 'express';
 import { Public } from '../../../common/decorators/public.decorator';
 import { DepositService } from '../deposit.service';
@@ -34,16 +35,20 @@ export class CryptomusWebhookController {
   @Post('cryptomus')
   @HttpCode(HttpStatus.OK)
   async receive(@Req() req: Request): Promise<{ ok: boolean; reason?: string }> {
-    // 1. IP allowlist (optional).
+    // 1. IP allowlist (optional). Trust only `req.ip` — Express resolves
+    //    this to the left-most-untrusted XFF entry once `app.set('trust
+    //    proxy', N)` is configured (see main.ts). Manual XFF parsing was
+    //    removed because the attacker controls header bytes; the previous
+    //    `subject.includes(allowed)` substring match is replaced by strict
+    //    equality with optional CIDR support via `isIpAllowed`.
+    //
+    //    HMAC verification still runs unconditionally below — the allowlist
+    //    is defense-in-depth, not a substitute for signature checks.
     const allowlist = (this.config.get<string>('CRYPTOMUS_IP_ALLOWLIST') ?? '').trim();
     if (allowlist.length > 0) {
-      const remoteIp = (req.ip ?? '').trim();
-      const xff = (req.header('x-forwarded-for') ?? '').split(',')[0]?.trim() ?? '';
-      const candidates = [remoteIp, xff].filter(Boolean);
-      const allowed = allowlist.split(',').map((s) => s.trim()).filter(Boolean);
-      const match = candidates.some((c) => allowed.some((a) => c === a || c.includes(a)));
-      if (!match) {
-        this.logger.warn(`Cryptomus webhook from disallowed IP: ${candidates.join(',')}`);
+      const subject = (req.ip ?? '').trim();
+      if (!isIpAllowed(subject, allowlist)) {
+        this.logger.warn(`Cryptomus webhook from disallowed IP: ${subject}`);
         throw new BadRequestException({ message: 'forbidden_ip' });
       }
     }

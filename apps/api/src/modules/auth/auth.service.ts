@@ -360,11 +360,18 @@ export class AuthService {
       return { ok: true };
     }
 
+    // Throttle: refuse if a still-valid token was issued in the last
+    // PASSWORD_RESET_THROTTLE_MS. Encoded by checking
+    // `expires > now + TTL - THROTTLE`: a freshly-minted token's `expires`
+    // is `now + TTL`, so the inequality holds for `THROTTLE` ms after issue.
+    // After that window the user may legitimately request another reset.
     const recent = await this.prisma.verificationToken.findFirst({
       where: {
         identifier: email,
         type: VerificationTokenType.PASSWORD_RESET,
-        expires: { gt: new Date(Date.now() + PASSWORD_RESET_TTL_MS - PASSWORD_RESET_THROTTLE_MS) },
+        expires: {
+          gt: new Date(Date.now() + PASSWORD_RESET_TTL_MS - PASSWORD_RESET_THROTTLE_MS),
+        },
       },
     });
     if (recent) {

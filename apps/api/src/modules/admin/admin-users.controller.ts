@@ -3,10 +3,12 @@ import {
   Body,
   Controller,
   DefaultValuePipe,
+  ForbiddenException,
   Get,
   HttpCode,
   HttpStatus,
   Inject,
+  NotFoundException,
   Param,
   ParseIntPipe,
   Patch,
@@ -19,6 +21,7 @@ import { UserRole, UserStatus } from '@aiagg/db';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
+import { CurrentUser, type CurrentUserPayload } from '../../common/decorators/current-user.decorator';
 import { LogAdminAction } from '../../common/decorators/log-admin-action.decorator';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { IOREDIS_CLIENT } from '../../common/redis/redis.module';
@@ -50,6 +53,32 @@ export class AdminUsersController {
     private readonly prisma: PrismaService,
     @Inject(IOREDIS_CLIENT) private readonly redis: Redis,
   ) {}
+
+  /**
+   * Refuse if the actor (ADMIN) is trying to act on a SUPER_ADMIN target,
+   * or if the target doesn't exist. SUPER_ADMIN actors may always proceed.
+   * Returns the target user (so the caller doesn't re-query).
+   */
+  private async assertCanActOn(
+    actor: CurrentUserPayload,
+    targetId: string,
+  ): Promise<{ id: string; role: UserRole }> {
+    const target = await this.prisma.user.findUnique({
+      where: { id: targetId },
+      select: { id: true, role: true },
+    });
+    if (!target) throw new NotFoundException({ code: 'user_not_found' });
+    if (
+      target.role === UserRole.SUPER_ADMIN &&
+      actor.role !== UserRole.SUPER_ADMIN
+    ) {
+      throw new ForbiddenException({
+        code: 'forbidden',
+        message: 'ADMIN cannot act on SUPER_ADMIN',
+      });
+    }
+    return target;
+  }
 
   private async invalidateApiKeyCache(userId: string): Promise<void> {
     // PublicApiKeyGuard caches per-user data on the prefix key
@@ -126,7 +155,11 @@ export class AdminUsersController {
     targetType: 'user',
     targetIdFrom: 'params.id',
   })
-  async enableSandbox(@Param('id') id: string) {
+  async enableSandbox(
+    @Param('id') id: string,
+    @CurrentUser() actor: CurrentUserPayload,
+  ) {
+    await this.assertCanActOn(actor, id);
     const user = await this.prisma.user.update({
       where: { id },
       data: { sandboxEnabled: true },
@@ -142,7 +175,11 @@ export class AdminUsersController {
     targetType: 'user',
     targetIdFrom: 'params.id',
   })
-  async disableSandbox(@Param('id') id: string) {
+  async disableSandbox(
+    @Param('id') id: string,
+    @CurrentUser() actor: CurrentUserPayload,
+  ) {
+    await this.assertCanActOn(actor, id);
     const user = await this.prisma.user.update({
       where: { id },
       data: { sandboxEnabled: false },
@@ -191,7 +228,9 @@ export class AdminUsersController {
   async setRateLimits(
     @Param('id') id: string,
     @Body() body: RateLimitsBody,
+    @CurrentUser() actor: CurrentUserPayload,
   ) {
+    await this.assertCanActOn(actor, id);
     const data: RateLimitsBody = {};
     const m = normaliseLimit(body.rateLimitPerMin, 'rateLimitPerMin');
     const d = normaliseLimit(body.rateLimitPerDay, 'rateLimitPerDay');
@@ -234,7 +273,19 @@ export class AdminUsersController {
     targetType: 'user',
     targetIdFrom: 'params.id',
   })
-  async anonymize(@Param('id') id: string) {
+  async anonymize(
+    @Param('id') id: string,
+    @CurrentUser() actor: CurrentUserPayload,
+  ) {
+    await this.assertCanActOn(actor, id);
+    // Self-anonymize would lock the actor out of their own account, including
+    // a SUPER_ADMIN. Refuse — must be done by another SUPER_ADMIN.
+    if (actor.id === id) {
+      throw new ForbiddenException({
+        code: 'forbidden',
+        message: 'cannot anonymize yourself',
+      });
+    }
     const tombstone = `deleted-${Date.now()}-${id}@tombstone.local`;
     const user = await this.prisma.user.update({
       where: { id },

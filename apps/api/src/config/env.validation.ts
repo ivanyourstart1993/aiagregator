@@ -73,6 +73,11 @@ export const envSchema = z
     SSRF_FETCH_MAX_REDIRECTS: z.coerce.number().int().nonnegative().optional(),
     SSRF_EXTRA_ALLOW: z.string().optional(),
     TRUST_PROXY: z.string().optional(),
+
+    // Test/dev convenience flag that auto-verifies new registrations without
+    // an email round-trip. Hard-blocked in production: leaving this on lets
+    // an attacker race-register a victim's email and lock them out.
+    EMAIL_AUTO_VERIFY: z.string().optional(),
   })
   .passthrough()
   .refine(
@@ -82,6 +87,14 @@ export const envSchema = z
     {
       message:
         'INTERNAL_SERVICE_SECRET and CREDENTIALS_KEK are required in production',
+    },
+  )
+  .refine(
+    (env) =>
+      env.NODE_ENV !== 'production' || env.EMAIL_AUTO_VERIFY !== 'true',
+    {
+      message:
+        'EMAIL_AUTO_VERIFY=true is forbidden in production (enables email pre-claim attack)',
     },
   );
 

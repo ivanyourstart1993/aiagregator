@@ -220,6 +220,53 @@ export async function assertSafeUrl(rawUrl: string): Promise<URL> {
 
 const ALLOWED_PORTS = new Set([80, 443, 8080, 8443]);
 
+/**
+ * Synchronous URL safety check used at request-submit time (no DNS).
+ *
+ * Catches: bad scheme, bad port, literal private/loopback/link-local IP in
+ * hostname. Does NOT defend against DNS rebinding — that's enforced at
+ * delivery time by `safeFetch` / `assertSafeUrl`.
+ *
+ * Returns null on success, or a short reason string on rejection.
+ */
+export function checkUrlShape(
+  rawUrl: string,
+  opts: { allowedPorts?: number[]; allowHttp?: boolean } = {},
+): string | null {
+  let parsed: URL;
+  try {
+    parsed = new URL(rawUrl);
+  } catch {
+    return 'invalid url';
+  }
+  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+    return `disallowed protocol: ${parsed.protocol}`;
+  }
+  if (parsed.protocol === 'http:' && opts.allowHttp === false) {
+    return 'http scheme not allowed (use https)';
+  }
+  const port = parsed.port
+    ? Number(parsed.port)
+    : parsed.protocol === 'https:'
+      ? 443
+      : 80;
+  const allowed = opts.allowedPorts ?? Array.from(ALLOWED_PORTS);
+  if (!allowed.includes(port)) {
+    return `disallowed port: ${port}`;
+  }
+  const host = parsed.hostname;
+  if (!host) return 'empty hostname';
+  if (host.toLowerCase() === 'localhost') return 'localhost not allowed';
+  const literalKind = isIP(host);
+  if (literalKind === 4) {
+    if (isPrivateV4(host)) return `private IPv4: ${host}`;
+  } else if (literalKind === 6) {
+    const v6 = host.startsWith('[') && host.endsWith(']') ? host.slice(1, -1) : host;
+    if (isPrivateV6(v6)) return `private IPv6: ${v6}`;
+  }
+  return null;
+}
+
 function checkPort(parsed: URL, strict: boolean): void {
   if (!strict) return;
   const port = parsed.port

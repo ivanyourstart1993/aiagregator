@@ -35,6 +35,10 @@ async function buildHeaders(opts: FetchOptions, anonymous: boolean): Promise<Hea
   if (!headers.has('content-type') && opts.body !== undefined) {
     headers.set('content-type', 'application/json');
   }
+  // Server-to-server boundary on /internal/*. See web/api-client.ts.
+  if (env.INTERNAL_SERVICE_SECRET) {
+    headers.set('x-internal-service-secret', env.INTERNAL_SERVICE_SECRET);
+  }
   if (!anonymous) {
     // We need the raw HS256 JWT — encode it via the same NextAuth callback
     // chain. The simplest path is to ask NextAuth for the session and then

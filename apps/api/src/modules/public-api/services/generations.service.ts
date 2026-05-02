@@ -1,4 +1,5 @@
-import { Inject, Injectable, Logger } from '@nestjs/common';
+import { BadRequestException, Inject, Injectable, Logger } from '@nestjs/common';
+import { checkUrlShape } from '@aiagg/shared';
 import { InjectQueue } from '@nestjs/bullmq';
 import {
   ApiRequestStatus,
@@ -149,6 +150,19 @@ export class GenerationsService {
     }
     const params = body.params;
     this.catalog.validateParamsOrThrow(triple.method, params);
+
+    // Reject obviously-unsafe callback URLs at submit time. The worker
+    // re-checks via DNS-resolving safeFetch, but failing fast here gives
+    // the user a clear error and prevents the row from being persisted.
+    if (body.callback_url) {
+      const reason = checkUrlShape(body.callback_url, { allowHttp: false });
+      if (reason) {
+        throw new BadRequestException({
+          code: 'invalid_callback_url',
+          message: `callback_url rejected: ${reason}`,
+        });
+      }
+    }
 
     // Default mode: ASYNC if method supports it (also enforced by stub-worker).
     const requestedMode = body.mode;

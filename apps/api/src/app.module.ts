@@ -10,6 +10,7 @@ import { validateEnv, type AppEnv } from './config/env.validation';
 import { PrismaModule } from './common/prisma/prisma.module';
 import { IdempotencyModule } from './common/idempotency/idempotency.module';
 import { RequestIdMiddleware, getRequestId } from './common/middleware/request-id.middleware';
+import { InternalServiceMiddleware } from './common/middleware/internal-service.middleware';
 import { PublicErrorFilter } from './common/filters/public-error.filter';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 import { AdminActionInterceptor } from './common/interceptors/admin-action.interceptor';
@@ -102,5 +103,8 @@ import { StorageModule } from './common/storage/storage.module';
 export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer): void {
     consumer.apply(RequestIdMiddleware).forRoutes('*');
+    // Privacy boundary on /internal/* — only server-side callers (web /
+    // admin BFFs) reach here. Public /v1/* and /webhooks/* are unaffected.
+    consumer.apply(InternalServiceMiddleware).forRoutes('internal/*');
   }
 }
