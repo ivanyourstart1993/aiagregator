@@ -15,6 +15,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { Prisma, ProxyProtocol, ProxyStatus, UserRole } from '@aiagg/db';
+import { encryptString, isEnvelope } from '@aiagg/shared';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
@@ -69,8 +70,7 @@ export class AdminProxyController {
         port: body.port,
         protocol: body.protocol ?? ProxyProtocol.HTTP,
         login: body.login ?? null,
-        // TODO Stage 11 full: encrypt at rest
-        passwordHash: body.password ?? null,
+        passwordHash: body.password ? encryptString(body.password) : null,
         country: body.country ?? null,
         region: body.region ?? null,
         status: body.status ?? ProxyStatus.ACTIVE,
@@ -100,7 +100,9 @@ export class AdminProxyController {
     if (body.port !== undefined) data.port = body.port;
     if (body.protocol !== undefined) data.protocol = body.protocol;
     if (body.login !== undefined) data.login = body.login;
-    if (body.password !== undefined) data.passwordHash = body.password;
+    if (body.password !== undefined) {
+      data.passwordHash = body.password ? encryptString(body.password) : null;
+    }
     if (body.country !== undefined) data.country = body.country;
     if (body.region !== undefined) data.region = body.region;
     if (body.status !== undefined) data.status = body.status;
@@ -172,6 +174,13 @@ export class AdminProxyController {
     createdAt: Date;
     updatedAt: Date;
   }) {
+    // Mark plaintext-stored passwords as legacy so the admin UI can hint
+    // a rotation; encrypted ones are reported as encrypted.
+    const passwordState = !p.passwordHash
+      ? 'none'
+      : isEnvelope(p.passwordHash)
+        ? 'encrypted'
+        : 'legacy_plaintext';
     return {
       id: p.id,
       name: p.name,
@@ -180,6 +189,7 @@ export class AdminProxyController {
       protocol: p.protocol,
       login: p.login,
       hasPassword: Boolean(p.passwordHash),
+      passwordState,
       country: p.country,
       region: p.region,
       status: p.status,

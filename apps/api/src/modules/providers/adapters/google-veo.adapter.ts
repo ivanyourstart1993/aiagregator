@@ -14,6 +14,7 @@
 // that capture math can use actual seconds.
 import { Injectable, Logger } from '@nestjs/common';
 import { HttpsProxyAgent } from 'https-proxy-agent';
+import { safeFetchAsBase64 } from '@aiagg/shared';
 import { StorageService } from '../../../common/storage/storage.service';
 import {
   AdapterError,
@@ -80,25 +81,22 @@ function pickInt(p: Record<string, unknown>, def: number, ...keys: string[]): nu
 
 async function fetchAsBase64(
   url: string,
-  agent?: HttpsProxyAgent<string>,
 ): Promise<{ data: string; mimeType: string }> {
-  const init: RequestInit & { agent?: unknown } = {};
-  if (agent) init.agent = agent;
-  const res = await fetch(url, init);
-  if (!res.ok) {
+  // SSRF-safe fetch: rejects private/loopback/cloud-metadata targets and
+  // caps response size + total time per env-driven settings.
+  try {
+    return await safeFetchAsBase64(url);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
     throw new AdapterError(
       'validation',
-      `failed to fetch source media (${res.status}): ${url}`,
+      `failed to fetch source media: ${msg}`,
     );
   }
-  const ct = res.headers.get('content-type') ?? 'application/octet-stream';
-  const buf = Buffer.from(await res.arrayBuffer());
-  return { data: buf.toString('base64'), mimeType: ct };
 }
 
 async function readMaybeBase64(
   v: unknown,
-  agent?: HttpsProxyAgent<string>,
 ): Promise<{ data: string; mimeType: string } | null> {
   if (typeof v !== 'string' || v.length === 0) return null;
   if (v.startsWith('data:')) {
@@ -106,7 +104,7 @@ async function readMaybeBase64(
     if (m) return { mimeType: m[1]!, data: m[2]! };
     return null;
   }
-  if (/^https?:\/\//.test(v)) return await fetchAsBase64(v, agent);
+  if (/^https?:\/\//.test(v)) return await fetchAsBase64(v);
   return null;
 }
 
@@ -172,7 +170,7 @@ export class GoogleVeoAdapter implements ProviderAdapter {
         params['image'] ??
         params['source_image'] ??
         params['input_image'];
-      const inline = await readMaybeBase64(imgVal, agent);
+      const inline = await readMaybeBase64(imgVal);
       if (!inline) {
         throw new AdapterError(
           'validation',
@@ -189,9 +187,9 @@ export class GoogleVeoAdapter implements ProviderAdapter {
       method.code === 'video_to_video'
     ) {
       // Stretch shapes — pass-through whatever URL fields are present.
-      const first = await readMaybeBase64(params['first_frame_url'], agent);
-      const last = await readMaybeBase64(params['last_frame_url'], agent);
-      const video = await readMaybeBase64(params['input_video_url'], agent);
+      const first = await readMaybeBase64(params['first_frame_url']);
+      const last = await readMaybeBase64(params['last_frame_url']);
+      const video = await readMaybeBase64(params['input_video_url']);
       if (first) instance.firstFrame = { bytesBase64Encoded: first.data, mimeType: first.mimeType };
       if (last) instance.lastFrame = { bytesBase64Encoded: last.data, mimeType: last.mimeType };
       if (video) instance.video = { bytesBase64Encoded: video.data, mimeType: video.mimeType };

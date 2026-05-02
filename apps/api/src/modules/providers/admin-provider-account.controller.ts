@@ -19,6 +19,7 @@ import {
   ProviderAccountStatus,
   UserRole,
 } from '@aiagg/db';
+import { decryptJson, encryptJson } from '@aiagg/shared';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
@@ -80,7 +81,9 @@ export class AdminProviderAccountController {
         providerId: body.providerId,
         name: body.name,
         description: body.description ?? null,
-        credentials: body.credentials as Prisma.InputJsonValue,
+        credentials: encryptJson(
+          (body.credentials ?? {}) as Record<string, unknown>,
+        ) as unknown as Prisma.InputJsonValue,
         proxyId: body.proxyId ?? null,
         status: body.status ?? ProviderAccountStatus.ACTIVE,
         rotationEnabled: body.rotationEnabled ?? true,
@@ -125,7 +128,9 @@ export class AdminProviderAccountController {
     if (body.name !== undefined) data.name = body.name;
     if (body.description !== undefined) data.description = body.description;
     if (body.credentials !== undefined) {
-      data.credentials = body.credentials as Prisma.InputJsonValue;
+      data.credentials = encryptJson(
+        body.credentials as Record<string, unknown>,
+      ) as unknown as Prisma.InputJsonValue;
     }
     if (body.proxyId !== undefined) {
       data.proxy = body.proxyId
@@ -364,10 +369,16 @@ export class AdminProviderAccountController {
     updatedAt: Date;
   }) {
     // Mask credentials in admin list responses (don't leak secrets in JSON).
-    const credObj =
-      a.credentials && typeof a.credentials === 'object'
-        ? (a.credentials as Record<string, unknown>)
-        : {};
+    // The stored credentials may be wrapped in a v1 encryption envelope; the
+    // decrypt helper unwraps it (and is a no-op for legacy plaintext rows).
+    let credObj: Record<string, unknown>;
+    try {
+      credObj = decryptJson(a.credentials);
+    } catch {
+      // Decryption failure (wrong KEK, corrupted ciphertext) — refuse to leak
+      // the envelope; surface a marker instead.
+      credObj = { __decrypt_error__: true };
+    }
     const masked: Record<string, unknown> = {};
     for (const k of Object.keys(credObj)) {
       const v = credObj[k];

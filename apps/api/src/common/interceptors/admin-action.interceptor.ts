@@ -30,6 +30,46 @@ function pluck(req: Request, path: string | undefined): string | undefined {
   return typeof cur === 'string' ? cur : undefined;
 }
 
+// Keys whose values are secrets and must never end up in admin_action.payload.
+// Match is case-insensitive and substring-based so misnamed fields
+// (e.g. `apiKeyValue`, `OXAPAY_MERCHANT_KEY`) still get caught.
+const SECRET_KEY_PATTERNS = [
+  'credentials',
+  'password',
+  'passwd',
+  'apikey',
+  'api_key',
+  'token',
+  'secret',
+  'webhooksecret',
+  'serviceaccount',
+  'private_key',
+  'privatekey',
+  'cookie',
+  'authorization',
+];
+
+const REDACTED = '[REDACTED]';
+
+function isSecretKey(key: string): boolean {
+  const lower = key.toLowerCase();
+  return SECRET_KEY_PATTERNS.some((p) => lower.includes(p));
+}
+
+function redactDeep(value: unknown, depth = 0): unknown {
+  if (depth > 8) return REDACTED;
+  if (Array.isArray(value)) return value.map((v) => redactDeep(v, depth + 1));
+  if (value && typeof value === 'object') {
+    const src = value as Record<string, unknown>;
+    const out: Record<string, unknown> = {};
+    for (const k of Object.keys(src)) {
+      out[k] = isSecretKey(k) ? REDACTED : redactDeep(src[k], depth + 1);
+    }
+    return out;
+  }
+  return value;
+}
+
 @Injectable()
 export class AdminActionInterceptor implements NestInterceptor {
   private readonly logger = new Logger(AdminActionInterceptor.name);
@@ -65,7 +105,7 @@ export class AdminActionInterceptor implements NestInterceptor {
 
         const payload: Record<string, unknown> = {};
         if (req.body && typeof req.body === 'object') {
-          payload.body = req.body;
+          payload.body = redactDeep(req.body);
         }
 
         this.prisma.adminAction

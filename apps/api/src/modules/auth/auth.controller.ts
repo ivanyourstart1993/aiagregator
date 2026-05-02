@@ -1,5 +1,6 @@
-import { Body, Controller, HttpCode, HttpStatus, Post, UsePipes } from '@nestjs/common';
+import { Body, Controller, HttpCode, HttpStatus, Post, UseGuards, UsePipes } from '@nestjs/common';
 import { Public } from '../../common/decorators/public.decorator';
+import { InternalServiceGuard } from '../../common/guards/internal-service.guard';
 import { ZodValidationPipe } from './dto/zod-pipe';
 import { registerSchema, type RegisterDto } from './dto/register.dto';
 import { loginSchema, type LoginDto } from './dto/login.dto';
@@ -55,6 +56,7 @@ export class AuthController {
   }
 
   @Public()
+  @UseGuards(InternalServiceGuard)
   @Post('oauth-bridge')
   @HttpCode(HttpStatus.OK)
   @UsePipes(new ZodValidationPipe(oauthBridgeSchema))

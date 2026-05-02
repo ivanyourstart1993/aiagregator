@@ -30,6 +30,7 @@ import {
   TaskStatus,
   TransactionType,
 } from '@aiagg/db';
+import { decryptJson, decryptString, isEnvelope } from '@aiagg/shared';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { AdapterRegistry } from './adapters/adapter-registry';
 import { RateCardService } from '../rate-cards/rate-cards.service';
@@ -179,12 +180,16 @@ export class PollLroCron {
         where: { id: account.proxyId },
       });
       if (proxy && proxy.status === ProxyStatus.ACTIVE) {
+        const decryptedPwd =
+          proxy.passwordHash && isEnvelope(proxy.passwordHash)
+            ? decryptString(proxy.passwordHash)
+            : (proxy.passwordHash ?? undefined);
         proxyCtx = {
           host: proxy.host,
           port: proxy.port,
           protocol: proxy.protocol,
           login: proxy.login ?? undefined,
-          password: proxy.passwordHash ?? undefined,
+          password: decryptedPwd,
         };
       }
     }
@@ -200,7 +205,7 @@ export class PollLroCron {
       params,
       account: {
         id: account.id,
-        credentials: (account.credentials ?? {}) as Record<string, unknown>,
+        credentials: decryptJson(account.credentials),
       },
       proxy: proxyCtx,
     };

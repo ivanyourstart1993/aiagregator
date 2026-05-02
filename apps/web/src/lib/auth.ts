@@ -131,21 +131,31 @@ export const authConfig: NextAuthConfig = {
         token.email = u.email ?? null;
         token.name = u.name ?? null;
       }
-      // Google sign-in: bridge into our backend so we end up with a
-      // local User row + role/emailVerified mirror in the JWT.
-      // Stage 1: keep this minimal — if backend has the endpoint we use it,
-      // otherwise we fall through with a USER role. The backend agent owns
-      // /internal/auth/oauth-bridge; if not implemented yet, this is a no-op.
-      if (account?.provider === 'google' && profile) {
+      // Google sign-in: hand the verified id_token to the backend bridge,
+      // which re-validates signature + claims server-side and resolves a
+      // local User row. We pass the shared INTERNAL_SERVICE_SECRET so the
+      // public NestJS endpoint will accept the call.
+      // `account.id_token` is provided by NextAuth's Google provider after
+      // its own verification. If the bridge fails (mis-config, network, or
+      // verification rejection) we deliberately do NOT fall through with a
+      // USER role — that would let an unbridged session into the app under
+      // the attacker's Google identity. Instead, leave token.sub unchanged
+      // and the session callback will surface as unauthenticated.
+      const idToken =
+        typeof (account as { id_token?: unknown })?.id_token === 'string'
+          ? ((account as { id_token: string }).id_token)
+          : null;
+      if (account?.provider === 'google' && idToken) {
         try {
           const res = await fetch(`${env.API_URL}/internal/auth/oauth-bridge`, {
             method: 'POST',
-            headers: { 'content-type': 'application/json' },
+            headers: {
+              'content-type': 'application/json',
+              'x-internal-service-secret': env.INTERNAL_SERVICE_SECRET,
+            },
             body: JSON.stringify({
               provider: 'google',
-              providerAccountId: account.providerAccountId,
-              email: profile.email,
-              name: profile.name,
+              idToken,
             }),
             cache: 'no-store',
           });
@@ -158,9 +168,14 @@ export const authConfig: NextAuthConfig = {
               token.email = data.user.email;
               token.name = data.user.name;
             }
+          } else {
+            // Surface a stable signal to the signIn callback (if any).
+            // Returning `token` as-is means downstream session() will see no
+            // sub/role and redirect to login.
+            console.warn('oauth-bridge rejected:', res.status);
           }
-        } catch {
-          // Backend may not implement the bridge yet; leave token as-is.
+        } catch (err) {
+          console.warn('oauth-bridge call failed:', (err as Error).message);
         }
       }
       return token;

@@ -13,6 +13,7 @@ import {
   TransactionType,
 } from '@aiagg/db';
 import type { PrismaClient } from '@aiagg/db';
+import { decryptJson, decryptString, isEnvelope } from '@aiagg/shared';
 import type { WorkerAdapterRegistry } from '../adapters/registry';
 import {
   AdapterError,
@@ -272,7 +273,7 @@ async function pickAccount(
 
     return {
       id: a.id,
-      credentials: (a.credentials ?? {}) as Record<string, unknown>,
+      credentials: decryptJson(a.credentials),
       proxyId: a.proxyId,
     };
   }
@@ -784,12 +785,16 @@ export function createGenerationWorker(opts: {
             await enqueueCallback(task.apiRequestId);
             return;
           }
+          const decryptedPwd =
+            proxy.passwordHash && isEnvelope(proxy.passwordHash)
+              ? decryptString(proxy.passwordHash)
+              : (proxy.passwordHash ?? undefined);
           proxyCtx = {
             host: proxy.host,
             port: proxy.port,
             protocol: proxy.protocol,
             login: proxy.login ?? undefined,
-            password: proxy.passwordHash ?? undefined,
+            password: decryptedPwd,
           };
         }
 

@@ -60,8 +60,30 @@ export const envSchema = z
     WEBHOOK_SECRET: z.string().min(16).default('dev-webhook-secret-change-me'),
     CALLBACK_MAX_ATTEMPTS: z.coerce.number().int().positive().default(5),
     CALLBACK_BACKOFF_MS: z.coerce.number().int().positive().default(2000),
+
+    // Security — shared with /internal/* guards, OAuth bridge, credentials
+    // encryption, and SSRF-safe fetcher. In production all four are required
+    // (the guards/helpers will throw at request time if missing); in dev we
+    // allow them to be absent and degrade gracefully.
+    INTERNAL_SERVICE_SECRET: z.string().min(32).optional(),
+    CREDENTIALS_KEK: z.string().min(32).optional(),
+    GOOGLE_OAUTH_CLIENT_ID: z.string().optional(),
+    SSRF_FETCH_MAX_BYTES: z.coerce.number().int().positive().optional(),
+    SSRF_FETCH_TIMEOUT_MS: z.coerce.number().int().positive().optional(),
+    SSRF_FETCH_MAX_REDIRECTS: z.coerce.number().int().nonnegative().optional(),
+    SSRF_EXTRA_ALLOW: z.string().optional(),
+    TRUST_PROXY: z.string().optional(),
   })
-  .passthrough();
+  .passthrough()
+  .refine(
+    (env) =>
+      env.NODE_ENV !== 'production' ||
+      (Boolean(env.INTERNAL_SERVICE_SECRET) && Boolean(env.CREDENTIALS_KEK)),
+    {
+      message:
+        'INTERNAL_SERVICE_SECRET and CREDENTIALS_KEK are required in production',
+    },
+  );
 
 export type AppEnv = z.infer<typeof envSchema>;
 

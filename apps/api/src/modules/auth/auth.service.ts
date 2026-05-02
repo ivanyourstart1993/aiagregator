@@ -10,6 +10,7 @@ import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { Prisma, UserStatus, VerificationTokenType, type User } from '@aiagg/db';
 import { ErrorCode } from '@aiagg/shared';
+import { verifyGoogleIdToken } from '@aiagg/shared';
 import * as argon2 from 'argon2';
 import { customAlphabet } from 'nanoid';
 import { PrismaService } from '../../common/prisma/prisma.service';
@@ -211,21 +212,55 @@ export class AuthService {
   /**
    * Bridge an OAuth sign-in (currently Google) into a local User row.
    *
-   * Look up existing Account by (provider, providerAccountId) — if found,
-   * return its user. Otherwise look up User by email and link the OAuth
-   * Account to it; if no User exists at all, create one (already
-   * email-verified since the IdP attests to ownership).
+   * Verifies the Google `id_token` server-side (signature + claims) and
+   * derives identity strictly from the verified payload. Refuses if
+   * `email_verified !== true` so a hijacked Google account with
+   * unverified email cannot pre-claim an arbitrary address.
    *
-   * Idempotent: repeated calls return the same user.
+   * Look up existing Account by (provider, sub) — if found, return its user.
+   * Otherwise look up User by the verified email and link the OAuth Account
+   * to it; if no User exists, create one (already email-verified since the
+   * IdP attests to ownership).
+   *
+   * Idempotent: repeated calls with the same id_token return the same user.
    */
   async oauthBridge(dto: OauthBridgeDto): Promise<{ user: SafeUser }> {
-    const email = dto.email.toLowerCase().trim();
+    const expectedAud = process.env.GOOGLE_OAUTH_CLIENT_ID ?? process.env.GOOGLE_CLIENT_ID;
+    if (!expectedAud) {
+      this.logger.error('oauth-bridge: neither GOOGLE_OAUTH_CLIENT_ID nor GOOGLE_CLIENT_ID is set');
+      throw new UnauthorizedException({
+        code: ErrorCode.INVALID_REQUEST,
+        message: 'OAuth is not configured.',
+      });
+    }
+
+    let payload;
+    try {
+      payload = await verifyGoogleIdToken(dto.idToken, { audience: expectedAud });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      this.logger.warn(`oauth-bridge: id_token verification failed: ${msg}`);
+      throw new UnauthorizedException({
+        code: ErrorCode.INVALID_REQUEST,
+        message: 'Invalid Google id_token.',
+      });
+    }
+    if (!payload.email_verified) {
+      throw new UnauthorizedException({
+        code: ErrorCode.INVALID_REQUEST,
+        message: 'Google email is not verified.',
+      });
+    }
+
+    const email = payload.email.toLowerCase().trim();
+    const providerAccountId = payload.sub;
+    const name = payload.name ?? null;
 
     const existingAccount = await this.prisma.account.findUnique({
       where: {
         provider_providerAccountId: {
           provider: dto.provider,
-          providerAccountId: dto.providerAccountId,
+          providerAccountId,
         },
       },
       include: { user: true },
@@ -252,23 +287,38 @@ export class AuthService {
           message: 'Account is not active.',
         });
       }
+      // Refuse to silently link if the existing user already has a different
+      // Google account attached — this would be a takeover vector if a
+      // first-link attempt could overwrite the original. (createMany unique
+      // constraint blocks this anyway, but we want a clear error.)
+      const otherGoogle = await this.prisma.account.findFirst({
+        where: { userId: existingUser.id, provider: dto.provider },
+        select: { providerAccountId: true },
+      });
+      if (otherGoogle && otherGoogle.providerAccountId !== providerAccountId) {
+        throw new UnauthorizedException({
+          code: ErrorCode.INVALID_REQUEST,
+          message: 'Another Google account is already linked to this user.',
+        });
+      }
       const updated = await this.prisma.$transaction(async (tx) => {
         await tx.account.create({
           data: {
             userId: existingUser.id,
             type: 'oauth',
             provider: dto.provider,
-            providerAccountId: dto.providerAccountId,
+            providerAccountId,
           },
         });
         return tx.user.update({
           where: { id: existingUser.id },
           data: {
             lastLoginAt: new Date(),
-            // If user previously registered without verifying email, trust the IdP.
+            // The IdP verified the email — promote to verified for legacy
+            // password-only signups that never confirmed.
             emailVerified: existingUser.emailVerified ?? new Date(),
             // Backfill display name from Google profile if missing.
-            name: existingUser.name ?? dto.name ?? null,
+            name: existingUser.name ?? name,
           },
         });
       });
@@ -279,7 +329,7 @@ export class AuthService {
       const user = await tx.user.create({
         data: {
           email,
-          name: dto.name ?? null,
+          name,
           locale: 'en',
           emailVerified: new Date(),
           lastLoginAt: new Date(),
@@ -290,7 +340,7 @@ export class AuthService {
           userId: user.id,
           type: 'oauth',
           provider: dto.provider,
-          providerAccountId: dto.providerAccountId,
+          providerAccountId,
         },
       });
       return user;

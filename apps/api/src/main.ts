@@ -16,6 +16,17 @@ async function bootstrap(): Promise<void> {
 
   app.useLogger(app.get(Logger));
 
+  // Trust the front-end load-balancer hop count so `req.ip` reflects the real
+  // client (rather than the LB) and Express's left-most-untrusted X-Forwarded-
+  // For resolution Just Works. Without this set, req.ip is the LB IP and any
+  // code that splits XFF manually would trust the attacker-supplied first
+  // entry. Set TRUST_PROXY=1 for a single front-end LB (Northflank).
+  const trustProxy = process.env.TRUST_PROXY;
+  if (trustProxy && trustProxy !== '0' && trustProxy !== 'false') {
+    const num = Number(trustProxy);
+    app.set('trust proxy', Number.isFinite(num) && num > 0 ? num : trustProxy);
+  }
+
   app.use(helmet());
   app.use(cookieParser());
 

@@ -1,5 +1,6 @@
 import { createSign } from 'node:crypto';
 import { HttpsProxyAgent } from 'https-proxy-agent';
+import { safeFetchAsBase64 } from '@aiagg/shared';
 import {
   AdapterError,
   type AdapterContext,
@@ -150,16 +151,15 @@ function mimeToExt(mime: string): string {
 async function fetchAsBase64(
   url: string,
 ): Promise<{ data: string; mimeType: string }> {
-  const res = await fetch(url);
-  if (!res.ok) {
+  try {
+    return await safeFetchAsBase64(url);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
     throw new AdapterError(
       'validation',
-      `failed to fetch source image (${res.status}): ${url}`,
+      `failed to fetch source image: ${msg}`,
     );
   }
-  const ct = res.headers.get('content-type') ?? 'image/png';
-  const buf = Buffer.from(await res.arrayBuffer());
-  return { data: buf.toString('base64'), mimeType: ct };
 }
 
 async function buildInlineImages(

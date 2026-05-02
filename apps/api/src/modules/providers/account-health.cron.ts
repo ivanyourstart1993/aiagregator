@@ -13,6 +13,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
 import { ProviderAccountStatus, ProxyStatus } from '@aiagg/db';
+import { decryptJson, decryptString, isEnvelope } from '@aiagg/shared';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { AdapterRegistry } from './adapters/adapter-registry';
 
@@ -79,17 +80,21 @@ export class AccountHealthCron {
             where: { id: a.proxyId },
           });
           if (p && p.status === ProxyStatus.ACTIVE) {
+            const decryptedPwd =
+              p.passwordHash && isEnvelope(p.passwordHash)
+                ? decryptString(p.passwordHash)
+                : (p.passwordHash ?? undefined);
             proxyCtx = {
               host: p.host,
               port: p.port,
               protocol: p.protocol,
               login: p.login ?? undefined,
-              password: p.passwordHash ?? undefined,
+              password: decryptedPwd,
             };
           }
         }
         const result = await adapter.validateAccount(
-          (a.credentials ?? {}) as Record<string, unknown>,
+          decryptJson(a.credentials),
           proxyCtx,
         );
         if (result.ok) {

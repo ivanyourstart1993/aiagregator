@@ -138,14 +138,21 @@ export const authConfig: NextAuthConfig = {
       if (account?.provider !== 'google') return true;
       if (!profile?.email) return false;
 
+      const idToken =
+        typeof (account as { id_token?: unknown })?.id_token === 'string'
+          ? ((account as { id_token: string }).id_token)
+          : null;
+      if (!idToken) return '/login?error=oauth';
+
       const res = await fetch(`${env.API_URL}/internal/auth/oauth-bridge`, {
         method: 'POST',
-        headers: { 'content-type': 'application/json' },
+        headers: {
+          'content-type': 'application/json',
+          'x-internal-service-secret': env.INTERNAL_SERVICE_SECRET,
+        },
         body: JSON.stringify({
           provider: 'google',
-          providerAccountId: account.providerAccountId,
-          email: profile.email,
-          name: profile.name,
+          idToken,
         }),
         cache: 'no-store',
       });

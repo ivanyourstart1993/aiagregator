@@ -14,6 +14,7 @@ export const env = {
   AUTH_JWT_ACCESS_TTL: Number(process.env.AUTH_JWT_ACCESS_TTL ?? 900),
   GOOGLE_CLIENT_ID: process.env.GOOGLE_CLIENT_ID ?? '',
   GOOGLE_CLIENT_SECRET: process.env.GOOGLE_CLIENT_SECRET ?? '',
+  INTERNAL_SERVICE_SECRET: process.env.INTERNAL_SERVICE_SECRET ?? '',
 } as const;
 
 export function getJwtSecretBytes(): Uint8Array {

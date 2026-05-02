@@ -12,6 +12,7 @@ import {
   type PrismaClient,
 } from '@aiagg/db';
 import { sanitizeTaskError } from '@aiagg/shared';
+import { safeFetch } from '@aiagg/shared';
 
 const QUEUE = 'callback';
 const DLQ = 'callback-dead-letter';
@@ -70,36 +71,28 @@ async function postWithTimeout(
   signature: string,
   taskId: string,
 ): Promise<{ status: number; text: string }> {
-  // AbortController for total timeout. Connection timeout is approximated by
-  // the same controller — Node's fetch does not split connect/total; for
-  // strict separation the user can deploy behind undici with custom
-  // `connect: { timeout }`. For MVP we use the total budget.
-  const controller = new AbortController();
-  const total = setTimeout(() => controller.abort(), TOTAL_TIMEOUT_MS);
+  // SSRF-safe POST: blocks private/loopback/cloud-metadata destinations and
+  // re-checks DNS on each redirect (defeats DNS rebinding).
   void CONNECT_TIMEOUT_MS;
-  try {
-    const res = await fetch(url, {
-      method: 'POST',
-      body,
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Aggregator-Signature': `sha256=${signature}`,
-        'X-Aggregator-Event': 'generation.completed',
-        'X-Aggregator-Task-Id': taskId,
-        'User-Agent': 'aiagg-webhook/1.0',
-      },
-      signal: controller.signal,
-    });
-    let text = '';
-    try {
-      text = await res.text();
-    } catch {
-      /* swallow body read errors */
-    }
-    return { status: res.status, text: text.slice(0, 4000) };
-  } finally {
-    clearTimeout(total);
-  }
+  const res = await safeFetch(url, {
+    method: 'POST',
+    body,
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Aggregator-Signature': `sha256=${signature}`,
+      'X-Aggregator-Event': 'generation.completed',
+      'X-Aggregator-Task-Id': taskId,
+      'User-Agent': 'aiagg-webhook/1.0',
+    },
+    timeoutMs: TOTAL_TIMEOUT_MS,
+    // Cap response body small — we only persist the first 4 KB anyway, and we
+    // don't want a malicious receiver to stuff our DB with arbitrary bytes.
+    maxBytes: 64 * 1024,
+  });
+  // safeFetch returns the body as bytes; decode and truncate to 4 KB to
+  // match the column / preserve the previous contract.
+  const text = Buffer.from(res.body).toString('utf8').slice(0, 4000);
+  return { status: res.status, text };
 }
 
 export function createCallbackWorker(opts: {
