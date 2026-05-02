@@ -22,7 +22,10 @@ interface LoginResponse {
 async function loginViaApi(email: string, password: string): Promise<InternalUser | null> {
   const res = await fetch(`${env.API_URL}/internal/auth/login`, {
     method: 'POST',
-    headers: { 'content-type': 'application/json' },
+    headers: {
+      'content-type': 'application/json',
+      'x-internal-service-secret': env.INTERNAL_SERVICE_SECRET,
+    },
     body: JSON.stringify({ email, password }),
     cache: 'no-store',
   });
