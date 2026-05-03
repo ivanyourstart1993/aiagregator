@@ -294,7 +294,7 @@
       "coupons": "Coupons",
       "pricing": "Pricing",
       "apiExplorer": "API Explorer",
-      "playground": "Playground",
+      "playground": "Generate",
       "charges": "Charges",
       "requests": "Requests",
       "exports": "Exports",
@@ -611,7 +611,7 @@
     }
   },
   "playground": {
-    "title": "Playground",
+    "title": "Generate",
     "subtitle": "Type a prompt and get a result right in the browser. Charged from your balance.",
     "whatToGenerate": "What to generate",
     "groupImageGen": "Text → image",
