@@ -48,7 +48,14 @@ async function loginViaApi(email: string, password: string): Promise<InternalUse
 
 export const authConfig: NextAuthConfig = {
   trustHost: true,
-  session: { strategy: 'jwt', maxAge: env.AUTH_JWT_ACCESS_TTL },
+  // 30-day rolling session by default. updateAge re-issues the cookie
+  // on activity (default: once per day) so an active user effectively
+  // never gets logged out, while idle sessions still expire.
+  session: {
+    strategy: 'jwt',
+    maxAge: env.AUTH_SESSION_TTL,
+    updateAge: env.AUTH_SESSION_UPDATE_AGE,
+  },
   pages: {
     signIn: '/login',
   },
@@ -103,7 +110,10 @@ export const authConfig: NextAuthConfig = {
         .setIssuer(env.AUTH_JWT_ISSUER)
         .setAudience(env.AUTH_JWT_AUDIENCE)
         .setIssuedAt()
-        .setExpirationTime(`${env.AUTH_JWT_ACCESS_TTL}s`)
+        // The cookie itself lives for AUTH_SESSION_TTL; the short
+        // AUTH_JWT_ACCESS_TTL stays reserved for the /internal bearer
+        // tokens minted in api-client.ts.
+        .setExpirationTime(`${env.AUTH_SESSION_TTL}s`)
         .sign(getJwtSecretBytes());
     },
     async decode({ token }) {
