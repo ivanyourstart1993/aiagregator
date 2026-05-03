@@ -128,11 +128,20 @@ interface ResultFile {
   mime_type?: string;
 }
 
+interface InputImage {
+  id: string;
+  previewUrl: string; // either blob: URL (uploaded file) or remote URL
+  remoteUrl: string | null; // null while uploading, set when MinIO returns
+  uploading: boolean;
+  error?: string;
+}
+
+const MAX_INPUT_IMAGES = 6;
+
 export function PlaygroundClient({ balance }: Props) {
   const t = useTranslations('playground');
   const [taskType, setTaskType] = useState<TaskType>('text_to_image_flash_1k');
   const [prompt, setPrompt] = useState('');
-  const [inputImageUrl, setInputImageUrl] = useState('');
   const [aspect, setAspect] = useState<'1:1' | '16:9' | '9:16' | '4:3' | '3:4'>('1:1');
 
   const [phase, setPhase] = useState<Phase>('idle');
@@ -141,16 +150,21 @@ export function PlaygroundClient({ balance }: Props) {
   const [files, setFiles] = useState<ResultFile[]>([]);
   const pollRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Local image-edit input state. The user can either upload a file
-  // (drag-drop / picker / clipboard paste) or paste a URL directly.
-  // Once a file uploads we keep its preview blob in localPreviewUrl
-  // and the resolved MinIO URL in inputImageUrl.
-  const [uploading, setUploading] = useState(false);
-  const [localPreviewUrl, setLocalPreviewUrl] = useState<string | null>(null);
+  // Up to MAX_INPUT_IMAGES source images for image_edit. Each can be a
+  // file upload (preview is a blob: URL, remoteUrl filled after upload)
+  // or a manually entered URL (preview === remoteUrl).
+  const [images, setImages] = useState<InputImage[]>([]);
+  const [urlDraft, setUrlDraft] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [dragOver, setDragOver] = useState(false);
 
-  async function handleFileSelected(file: File) {
+  const uploading = images.some((i) => i.uploading);
+  const hasImages = images.length > 0;
+  const readyImageUrls = images
+    .map((i) => i.remoteUrl)
+    .filter((u): u is string => typeof u === 'string' && u.length > 0);
+
+  async function uploadOne(file: File) {
     if (!file.type.startsWith('image/')) {
       toast.error(t('imageInvalidType'));
       return;
@@ -159,28 +173,71 @@ export function PlaygroundClient({ balance }: Props) {
       toast.error(t('imageTooLarge'));
       return;
     }
-    if (localPreviewUrl) URL.revokeObjectURL(localPreviewUrl);
+    const id = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
     const preview = URL.createObjectURL(file);
-    setLocalPreviewUrl(preview);
-    setUploading(true);
-    setInputImageUrl('');
+    setImages((prev) => [
+      ...prev,
+      { id, previewUrl: preview, remoteUrl: null, uploading: true },
+    ]);
     const fd = new FormData();
     fd.append('file', file);
     const res = await uploadImageAction(fd);
-    setUploading(false);
     if (!res.ok || !res.url) {
-      toast.error(res.error ?? t('imageUploadFailed'));
-      URL.revokeObjectURL(preview);
-      setLocalPreviewUrl(null);
+      const msg = res.error ?? t('imageUploadFailed');
+      toast.error(msg);
+      setImages((prev) => {
+        const m = prev.find((i) => i.id === id);
+        if (m) URL.revokeObjectURL(m.previewUrl);
+        return prev.filter((i) => i.id !== id);
+      });
       return;
     }
-    setInputImageUrl(res.url);
+    setImages((prev) =>
+      prev.map((i) =>
+        i.id === id ? { ...i, remoteUrl: res.url ?? null, uploading: false } : i,
+      ),
+    );
   }
 
-  function clearImage() {
-    if (localPreviewUrl) URL.revokeObjectURL(localPreviewUrl);
-    setLocalPreviewUrl(null);
-    setInputImageUrl('');
+  async function handleFiles(fileList: FileList | File[]) {
+    const arr = Array.from(fileList);
+    const remainingSlots = MAX_INPUT_IMAGES - images.length;
+    if (remainingSlots <= 0) {
+      toast.error(t('imageMaxReached', { max: MAX_INPUT_IMAGES }));
+      return;
+    }
+    const toUpload = arr.slice(0, remainingSlots);
+    if (arr.length > toUpload.length) {
+      toast.error(t('imageMaxReached', { max: MAX_INPUT_IMAGES }));
+    }
+    await Promise.all(toUpload.map((f) => uploadOne(f)));
+  }
+
+  function addUrl() {
+    const u = urlDraft.trim();
+    if (!u) return;
+    if (images.length >= MAX_INPUT_IMAGES) {
+      toast.error(t('imageMaxReached', { max: MAX_INPUT_IMAGES }));
+      return;
+    }
+    if (!/^https?:\/\//i.test(u)) {
+      toast.error(t('imageBadUrl'));
+      return;
+    }
+    const id = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+    setImages((prev) => [
+      ...prev,
+      { id, previewUrl: u, remoteUrl: u, uploading: false },
+    ]);
+    setUrlDraft('');
+  }
+
+  function removeImage(id: string) {
+    setImages((prev) => {
+      const m = prev.find((i) => i.id === id);
+      if (m && m.previewUrl.startsWith('blob:')) URL.revokeObjectURL(m.previewUrl);
+      return prev.filter((i) => i.id !== id);
+    });
   }
 
   const preset = PRESETS[taskType];
@@ -192,32 +249,36 @@ export function PlaygroundClient({ balance }: Props) {
   }, []);
 
   // Clipboard-paste support: when image_edit is the active task type,
-  // pasting an image anywhere on the page uploads it as the input.
+  // pasting an image anywhere on the page uploads it as an additional
+  // input. Multiple images in one paste event are all picked up.
   useEffect(() => {
     if (!preset.needsImage) return;
     function onPaste(e: ClipboardEvent) {
       const items = e.clipboardData?.items;
       if (!items) return;
+      const pasted: File[] = [];
       for (const item of Array.from(items)) {
         if (item.kind === 'file' && item.type.startsWith('image/')) {
           const file = item.getAsFile();
-          if (file) {
-            e.preventDefault();
-            void handleFileSelected(file);
-            return;
-          }
+          if (file) pasted.push(file);
         }
+      }
+      if (pasted.length > 0) {
+        e.preventDefault();
+        void handleFiles(pasted);
       }
     }
     window.addEventListener('paste', onPaste);
     return () => window.removeEventListener('paste', onPaste);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [preset.needsImage]);
+  }, [preset.needsImage, images.length]);
 
   // Free preview blob URLs when component unmounts.
   useEffect(() => {
     return () => {
-      if (localPreviewUrl) URL.revokeObjectURL(localPreviewUrl);
+      for (const i of images) {
+        if (i.previewUrl.startsWith('blob:')) URL.revokeObjectURL(i.previewUrl);
+      }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -231,7 +292,7 @@ export function PlaygroundClient({ balance }: Props) {
       toast.error(t('imageStillUploading'));
       return;
     }
-    if (preset.needsImage && !inputImageUrl.trim()) {
+    if (preset.needsImage && readyImageUrls.length === 0) {
       toast.error(t('imageRequired'));
       return;
     }
@@ -247,7 +308,7 @@ export function PlaygroundClient({ balance }: Props) {
     };
     if (preset.resolution) params.resolution = preset.resolution;
     if (preset.durationSeconds) params.duration_seconds = preset.durationSeconds;
-    if (preset.needsImage) params.input_images = [inputImageUrl.trim()];
+    if (preset.needsImage) params.input_images = readyImageUrls;
 
     const res = await submitGenerationAction({
       provider: preset.provider,
@@ -372,67 +433,79 @@ export function PlaygroundClient({ balance }: Props) {
 
         {preset.needsImage ? (
           <div className="space-y-3 rounded-lg border bg-card/40 p-5">
-            <Label>{t('imageInputLabel')}</Label>
+            <div className="flex items-center justify-between">
+              <Label>{t('imageInputLabel')}</Label>
+              <span className="text-xs text-muted-foreground">
+                {t('imageCount', { current: images.length, max: MAX_INPUT_IMAGES })}
+              </span>
+            </div>
 
-            {localPreviewUrl || inputImageUrl ? (
-              <div className="flex items-start gap-3 rounded-md border border-border/60 bg-background/40 p-3">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={localPreviewUrl ?? inputImageUrl}
-                  alt=""
-                  className="h-24 w-24 rounded-md object-cover"
-                />
-                <div className="flex min-w-0 flex-1 flex-col gap-1.5">
-                  <span className="truncate text-xs text-muted-foreground">
-                    {uploading ? t('imageUploading') : inputImageUrl || t('imagePreviewOnly')}
-                  </span>
-                  <Button
+            <div
+              onDragOver={(e) => {
+                e.preventDefault();
+                setDragOver(true);
+              }}
+              onDragLeave={() => setDragOver(false)}
+              onDrop={(e) => {
+                e.preventDefault();
+                setDragOver(false);
+                if (e.dataTransfer.files?.length) void handleFiles(e.dataTransfer.files);
+              }}
+              className={`grid grid-cols-3 gap-2 rounded-md border-2 border-dashed p-3 transition-colors sm:grid-cols-4 ${
+                dragOver
+                  ? 'border-info bg-info/5'
+                  : hasImages
+                    ? 'border-border/60'
+                    : 'border-border/60'
+              }`}
+            >
+              {images.map((img) => (
+                <div
+                  key={img.id}
+                  className="group relative aspect-square overflow-hidden rounded-md border border-border/60 bg-background/40"
+                >
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={img.previewUrl} alt="" className="h-full w-full object-cover" />
+                  {img.uploading ? (
+                    <div className="absolute inset-0 flex items-center justify-center bg-background/60">
+                      <Loader2 className="h-5 w-5 animate-spin text-info" />
+                    </div>
+                  ) : null}
+                  <button
                     type="button"
-                    size="sm"
-                    variant="outline"
-                    onClick={clearImage}
-                    className="h-7 self-start gap-1 px-2 text-xs"
+                    onClick={() => removeImage(img.id)}
+                    className="absolute right-1 top-1 rounded-md bg-background/80 p-1 text-foreground opacity-0 transition-opacity hover:bg-destructive hover:text-destructive-foreground group-hover:opacity-100"
+                    aria-label={t('imageRemove')}
                   >
-                    <X className="h-3 w-3" />
-                    {t('imageRemove')}
-                  </Button>
+                    <X className="h-3.5 w-3.5" />
+                  </button>
                 </div>
-              </div>
-            ) : (
-              <button
-                type="button"
-                onClick={() => fileInputRef.current?.click()}
-                onDragOver={(e) => {
-                  e.preventDefault();
-                  setDragOver(true);
-                }}
-                onDragLeave={() => setDragOver(false)}
-                onDrop={(e) => {
-                  e.preventDefault();
-                  setDragOver(false);
-                  const f = e.dataTransfer.files?.[0];
-                  if (f) void handleFileSelected(f);
-                }}
-                className={`flex w-full flex-col items-center gap-2 rounded-md border-2 border-dashed p-6 text-sm transition-colors ${
-                  dragOver
-                    ? 'border-info bg-info/5 text-info'
-                    : 'border-border/60 text-muted-foreground hover:border-info/40 hover:text-foreground'
-                }`}
-              >
-                <Upload className="h-5 w-5" />
-                <span className="font-medium">{t('imageDropZone')}</span>
-                <span className="text-xs">{t('imageDropHint')}</span>
-              </button>
-            )}
+              ))}
+
+              {images.length < MAX_INPUT_IMAGES ? (
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="flex aspect-square flex-col items-center justify-center gap-1 rounded-md border border-dashed border-border/60 bg-background/40 text-xs text-muted-foreground transition-colors hover:border-info/50 hover:text-info"
+                >
+                  <Upload className="h-4 w-4" />
+                  <span>{t('imageAdd')}</span>
+                </button>
+              ) : null}
+            </div>
+
+            <p className="text-xs text-muted-foreground">
+              {hasImages ? t('imageDropHintMulti') : t('imageDropZoneMulti')}
+            </p>
 
             <input
               ref={fileInputRef}
               type="file"
               accept="image/jpeg,image/png,image/webp,image/gif"
+              multiple
               className="hidden"
               onChange={(e) => {
-                const f = e.target.files?.[0];
-                if (f) void handleFileSelected(f);
+                if (e.target.files?.length) void handleFiles(e.target.files);
                 e.target.value = '';
               }}
             />
@@ -441,15 +514,23 @@ export function PlaygroundClient({ balance }: Props) {
               <summary className="cursor-pointer select-none hover:text-foreground">
                 {t('imageOrUrl')}
               </summary>
-              <Input
-                id="image-url"
-                type="url"
-                placeholder="https://..."
-                value={localPreviewUrl ? '' : inputImageUrl}
-                disabled={!!localPreviewUrl || uploading}
-                onChange={(e) => setInputImageUrl(e.target.value)}
-                className="mt-2"
-              />
+              <div className="mt-2 flex gap-2">
+                <Input
+                  type="url"
+                  placeholder="https://..."
+                  value={urlDraft}
+                  onChange={(e) => setUrlDraft(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      addUrl();
+                    }
+                  }}
+                />
+                <Button type="button" size="sm" variant="outline" onClick={addUrl}>
+                  {t('imageAdd')}
+                </Button>
+              </div>
             </details>
           </div>
         ) : null}
