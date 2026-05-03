@@ -48,16 +48,20 @@
     --destructive-foreground: 30 25% 96%;
     --border: 28 12% 19%;
     --input: 28 12% 19%;
-    --ring: 16 78% 60%;
+    --ring: 10 58% 50%;
 
-    --success: 142 60% 50%;
+    --success: 142 50% 45%;
     --success-foreground: 30 25% 96%;
-    --warning: 35 90% 55%;
+    /* warning shifted from 35° (orange-yellow) toward 25° (amber) and
+       desaturated so it stops reading as a highlighter. */
+    --warning: 26 65% 50%;
     --warning-foreground: 28 14% 8%;
-    /* `info` was Vercel-blue (217 91% 60%) — too generic, every AI startup
-       uses it. Replaced with terracotta/coral so the brand sits closer to
-       editorial / consumer than dev-tool. */
-    --info: 16 78% 60%;
+    /* `info` was Vercel-blue (217 91% 60%) — too generic. First pass at
+       terracotta (16 78% 60%) read as bright orange-yellow on screen.
+       Pulled into deeper rust / burnt-sienna territory: hue 10°
+       (red-leaning, no yellow tinge), saturation 58% (less neon),
+       lightness 50% (richer, magazine-print rather than highlighter). */
+    --info: 10 58% 50%;
     --info-foreground: 30 25% 96%;
   }
 }

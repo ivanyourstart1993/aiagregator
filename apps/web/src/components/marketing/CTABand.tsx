@@ -13,7 +13,7 @@ export function CTABand() {
           className="pointer-events-none absolute -right-20 -top-20 h-80 w-80 rounded-full"
           style={{
             background:
-              'radial-gradient(circle, hsl(16 78% 60% / 0.30), transparent 70%)',
+              'radial-gradient(circle, hsl(10 58% 50% / 0.30), transparent 70%)',
           }}
         />
         <div className="relative flex flex-col items-start gap-6 md:flex-row md:items-center md:justify-between">

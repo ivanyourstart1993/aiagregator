@@ -16,7 +16,7 @@ export function Hero() {
         className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-[520px]"
         style={{
           background:
-            'radial-gradient(ellipse 70% 45% at 30% 10%, hsl(16 78% 60% / 0.15), transparent 70%)',
+            'radial-gradient(ellipse 70% 45% at 30% 10%, hsl(10 58% 50% / 0.18), transparent 70%)',
         }}
       />
 
