@@ -37,13 +37,18 @@ type TaskType =
 interface PresetSpec {
   provider: string;
   model: string;
+  // Default method when no input image is attached. For video presets,
+  // an attached image switches the call to imageMethod automatically.
   method: string;
+  imageMethod?: string; // image_to_video, etc.
   resolution?: string;
-  durationSeconds?: number;
+  durationOptions?: number[]; // shows duration buttons; first is default
   needsImage?: boolean;
   needsVideo?: true;
   // Display price (matches default tariff). We only show an estimate here —
   // the real cost is decided server-side at admit, this is just for UX.
+  // For video, this is the per-8-second base; the UI scales linearly by
+  // selected duration / 8.
   approxUsd: number;
 }
 
@@ -89,8 +94,9 @@ const PRESETS: Record<TaskType, PresetSpec> = {
     provider: 'google_veo',
     model: 'veo-3.0-fast-generate-001',
     method: 'text_to_video',
+    imageMethod: 'image_to_video',
     resolution: '1080p',
-    durationSeconds: 8,
+    durationOptions: [4, 6, 8],
     needsVideo: true,
     approxUsd: 1.08,
   },
@@ -98,8 +104,9 @@ const PRESETS: Record<TaskType, PresetSpec> = {
     provider: 'google_veo',
     model: 'veo-3.0-generate-001',
     method: 'text_to_video',
+    imageMethod: 'image_to_video',
     resolution: '1080p',
-    durationSeconds: 8,
+    durationOptions: [4, 6, 8],
     needsVideo: true,
     approxUsd: 2.7,
   },
@@ -143,6 +150,7 @@ export function PlaygroundClient({ balance }: Props) {
   const [taskType, setTaskType] = useState<TaskType>('text_to_image_flash_1k');
   const [prompt, setPrompt] = useState('');
   const [aspect, setAspect] = useState<'1:1' | '16:9' | '9:16' | '4:3' | '3:4'>('1:1');
+  const [duration, setDuration] = useState<number>(8);
 
   const [phase, setPhase] = useState<Phase>('idle');
   const [taskId, setTaskId] = useState<string | null>(null);
@@ -201,14 +209,14 @@ export function PlaygroundClient({ balance }: Props) {
 
   async function handleFiles(fileList: FileList | File[]) {
     const arr = Array.from(fileList);
-    const remainingSlots = MAX_INPUT_IMAGES - images.length;
+    const remainingSlots = imageCap - images.length;
     if (remainingSlots <= 0) {
-      toast.error(t('imageMaxReached', { max: MAX_INPUT_IMAGES }));
+      toast.error(t('imageMaxReached', { max: imageCap }));
       return;
     }
     const toUpload = arr.slice(0, remainingSlots);
     if (arr.length > toUpload.length) {
-      toast.error(t('imageMaxReached', { max: MAX_INPUT_IMAGES }));
+      toast.error(t('imageMaxReached', { max: imageCap }));
     }
     await Promise.all(toUpload.map((f) => uploadOne(f)));
   }
@@ -216,8 +224,8 @@ export function PlaygroundClient({ balance }: Props) {
   function addUrl() {
     const u = urlDraft.trim();
     if (!u) return;
-    if (images.length >= MAX_INPUT_IMAGES) {
-      toast.error(t('imageMaxReached', { max: MAX_INPUT_IMAGES }));
+    if (images.length >= imageCap) {
+      toast.error(t('imageMaxReached', { max: imageCap }));
       return;
     }
     if (!/^https?:\/\//i.test(u)) {
@@ -248,11 +256,28 @@ export function PlaygroundClient({ balance }: Props) {
     };
   }, []);
 
-  // Clipboard-paste support: when image_edit is the active task type,
-  // pasting an image anywhere on the page uploads it as an additional
-  // input. Multiple images in one paste event are all picked up.
+  // The upload zone is shown when an image is required (image_edit) or
+  // optional (video → image_to_video).
+  const acceptsImage = preset.needsImage || (preset.needsVideo && !!preset.imageMethod);
+  // Veo's image_to_video takes a single first-frame image; Banana's
+  // image_edit accepts up to MAX_INPUT_IMAGES. Cap at runtime.
+  const imageCap = preset.needsImage ? MAX_INPUT_IMAGES : 1;
+
+  // Reset duration when switching presets so we never carry "10s" into
+  // a model that doesn't support it. Preset.durationOptions[0] is the
+  // canonical default.
   useEffect(() => {
-    if (!preset.needsImage) return;
+    const opts = preset.durationOptions;
+    if (opts && opts.length > 0 && !opts.includes(duration)) {
+      setDuration(opts[opts.length - 1]!); // prefer 8s default
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [taskType]);
+
+  // Clipboard-paste support: while an image-accepting preset is active,
+  // pasting images anywhere on the page uploads them as inputs.
+  useEffect(() => {
+    if (!acceptsImage) return;
     function onPaste(e: ClipboardEvent) {
       const items = e.clipboardData?.items;
       if (!items) return;
@@ -271,7 +296,7 @@ export function PlaygroundClient({ balance }: Props) {
     window.addEventListener('paste', onPaste);
     return () => window.removeEventListener('paste', onPaste);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [preset.needsImage, images.length]);
+  }, [acceptsImage, images.length]);
 
   // Free preview blob URLs when component unmounts.
   useEffect(() => {
@@ -288,7 +313,7 @@ export function PlaygroundClient({ balance }: Props) {
       toast.error(t('promptRequired'));
       return;
     }
-    if (preset.needsImage && uploading) {
+    if (uploading) {
       toast.error(t('imageStillUploading'));
       return;
     }
@@ -304,16 +329,29 @@ export function PlaygroundClient({ balance }: Props) {
 
     const params: Record<string, unknown> = {
       prompt: prompt.trim(),
-      aspect_ratio: aspect,
     };
+    if (!preset.needsVideo) params.aspect_ratio = aspect;
     if (preset.resolution) params.resolution = preset.resolution;
-    if (preset.durationSeconds) params.duration_seconds = preset.durationSeconds;
-    if (preset.needsImage) params.input_images = readyImageUrls;
+
+    // Method routing:
+    //   image_edit: bound by preset (needsImage = true)
+    //   video: text_to_video by default; switch to image_to_video when
+    //     the user attached an image (preset.imageMethod must be set).
+    let methodCode = preset.method;
+    if (preset.needsImage) {
+      params.input_images = readyImageUrls;
+    } else if (preset.needsVideo) {
+      params.duration_seconds = duration;
+      if (readyImageUrls.length > 0 && preset.imageMethod) {
+        methodCode = preset.imageMethod;
+        params.input_image_url = readyImageUrls[0];
+      }
+    }
 
     const res = await submitGenerationAction({
       provider: preset.provider,
       model: preset.model,
-      method: preset.method,
+      method: methodCode,
       params,
     });
     if (!res.ok || !res.taskId) {
@@ -431,12 +469,16 @@ export function PlaygroundClient({ balance }: Props) {
           <p className="text-xs text-muted-foreground">{t('promptHint')}</p>
         </div>
 
-        {preset.needsImage ? (
+        {acceptsImage ? (
           <div className="space-y-3 rounded-lg border bg-card/40 p-5">
             <div className="flex items-center justify-between">
-              <Label>{t('imageInputLabel')}</Label>
+              <Label>
+                {preset.needsImage
+                  ? t('imageInputLabel')
+                  : t('imageInputLabelOptional')}
+              </Label>
               <span className="text-xs text-muted-foreground">
-                {t('imageCount', { current: images.length, max: MAX_INPUT_IMAGES })}
+                {t('imageCount', { current: images.length, max: imageCap })}
               </span>
             </div>
 
@@ -482,7 +524,7 @@ export function PlaygroundClient({ balance }: Props) {
                 </div>
               ))}
 
-              {images.length < MAX_INPUT_IMAGES ? (
+              {images.length < imageCap ? (
                 <button
                   type="button"
                   onClick={() => fileInputRef.current?.click()}
@@ -502,7 +544,7 @@ export function PlaygroundClient({ balance }: Props) {
               ref={fileInputRef}
               type="file"
               accept="image/jpeg,image/png,image/webp,image/gif"
-              multiple
+              multiple={imageCap > 1}
               className="hidden"
               onChange={(e) => {
                 if (e.target.files?.length) void handleFiles(e.target.files);
@@ -559,11 +601,39 @@ export function PlaygroundClient({ balance }: Props) {
           </div>
         ) : null}
 
+        {preset.needsVideo && preset.durationOptions ? (
+          <div className="space-y-2 rounded-lg border bg-card/40 p-5">
+            <Label className="text-xs uppercase tracking-wider text-muted-foreground">
+              {t('duration')}
+            </Label>
+            <div className="flex flex-wrap gap-1.5">
+              {preset.durationOptions.map((d) => (
+                <button
+                  key={d}
+                  type="button"
+                  onClick={() => setDuration(d)}
+                  className={`rounded-md border px-2.5 py-1 text-xs transition-colors ${
+                    duration === d
+                      ? 'border-info bg-info/15 text-info'
+                      : 'border-border/60 bg-background hover:border-border'
+                  }`}
+                >
+                  {t('durationSec', { seconds: d })}
+                </button>
+              ))}
+            </div>
+          </div>
+        ) : null}
+
         <div className="flex items-center justify-between rounded-lg border bg-card/40 p-5">
           <div className="text-sm">
             <div className="text-muted-foreground">{t('costEstimate')}</div>
             <div className="font-mono text-base font-semibold text-foreground">
-              ≈ ${preset.approxUsd.toFixed(4)}
+              ≈ $
+              {(preset.needsVideo
+                ? preset.approxUsd * (duration / 8)
+                : preset.approxUsd
+              ).toFixed(4)}
             </div>
           </div>
           {balance ? (
