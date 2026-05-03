@@ -36,6 +36,12 @@ async function bootstrap(): Promise<void> {
   // payloads cheaply.
   app.use('/webhooks/cryptomus', express.raw({ type: '*/*', limit: '256kb' }));
   app.use('/webhooks/oxapay', express.raw({ type: '*/*', limit: '256kb' }));
+  // Playground image uploads come in as raw image/* bodies (no multipart,
+  // keeps us off multer). 15MB ceiling matches the controller-side check.
+  app.use(
+    '/internal/playground/uploads',
+    express.raw({ type: 'image/*', limit: '15mb' }),
+  );
 
   app.enableCors({
     origin: process.env.WEB_URL ?? 'http://localhost:3000',

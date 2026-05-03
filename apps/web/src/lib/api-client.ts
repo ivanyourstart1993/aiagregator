@@ -93,7 +93,18 @@ export async function apiFetch<T = unknown>(path: string, opts: FetchOptions = {
     cache: rest.cache ?? 'no-store',
   };
   if (body !== undefined) {
-    init.body = typeof body === 'string' ? body : JSON.stringify(body);
+    if (typeof body === 'string') {
+      init.body = body;
+    } else if (
+      body instanceof ArrayBuffer ||
+      ArrayBuffer.isView(body as ArrayBufferView) ||
+      (typeof Buffer !== 'undefined' && body instanceof Buffer)
+    ) {
+      // Raw bytes — pass through unchanged so callers can upload binary.
+      init.body = body as BodyInit;
+    } else {
+      init.body = JSON.stringify(body);
+    }
   }
 
   const res = await fetch(url, init);

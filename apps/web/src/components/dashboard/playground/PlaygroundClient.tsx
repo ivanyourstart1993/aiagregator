@@ -1,6 +1,6 @@
 'use client';
 
-import { Download, Loader2, Sparkles } from 'lucide-react';
+import { Download, Loader2, Sparkles, Upload, X } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
@@ -11,6 +11,7 @@ import { Textarea } from '@/components/ui/textarea';
 import {
   submitGenerationAction,
   pollTaskAction,
+  uploadImageAction,
 } from '@/app/[locale]/(dashboard)/playground/actions';
 import type { BalanceView } from '@/lib/server-api';
 import { formatNanoUSDWithSign } from '@/lib/money';
@@ -140,6 +141,48 @@ export function PlaygroundClient({ balance }: Props) {
   const [files, setFiles] = useState<ResultFile[]>([]);
   const pollRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // Local image-edit input state. The user can either upload a file
+  // (drag-drop / picker / clipboard paste) or paste a URL directly.
+  // Once a file uploads we keep its preview blob in localPreviewUrl
+  // and the resolved MinIO URL in inputImageUrl.
+  const [uploading, setUploading] = useState(false);
+  const [localPreviewUrl, setLocalPreviewUrl] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [dragOver, setDragOver] = useState(false);
+
+  async function handleFileSelected(file: File) {
+    if (!file.type.startsWith('image/')) {
+      toast.error(t('imageInvalidType'));
+      return;
+    }
+    if (file.size > 15 * 1024 * 1024) {
+      toast.error(t('imageTooLarge'));
+      return;
+    }
+    if (localPreviewUrl) URL.revokeObjectURL(localPreviewUrl);
+    const preview = URL.createObjectURL(file);
+    setLocalPreviewUrl(preview);
+    setUploading(true);
+    setInputImageUrl('');
+    const fd = new FormData();
+    fd.append('file', file);
+    const res = await uploadImageAction(fd);
+    setUploading(false);
+    if (!res.ok || !res.url) {
+      toast.error(res.error ?? t('imageUploadFailed'));
+      URL.revokeObjectURL(preview);
+      setLocalPreviewUrl(null);
+      return;
+    }
+    setInputImageUrl(res.url);
+  }
+
+  function clearImage() {
+    if (localPreviewUrl) URL.revokeObjectURL(localPreviewUrl);
+    setLocalPreviewUrl(null);
+    setInputImageUrl('');
+  }
+
   const preset = PRESETS[taskType];
 
   useEffect(() => {
@@ -148,13 +191,48 @@ export function PlaygroundClient({ balance }: Props) {
     };
   }, []);
 
+  // Clipboard-paste support: when image_edit is the active task type,
+  // pasting an image anywhere on the page uploads it as the input.
+  useEffect(() => {
+    if (!preset.needsImage) return;
+    function onPaste(e: ClipboardEvent) {
+      const items = e.clipboardData?.items;
+      if (!items) return;
+      for (const item of Array.from(items)) {
+        if (item.kind === 'file' && item.type.startsWith('image/')) {
+          const file = item.getAsFile();
+          if (file) {
+            e.preventDefault();
+            void handleFileSelected(file);
+            return;
+          }
+        }
+      }
+    }
+    window.addEventListener('paste', onPaste);
+    return () => window.removeEventListener('paste', onPaste);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [preset.needsImage]);
+
+  // Free preview blob URLs when component unmounts.
+  useEffect(() => {
+    return () => {
+      if (localPreviewUrl) URL.revokeObjectURL(localPreviewUrl);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   async function handleSubmit() {
     if (!prompt.trim()) {
       toast.error(t('promptRequired'));
       return;
     }
+    if (preset.needsImage && uploading) {
+      toast.error(t('imageStillUploading'));
+      return;
+    }
     if (preset.needsImage && !inputImageUrl.trim()) {
-      toast.error(t('imageUrlRequired'));
+      toast.error(t('imageRequired'));
       return;
     }
 
@@ -293,16 +371,86 @@ export function PlaygroundClient({ balance }: Props) {
         </div>
 
         {preset.needsImage ? (
-          <div className="space-y-2 rounded-lg border bg-card/40 p-5">
-            <Label htmlFor="image-url">{t('imageUrlLabel')}</Label>
-            <Input
-              id="image-url"
-              type="url"
-              placeholder="https://..."
-              value={inputImageUrl}
-              onChange={(e) => setInputImageUrl(e.target.value)}
+          <div className="space-y-3 rounded-lg border bg-card/40 p-5">
+            <Label>{t('imageInputLabel')}</Label>
+
+            {localPreviewUrl || inputImageUrl ? (
+              <div className="flex items-start gap-3 rounded-md border border-border/60 bg-background/40 p-3">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={localPreviewUrl ?? inputImageUrl}
+                  alt=""
+                  className="h-24 w-24 rounded-md object-cover"
+                />
+                <div className="flex min-w-0 flex-1 flex-col gap-1.5">
+                  <span className="truncate text-xs text-muted-foreground">
+                    {uploading ? t('imageUploading') : inputImageUrl || t('imagePreviewOnly')}
+                  </span>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={clearImage}
+                    className="h-7 self-start gap-1 px-2 text-xs"
+                  >
+                    <X className="h-3 w-3" />
+                    {t('imageRemove')}
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  setDragOver(true);
+                }}
+                onDragLeave={() => setDragOver(false)}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  setDragOver(false);
+                  const f = e.dataTransfer.files?.[0];
+                  if (f) void handleFileSelected(f);
+                }}
+                className={`flex w-full flex-col items-center gap-2 rounded-md border-2 border-dashed p-6 text-sm transition-colors ${
+                  dragOver
+                    ? 'border-info bg-info/5 text-info'
+                    : 'border-border/60 text-muted-foreground hover:border-info/40 hover:text-foreground'
+                }`}
+              >
+                <Upload className="h-5 w-5" />
+                <span className="font-medium">{t('imageDropZone')}</span>
+                <span className="text-xs">{t('imageDropHint')}</span>
+              </button>
+            )}
+
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/jpeg,image/png,image/webp,image/gif"
+              className="hidden"
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f) void handleFileSelected(f);
+                e.target.value = '';
+              }}
             />
-            <p className="text-xs text-muted-foreground">{t('imageUrlHint')}</p>
+
+            <details className="text-xs text-muted-foreground">
+              <summary className="cursor-pointer select-none hover:text-foreground">
+                {t('imageOrUrl')}
+              </summary>
+              <Input
+                id="image-url"
+                type="url"
+                placeholder="https://..."
+                value={localPreviewUrl ? '' : inputImageUrl}
+                disabled={!!localPreviewUrl || uploading}
+                onChange={(e) => setInputImageUrl(e.target.value)}
+                className="mt-2"
+              />
+            </details>
           </div>
         ) : null}
 
@@ -345,7 +493,7 @@ export function PlaygroundClient({ balance }: Props) {
               </div>
             </div>
           ) : null}
-          <Button onClick={handleSubmit} disabled={isBusy} size="lg" className="gap-2">
+          <Button onClick={handleSubmit} disabled={isBusy || uploading} size="lg" className="gap-2">
             {isBusy ? (
               <>
                 <Loader2 className="h-4 w-4 animate-spin" />

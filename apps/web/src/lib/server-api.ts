@@ -686,6 +686,16 @@ export const serverApi = {
       reservation?: { amount: string; currency: string };
     }>('/internal/playground/generations', body),
 
+  // Upload an image to be referenced by a subsequent playground
+  // generation (image_edit). The API stores the bytes in MinIO and
+  // returns a public URL the worker can fetch.
+  playgroundUploadImage: (body: Buffer | Uint8Array, contentType: string) =>
+    apiPost<{ url: string }>(
+      '/internal/playground/uploads',
+      body,
+      { headers: { 'content-type': contentType } },
+    ),
+
   // ---- Stage 7+11: Provider accounts ----
   adminListProviderAccounts: (filters?: ProviderAccountFilters) =>
     apiGet<ProviderAccountsPage>(`/internal/admin/providers/accounts${qs({ ...filters })}`),
