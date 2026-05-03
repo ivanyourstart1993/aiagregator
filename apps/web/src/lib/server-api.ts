@@ -671,6 +671,21 @@ export const serverApi = {
     apiGet<TasksPage>(`/internal/tasks${qs({ ...filters })}`),
   getTask: (id: string) => apiGet<TaskView>(`/internal/tasks/${id}`),
 
+  // Playground submission — same admit logic as /v1/generations but
+  // authenticated via session cookie. Called from server actions in
+  // apps/web/src/app/[locale]/(dashboard)/playground/actions.ts so the
+  // dashboard can run a generation without requiring an API key first.
+  playgroundGenerate: (body: {
+    provider: string;
+    model: string;
+    method: string;
+    params: Record<string, unknown>;
+  }) =>
+    apiPost<{
+      task: { id: string; status: string };
+      reservation?: { amount: string; currency: string };
+    }>('/internal/playground/generations', body),
+
   // ---- Stage 7+11: Provider accounts ----
   adminListProviderAccounts: (filters?: ProviderAccountFilters) =>
     apiGet<ProviderAccountsPage>(`/internal/admin/providers/accounts${qs({ ...filters })}`),

@@ -9,6 +9,7 @@ import {
   LayoutDashboard,
   ListChecks,
   ScrollText,
+  Sparkles,
   Tags,
   TerminalSquare,
   Ticket,
@@ -28,6 +29,7 @@ type NavLabel =
   | 'coupons'
   | 'pricing'
   | 'apiExplorer'
+  | 'playground'
   | 'charges'
   | 'requests'
   | 'exports'
@@ -53,6 +55,7 @@ const SECTIONS: NavSection[] = [
     labelKey: 'workspace',
     items: [
       { href: '/dashboard', icon: LayoutDashboard, labelKey: 'dashboard' },
+      { href: '/playground', icon: Sparkles, labelKey: 'playground' },
       { href: '/api-keys', icon: KeyRound, labelKey: 'apiKeys' },
       { href: '/api-explorer', icon: TerminalSquare, labelKey: 'apiExplorer' },
       { href: '/docs/getting-started', icon: BookOpen, labelKey: 'docs' },

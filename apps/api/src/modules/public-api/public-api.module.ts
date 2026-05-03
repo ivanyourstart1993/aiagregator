@@ -13,6 +13,7 @@ import { BalanceController } from './v1/balance.controller';
 import { FilesController } from './v1/files.controller';
 import { InternalApiRequestsController } from './internal/api-requests.controller';
 import { InternalTasksController } from './internal/internal-tasks.controller';
+import { PlaygroundController } from './internal/playground.controller';
 import { EstimateService } from './services/estimate.service';
 import { GenerationsService } from './services/generations.service';
 import { TasksService } from './services/tasks.service';
@@ -34,6 +35,7 @@ import { TaskSweeperCron } from './crons/task-sweeper.cron';
     FilesController,
     InternalApiRequestsController,
     InternalTasksController,
+    PlaygroundController,
   ],
   providers: [
     EstimateService,
