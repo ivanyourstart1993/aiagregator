@@ -68,7 +68,7 @@ const config: Config = {
       fontFamily: {
         // Editorial serif for headlines. Loaded by [locale]/layout.tsx as
         // a CSS var so we don't FOUT on every component.
-        serif: ['var(--font-serif)', 'Fraunces', 'Georgia', 'serif'],
+        serif: ['var(--font-serif)', 'Lora', 'Georgia', 'serif'],
       },
       keyframes: {
         'accordion-down': {

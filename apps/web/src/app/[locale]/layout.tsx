@@ -2,15 +2,16 @@ import type { ReactNode } from 'react';
 import { notFound } from 'next/navigation';
 import { NextIntlClientProvider } from 'next-intl';
 import { getMessages } from 'next-intl/server';
-import { Fraunces } from 'next/font/google';
+import { Lora } from 'next/font/google';
 import { Toaster } from '@/components/ui/sonner';
 import { routing } from '@/i18n/routing';
 
-// Editorial serif headline. Picked over Tiempos/Recoleta because it's
-// free, has expressive optical sizes, and carries a "magazine" feel that
-// pulls us out of the generic AI-dev-tool aesthetic shared by Vercel,
-// Linear, and runblob.
-const fraunces = Fraunces({
+// Editorial serif headline. Originally tried Fraunces (more "magazine"
+// feel) but it ships only Latin + Vietnamese on Google Fonts — build
+// fails on `subsets: ['cyrillic']`. Lora has a similar warm-editorial
+// register and full Latin + Cyrillic coverage, so localized RU
+// headlines render correctly without falling back to a system serif.
+const serif = Lora({
   subsets: ['latin', 'cyrillic'],
   weight: ['400', '500', '600', '700'],
   variable: '--font-serif',
@@ -42,7 +43,7 @@ export default async function LocaleLayout({ children, params: { locale } }: Loc
   return (
     <html
       lang={locale}
-      className={`dark ${fraunces.variable}`}
+      className={`dark ${serif.variable}`}
       style={{ colorScheme: 'dark' }}
     >
       <body className="min-h-screen bg-background text-foreground antialiased">
