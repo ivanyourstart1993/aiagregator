@@ -12,6 +12,25 @@ async function safeBalance() {
 }
 
 export default async function PlaygroundPage() {
+  try {
+    return await renderPlayground();
+  } catch (err) {
+    // TEMP DIAGNOSTIC — render the actual error so we can see what's
+    // crashing playground in prod. Mirror the pattern used on
+    // /dashboard/page.tsx. Remove once debugged.
+    const e = err instanceof Error ? err : new Error(String(err));
+    return (
+      <div className="space-y-4 p-6">
+        <h1 className="text-xl font-semibold text-destructive">Playground render error</h1>
+        <pre className="overflow-auto rounded-md border border-destructive/30 bg-destructive/5 p-4 text-xs">
+{`${e.name}: ${e.message}\n\n${e.stack ?? '(no stack)'}`}
+        </pre>
+      </div>
+    );
+  }
+}
+
+async function renderPlayground() {
   const t = await getTranslations('playground');
   const balance = await safeBalance();
 
