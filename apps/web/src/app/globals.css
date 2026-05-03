@@ -27,32 +27,38 @@
   }
 
   .dark {
-    --background: 224 47% 5%;
-    --foreground: 210 40% 98%;
-    --card: 224 30% 8%;
-    --card-foreground: 210 40% 98%;
-    --popover: 224 30% 8%;
-    --popover-foreground: 210 40% 98%;
-    --primary: 210 40% 98%;
-    --primary-foreground: 222.2 47.4% 11.2%;
-    --secondary: 217 28% 14%;
-    --secondary-foreground: 210 40% 98%;
-    --muted: 217 28% 12%;
-    --muted-foreground: 215 18% 65%;
-    --accent: 217 28% 16%;
-    --accent-foreground: 210 40% 98%;
-    --destructive: 0 70% 45%;
-    --destructive-foreground: 210 40% 98%;
-    --border: 217 25% 18%;
-    --input: 217 25% 18%;
-    --ring: 212.7 26.8% 83.9%;
+    /* Warm-dark editorial palette. Neutral hue shifted from cool-blue
+       (217°) to warm-charcoal (28°/orange-grey) so accents feel like
+       terracotta-on-paper instead of "another AI dev tool". */
+    --background: 28 14% 6%;
+    --foreground: 30 25% 96%;
+    --card: 28 14% 9%;
+    --card-foreground: 30 25% 96%;
+    --popover: 28 14% 9%;
+    --popover-foreground: 30 25% 96%;
+    --primary: 30 25% 96%;
+    --primary-foreground: 28 14% 8%;
+    --secondary: 28 12% 15%;
+    --secondary-foreground: 30 25% 96%;
+    --muted: 28 12% 13%;
+    --muted-foreground: 28 12% 64%;
+    --accent: 28 12% 18%;
+    --accent-foreground: 30 25% 96%;
+    --destructive: 0 70% 50%;
+    --destructive-foreground: 30 25% 96%;
+    --border: 28 12% 19%;
+    --input: 28 12% 19%;
+    --ring: 16 78% 60%;
 
-    --success: 142 71% 45%;
-    --success-foreground: 210 40% 98%;
-    --warning: 38 92% 50%;
-    --warning-foreground: 222.2 47.4% 11.2%;
-    --info: 217 91% 60%;
-    --info-foreground: 210 40% 98%;
+    --success: 142 60% 50%;
+    --success-foreground: 30 25% 96%;
+    --warning: 35 90% 55%;
+    --warning-foreground: 28 14% 8%;
+    /* `info` was Vercel-blue (217 91% 60%) — too generic, every AI startup
+       uses it. Replaced with terracotta/coral so the brand sits closer to
+       editorial / consumer than dev-tool. */
+    --info: 16 78% 60%;
+    --info-foreground: 30 25% 96%;
   }
 }
 

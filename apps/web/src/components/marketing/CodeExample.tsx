@@ -55,7 +55,7 @@ export function CodeExample() {
       <div className="grid gap-10 md:grid-cols-12 md:items-center">
         <div className="md:col-span-5">
           <p className="text-xs font-medium uppercase tracking-wider text-info">{t('eyebrow')}</p>
-          <h2 className="mt-3 text-3xl font-semibold tracking-tight sm:text-4xl">{t('title')}</h2>
+          <h2 className="mt-3 font-serif text-4xl font-medium tracking-tight sm:text-5xl">{t('title')}</h2>
           <p className="mt-3 text-sm leading-relaxed text-muted-foreground sm:text-base">
             {t('subtitle')}
           </p>

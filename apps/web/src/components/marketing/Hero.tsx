@@ -8,25 +8,15 @@ export function Hero() {
   const t = useTranslations('marketing');
   return (
     <section className="relative overflow-hidden">
-      {/* Subtle radial glow */}
+      {/* Soft warm wash, replaces the cool-blue radial that everyone else
+          uses. Sits behind the headline, not behind the whole hero — so
+          the page bottom stays calm. */}
       <div
         aria-hidden
-        className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-[640px]"
+        className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-[520px]"
         style={{
           background:
-            'radial-gradient(ellipse 80% 50% at 50% 0%, hsl(217 91% 60% / 0.18), transparent 70%)',
-        }}
-      />
-      {/* Subtle grid */}
-      <div
-        aria-hidden
-        className="pointer-events-none absolute inset-0 -z-10 opacity-[0.07]"
-        style={{
-          backgroundImage:
-            'linear-gradient(hsl(var(--border)) 1px, transparent 1px), linear-gradient(90deg, hsl(var(--border)) 1px, transparent 1px)',
-          backgroundSize: '64px 64px',
-          maskImage:
-            'radial-gradient(ellipse 60% 50% at 50% 0%, black 40%, transparent 80%)',
+            'radial-gradient(ellipse 70% 45% at 30% 10%, hsl(16 78% 60% / 0.15), transparent 70%)',
         }}
       />
 
@@ -36,19 +26,22 @@ export function Hero() {
             href="/docs/getting-started"
             className="inline-flex items-center gap-2 rounded-full border border-border/60 bg-card/40 px-3 py-1 text-xs text-muted-foreground transition-colors hover:border-border hover:bg-card hover:text-foreground"
           >
-            <span className="flex h-1.5 w-1.5 rounded-full bg-success" />
+            <span className="flex h-1.5 w-1.5 rounded-full bg-info" />
             <span>{t('badge')}</span>
             <ArrowRight className="h-3 w-3" />
           </Link>
 
-          <h1 className="mt-6 text-4xl font-semibold tracking-tight text-foreground sm:text-5xl md:text-6xl">
+          {/* Editorial serif headline. The italic accent on the second
+              line is the brand's signature contrast — sharp sans on
+              line 1, soft serif italic on line 2. */}
+          <h1 className="mt-6 font-serif text-5xl font-medium leading-[1.05] tracking-tight text-foreground sm:text-6xl md:text-7xl">
             {t('heroTitleLine1')}{' '}
-            <span className="bg-gradient-to-r from-info via-info to-foreground bg-clip-text text-transparent">
+            <em className="not-italic font-normal italic text-info">
               {t('heroTitleAccent')}
-            </span>
+            </em>
           </h1>
 
-          <p className="mt-5 max-w-xl text-base leading-relaxed text-muted-foreground sm:text-lg">
+          <p className="mt-6 max-w-xl text-base leading-relaxed text-muted-foreground sm:text-lg">
             {t('heroSubtitle')}
           </p>
 
@@ -67,7 +60,7 @@ export function Hero() {
             </Button>
           </div>
 
-          <div className="mt-8 flex flex-wrap gap-x-6 gap-y-2 text-xs text-muted-foreground">
+          <div className="mt-10 flex flex-wrap gap-x-6 gap-y-2 text-xs text-muted-foreground">
             <HeroStat value="10+" label={t('statProviders')} />
             <HeroStat value="USD" label={t('statCurrency')} />
             <HeroStat value="<200ms" label={t('statLatency')} />

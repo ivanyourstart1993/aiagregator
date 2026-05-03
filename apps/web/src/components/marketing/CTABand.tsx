@@ -13,12 +13,12 @@ export function CTABand() {
           className="pointer-events-none absolute -right-20 -top-20 h-80 w-80 rounded-full"
           style={{
             background:
-              'radial-gradient(circle, hsl(217 91% 60% / 0.25), transparent 70%)',
+              'radial-gradient(circle, hsl(16 78% 60% / 0.30), transparent 70%)',
           }}
         />
         <div className="relative flex flex-col items-start gap-6 md:flex-row md:items-center md:justify-between">
           <div className="max-w-xl">
-            <h2 className="text-2xl font-semibold tracking-tight sm:text-3xl">
+            <h2 className="font-serif text-3xl font-medium tracking-tight sm:text-4xl">
               {t('title')}
             </h2>
             <p className="mt-2 text-sm leading-relaxed text-muted-foreground sm:text-base">

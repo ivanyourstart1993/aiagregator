@@ -49,11 +49,11 @@ export function Features() {
   return (
     <section id="features" className="mx-auto w-full max-w-6xl px-4 py-16 md:px-6 md:py-20">
       <div className="mx-auto max-w-2xl text-center">
-        <p className="text-xs font-medium uppercase tracking-wider text-info">{t('featuresEyebrow')}</p>
-        <h2 className="mt-3 text-3xl font-semibold tracking-tight sm:text-4xl">
+        <p className="text-xs font-medium uppercase tracking-[0.2em] text-info">{t('featuresEyebrow')}</p>
+        <h2 className="mt-3 font-serif text-4xl font-medium tracking-tight sm:text-5xl">
           {t('featuresTitle')}
         </h2>
-        <p className="mt-3 text-sm leading-relaxed text-muted-foreground sm:text-base">
+        <p className="mt-4 text-sm leading-relaxed text-muted-foreground sm:text-base">
           {t('featuresSubtitle')}
         </p>
       </div>

@@ -65,6 +65,11 @@ const config: Config = {
         md: 'calc(var(--radius) - 2px)',
         sm: 'calc(var(--radius) - 4px)',
       },
+      fontFamily: {
+        // Editorial serif for headlines. Loaded by [locale]/layout.tsx as
+        // a CSS var so we don't FOUT on every component.
+        serif: ['var(--font-serif)', 'Fraunces', 'Georgia', 'serif'],
+      },
       keyframes: {
         'accordion-down': {
           from: { height: '0' },
