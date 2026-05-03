@@ -1647,6 +1647,12 @@ export interface TaskView {
   startedAt?: string | null;
   finishedAt?: string | null;
   createdAt: string;
+  // The internal `/internal/tasks/{id}` endpoint also returns the
+  // generation result in snake_case once the task SUCCEEDED. Modeled
+  // here so the playground can render the picture/video without
+  // casting through `any`.
+  result?: unknown;
+  result_files?: unknown;
 }
 
 export interface TasksPage {

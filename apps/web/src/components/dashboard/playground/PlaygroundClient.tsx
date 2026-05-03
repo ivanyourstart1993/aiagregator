@@ -198,7 +198,7 @@ export function PlaygroundClient({ balance }: Props) {
     {
       if (task.status === 'SUCCEEDED') {
         setPhase('succeeded');
-        const result = task.resultFiles ?? task.resultData;
+        const result = task.result_files ?? task.result;
         const arr: ResultFile[] = [];
         if (Array.isArray(result)) {
           for (const f of result) {
