@@ -3,8 +3,8 @@ import {
   CheckCircle2,
   KeyRound,
   Plus,
+  Sparkles,
   Tags,
-  TerminalSquare,
   Wallet,
 } from 'lucide-react';
 import { getFormatter, getTranslations } from 'next-intl/server';
@@ -87,28 +87,25 @@ async function renderDashboardHome() {
   const noKeys = activeKeys === 0;
   const tariffName = tariff?.name ?? t('default');
 
+  // Playground is the new "first thing a customer should try" — promote
+  // it to the front of QuickActions and make it the primary CTA when
+  // the user is ready to generate (has balance, regardless of API key,
+  // since /playground hits the JWT-auth path).
   const quickActions: QuickAction[] = [
-    noKeys
-      ? {
-          href: '/api-keys',
-          icon: KeyRound,
-          title: t('quick.createKey.title'),
-          description: t('quick.createKey.description'),
-          primary: true,
-        }
-      : {
-          href: '/api-keys',
-          icon: KeyRound,
-          title: t('quick.manageKeys.title'),
-          description: t('quick.manageKeys.description'),
-        },
+    {
+      href: '/playground',
+      icon: Sparkles,
+      title: t('quick.playground.title'),
+      description: t('quick.playground.description'),
+      primary: !balanceIsZero,
+    },
     balanceIsZero
       ? {
           href: '/top-up/new',
           icon: Plus,
           title: t('quick.topUp.title'),
           description: t('quick.topUp.description'),
-          primary: !noKeys,
+          primary: true,
         }
       : {
           href: '/balance',
@@ -116,12 +113,19 @@ async function renderDashboardHome() {
           title: t('quick.balance.title'),
           description: t('quick.balance.description'),
         },
-    {
-      href: '/api-explorer',
-      icon: TerminalSquare,
-      title: t('quick.explorer.title'),
-      description: t('quick.explorer.description'),
-    },
+    noKeys
+      ? {
+          href: '/api-keys',
+          icon: KeyRound,
+          title: t('quick.createKey.title'),
+          description: t('quick.createKey.description'),
+        }
+      : {
+          href: '/api-keys',
+          icon: KeyRound,
+          title: t('quick.manageKeys.title'),
+          description: t('quick.manageKeys.description'),
+        },
     {
       href: '/docs/getting-started',
       icon: BookOpen,

@@ -237,6 +237,10 @@
     "default": "Default",
     "quickActionsTitle": "Quick actions",
     "quick": {
+      "playground": {
+        "title": "Generate right now",
+        "description": "Image or video — no API key needed, in your browser."
+      },
       "createKey": {
         "title": "Create API key",
         "description": "Get a key to authenticate /v1/* requests."
