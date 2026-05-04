@@ -772,6 +772,9 @@ export const serverApi = {
   adminResolveAlert: (id: string) =>
     apiPost<{ ok: true }>(`/internal/admin/alerts/${id}/resolve`, {}),
 
+  // ---- Public site config (read-only, used by RSC layout) ----
+  getSiteConfig: () => apiGet<SiteConfig>('/internal/site-config', { anonymous: true }),
+
   // ---- Stage 14: System settings + Load ----
   adminListSettings: () => apiGet<SystemSettingView[] | { items: SystemSettingView[] }>(
     '/internal/admin/settings',
@@ -1157,6 +1160,15 @@ export interface AlertFilters {
   category?: AlertCategory;
   page?: number;
   pageSize?: number;
+}
+
+export interface GtmConfig {
+  containerId: string | null;
+  enabled: boolean;
+}
+
+export interface SiteConfig {
+  gtm: GtmConfig;
 }
 
 // ---- Stage 14 ----

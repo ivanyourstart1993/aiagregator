@@ -47,6 +47,29 @@ export async function pauseProviderAction(code: string, paused: boolean): Promis
   }
 }
 
+export async function updateGtmAction(
+  containerId: string,
+  enabled: boolean,
+): Promise<MutationResult> {
+  const trimmed = containerId.trim().toUpperCase();
+  if (trimmed && !/^GTM-[A-Z0-9]+$/.test(trimmed)) {
+    return { ok: false, code: 'invalid_container_id' };
+  }
+  try {
+    await serverApi.adminUpdateSetting('gtm', {
+      value: {
+        containerId: trimmed || null,
+        enabled: enabled && trimmed.length > 0,
+      },
+    });
+    revalidatePath('/(admin)/admin/settings', 'page');
+    revalidatePath('/[locale]', 'layout');
+    return { ok: true };
+  } catch (err) {
+    return fail(err);
+  }
+}
+
 export async function pauseBundleAction(key: string, paused: boolean): Promise<MutationResult> {
   try {
     await serverApi.adminPauseBundle(key, paused);
