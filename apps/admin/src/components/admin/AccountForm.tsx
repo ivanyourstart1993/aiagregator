@@ -40,9 +40,16 @@ export function AccountForm({ mode, account, providers, proxies }: Props) {
   const [providerId, setProviderId] = useState(
     account?.providerId ?? providers[0]?.id ?? '',
   );
+  const selectedProvider = providers.find((p) => p.id === providerId);
+  const providerCode = selectedProvider?.code ?? '';
+  const isKling = providerCode === 'kling_ai';
+  const isGoogle = providerCode === 'google_banana' || providerCode === 'google_veo';
+
   const [name, setName] = useState(account?.name ?? '');
   const [description, setDescription] = useState(account?.description ?? '');
   const [credentials, setCredentials] = useState('{}');
+  const [klingAccessKey, setKlingAccessKey] = useState('');
+  const [klingSecretKey, setKlingSecretKey] = useState('');
   const [proxyId, setProxyId] = useState<string>(account?.proxyId ?? '');
   const [dailyLimit, setDailyLimit] = useState(
     account?.dailyLimit?.toString() ?? '',
@@ -68,17 +75,37 @@ export function AccountForm({ mode, account, providers, proxies }: Props) {
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     let creds: Record<string, unknown> = {};
-    if (mode === 'create' || credentials.trim() !== '{}') {
+    let credsTouched = false;
+    if (isKling) {
+      const ak = klingAccessKey.trim();
+      const sk = klingSecretKey.trim();
+      if (mode === 'create') {
+        if (!ak || !sk) {
+          toast.error('Заполни Access Key и Secret Key');
+          return;
+        }
+        creds = { access_key: ak, secret_key: sk };
+        credsTouched = true;
+      } else if (ak || sk) {
+        if (!ak || !sk) {
+          toast.error('Чтобы сменить ключи — заполни оба поля');
+          return;
+        }
+        creds = { access_key: ak, secret_key: sk };
+        credsTouched = true;
+      }
+    } else if (mode === 'create' || credentials.trim() !== '{}') {
       try {
         creds = JSON.parse(credentials || '{}');
       } catch {
         toast.error('Невалидный JSON в credentials');
         return;
       }
+      credsTouched = true;
     }
 
-    if (!proxyId) {
-      // Soft warning — server will accept null, but we strongly suggest a proxy.
+    if (!proxyId && isGoogle) {
+      // Soft warning — server will accept null, but we strongly suggest a proxy for Google.
       const ok = confirm(
         'Прокси не выбран. Запросы пойдут с публичного IP Northflank — это сильный fingerprint signal для Google. Продолжить без прокси?',
       );
@@ -113,7 +140,7 @@ export function AccountForm({ mode, account, providers, proxies }: Props) {
             })
           : await updateProviderAccountAction(account!.id, {
               ...body,
-              ...(credentials.trim() !== '{}' ? { credentials: creds } : {}),
+              ...(credsTouched ? { credentials: creds } : {}),
             });
       if (res.ok) {
         toast.success('Сохранено');
@@ -179,30 +206,87 @@ export function AccountForm({ mode, account, providers, proxies }: Props) {
         />
       </div>
 
-      <div className="space-y-2">
-        <Label>
-          Credentials (JSON)
-          {mode === 'edit' && (
-            <span className="ml-2 text-xs text-muted-foreground">
-              Оставь {'{}'} чтобы не менять
-            </span>
-          )}
-        </Label>
-        <Textarea
-          value={credentials}
-          onChange={(e) => setCredentials(e.target.value)}
-          rows={6}
-          className="font-mono text-xs"
-          placeholder='{"apiKey":"AIza..."}  или {"serviceAccount":{...}}'
-        />
-      </div>
+      {isKling ? (
+        <div className="space-y-3 rounded-md border border-border/60 bg-muted/20 p-3">
+          <div className="flex items-center justify-between">
+            <Label className="text-sm">Kling AI · ключи доступа</Label>
+            <a
+              href="https://app.klingai.com/global/dev/document-api/quickStart/keyAccess"
+              target="_blank"
+              rel="noreferrer"
+              className="text-xs text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
+            >
+              где взять ключи?
+            </a>
+          </div>
+          <div className="space-y-2">
+            <Label className="text-xs text-muted-foreground">Access Key</Label>
+            <Input
+              value={klingAccessKey}
+              onChange={(e) => setKlingAccessKey(e.target.value)}
+              placeholder={
+                mode === 'edit' ? 'оставь пустым чтобы не менять' : 'AN...'
+              }
+              autoComplete="off"
+              spellCheck={false}
+              className="font-mono text-xs"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label className="text-xs text-muted-foreground">Secret Key</Label>
+            <Input
+              type="password"
+              value={klingSecretKey}
+              onChange={(e) => setKlingSecretKey(e.target.value)}
+              placeholder={
+                mode === 'edit' ? 'оставь пустым чтобы не менять' : 'Ah...'
+              }
+              autoComplete="off"
+              spellCheck={false}
+              className="font-mono text-xs"
+            />
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Сохранится как{' '}
+            <code className="rounded bg-muted px-1 py-0.5 font-mono text-[11px]">
+              {'{access_key, secret_key}'}
+            </code>
+            . Адаптер подписывает HS256-JWT и шлёт в{' '}
+            <code className="font-mono text-[11px]">api-singapore.klingai.com</code>.
+          </p>
+        </div>
+      ) : (
+        <div className="space-y-2">
+          <Label>
+            Credentials (JSON)
+            {mode === 'edit' && (
+              <span className="ml-2 text-xs text-muted-foreground">
+                Оставь {'{}'} чтобы не менять
+              </span>
+            )}
+          </Label>
+          <Textarea
+            value={credentials}
+            onChange={(e) => setCredentials(e.target.value)}
+            rows={6}
+            className="font-mono text-xs"
+            placeholder='{"apiKey":"AIza..."}  или {"serviceAccount":{...}}'
+          />
+        </div>
+      )}
 
       <div className="space-y-2">
         <Label>
           Прокси
-          <span className="ml-2 text-xs text-yellow-500">
-            Для Google аккаунтов критически рекомендуется
-          </span>
+          {isGoogle ? (
+            <span className="ml-2 text-xs text-yellow-500">
+              Для Google аккаунтов критически рекомендуется
+            </span>
+          ) : (
+            <span className="ml-2 text-xs text-muted-foreground">
+              опционально
+            </span>
+          )}
         </Label>
         <Select
           value={proxyId || '__none__'}
