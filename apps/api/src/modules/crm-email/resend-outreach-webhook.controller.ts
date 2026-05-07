@@ -71,7 +71,7 @@ export class ResendOutreachWebhookController {
       return await this.doHandle(req, svixId, svixTimestamp, svixSignature);
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
-      const stack = e instanceof Error ? e.stack : '';
+      const stack = (e instanceof Error ? e.stack : '') ?? '';
       this.logger.error(`[outreach-webhook] failed: ${msg}\n${stack}`);
       throw new BadRequestException({
         message: 'webhook_handler_error',
