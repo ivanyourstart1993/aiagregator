@@ -40,7 +40,7 @@ import {
   type AdapterFile,
 } from './adapters/provider-adapter.interface';
 
-const RESULT_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
+const RESULT_TTL_MS = 1 * 24 * 60 * 60 * 1000; // 1 day
 const DEFAULT_TIMEOUT_MS = 10 * 60 * 1000; // 10 minutes
 
 @Injectable()

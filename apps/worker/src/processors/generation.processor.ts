@@ -26,7 +26,7 @@ const QUEUE = 'generation';
 const CALLBACK_QUEUE = 'callback';
 const DLQ = 'generation-dead-letter';
 const NOT_IMPLEMENTED = 'provider_not_implemented';
-const RESULT_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
+const RESULT_TTL_MS = 1 * 24 * 60 * 60 * 1000; // 1 day
 const MAX_ATTEMPTS = 3;
 
 interface JobData {
