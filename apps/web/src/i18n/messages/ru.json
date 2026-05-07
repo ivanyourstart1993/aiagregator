@@ -624,6 +624,8 @@
     "type_image_edit_pro_2k": "Edit Pro 2K",
     "type_text_to_video_fast_1080p": "Veo Fast 1080p · 8с",
     "type_text_to_video_quality_1080p": "Veo Quality 1080p · 8с",
+    "type_text_to_video_kling_std": "Kling 2.6 Standard · 5с",
+    "type_text_to_video_kling_pro": "Kling 2.6 Pro · 5с",
     "promptLabel": "Промпт",
     "promptPlaceholder": "Например: «фото красного куба на белом фоне в стиле product photography»",
     "promptHint": "Описывайте что хотите получить. Чем конкретнее — тем лучше результат.",

@@ -32,7 +32,9 @@ type TaskType =
   | 'image_edit_flash_1k'
   | 'image_edit_pro_2k'
   | 'text_to_video_fast_1080p'
-  | 'text_to_video_quality_1080p';
+  | 'text_to_video_quality_1080p'
+  | 'text_to_video_kling_std'
+  | 'text_to_video_kling_pro';
 
 interface PresetSpec {
   provider: string;
@@ -43,12 +45,15 @@ interface PresetSpec {
   imageMethod?: string; // image_to_video, etc.
   resolution?: string;
   durationOptions?: number[]; // shows duration buttons; first is default
+  // Base duration the `approxUsd` price refers to. Cost shown to the user
+  // is `approxUsd * (duration / durationBase)`. Veo: 8s, Kling: 5s.
+  durationBase?: number;
+  // Provider-specific quality/mode tier. Kling: 'standard' | 'pro'.
+  mode?: 'standard' | 'pro';
   needsImage?: boolean;
   needsVideo?: true;
-  // Display price (matches default tariff). We only show an estimate here —
-  // the real cost is decided server-side at admit, this is just for UX.
-  // For video, this is the per-8-second base; the UI scales linearly by
-  // selected duration / 8.
+  // Display price — UX-only estimate, the real cost is decided
+  // server-side at admit time.
   approxUsd: number;
 }
 
@@ -110,6 +115,28 @@ const PRESETS: Record<TaskType, PresetSpec> = {
     needsVideo: true,
     approxUsd: 2.7,
   },
+  text_to_video_kling_std: {
+    provider: 'kling_ai',
+    model: 'kling-2.6',
+    method: 'text_to_video',
+    imageMethod: 'image_to_video',
+    durationOptions: [5, 10],
+    durationBase: 5,
+    mode: 'standard',
+    needsVideo: true,
+    approxUsd: 0.2,
+  },
+  text_to_video_kling_pro: {
+    provider: 'kling_ai',
+    model: 'kling-2.6',
+    method: 'text_to_video',
+    imageMethod: 'image_to_video',
+    durationOptions: [5, 10],
+    durationBase: 5,
+    mode: 'pro',
+    needsVideo: true,
+    approxUsd: 0.4,
+  },
 };
 
 const TASK_GROUPS: Array<{ labelKey: string; types: TaskType[] }> = [
@@ -123,7 +150,12 @@ const TASK_GROUPS: Array<{ labelKey: string; types: TaskType[] }> = [
   },
   {
     labelKey: 'groupVideo',
-    types: ['text_to_video_fast_1080p', 'text_to_video_quality_1080p'],
+    types: [
+      'text_to_video_fast_1080p',
+      'text_to_video_quality_1080p',
+      'text_to_video_kling_std',
+      'text_to_video_kling_pro',
+    ],
   },
 ];
 
@@ -342,9 +374,12 @@ export function PlaygroundClient({ balance }: Props) {
       params.input_images = readyImageUrls;
     } else if (preset.needsVideo) {
       params.duration_seconds = duration;
+      if (preset.mode) params.mode = preset.mode;
       if (readyImageUrls.length > 0 && preset.imageMethod) {
         methodCode = preset.imageMethod;
         params.input_image_url = readyImageUrls[0];
+        // Kling adapter expects the source image under `image`.
+        params.image = readyImageUrls[0];
       }
     }
 
@@ -631,7 +666,7 @@ export function PlaygroundClient({ balance }: Props) {
             <div className="font-mono text-base font-semibold text-foreground">
               ≈ $
               {(preset.needsVideo
-                ? preset.approxUsd * (duration / 8)
+                ? preset.approxUsd * (duration / (preset.durationBase ?? 8))
                 : preset.approxUsd
               ).toFixed(4)}
             </div>
