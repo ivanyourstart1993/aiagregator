@@ -288,6 +288,19 @@ export class GoogleBananaAdapter implements ProviderAdapter {
       c['service_account'] ??
       c['serviceAccountKey'] ??
       c['serviceAccountJson'];
+    // Fallback: credentials may be the plain Service Account JSON itself
+    // (no wrapper key). Detect by the canonical `type: "service_account"` field
+    // or the presence of client_email + private_key + project_id.
+    if (raw === undefined) {
+      if (
+        c['type'] === 'service_account' ||
+        (typeof c['client_email'] === 'string' &&
+          typeof c['private_key'] === 'string' &&
+          typeof c['project_id'] === 'string')
+      ) {
+        raw = c;
+      }
+    }
     if (typeof raw === 'string') {
       try {
         raw = JSON.parse(raw);

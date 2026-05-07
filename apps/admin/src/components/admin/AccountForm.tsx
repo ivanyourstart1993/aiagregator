@@ -255,6 +255,31 @@ export function AccountForm({ mode, account, providers, proxies }: Props) {
             <code className="font-mono text-[11px]">api-singapore.klingai.com</code>.
           </p>
         </div>
+      ) : isGoogle ? (
+        <div className="space-y-2 rounded-md border border-border/60 bg-muted/20 p-3">
+          <Label>
+            Google · Service Account JSON
+            {mode === 'edit' && (
+              <span className="ml-2 text-xs text-muted-foreground">
+                Оставь {'{}'} чтобы не менять
+              </span>
+            )}
+          </Label>
+          <Textarea
+            value={credentials}
+            onChange={(e) => setCredentials(e.target.value)}
+            rows={10}
+            className="font-mono text-xs"
+            placeholder='Вставь весь JSON, скачанный из Google Cloud Console: {"type":"service_account","project_id":"...","private_key":"-----BEGIN...","client_email":"...","..."}'
+          />
+          <p className="text-xs text-muted-foreground">
+            Можно вставить файл SA <em>как есть</em> — оборачивать в{' '}
+            <code className="font-mono text-[11px]">{'{ "serviceAccount": ... }'}</code>{' '}
+            не нужно. Адаптер также принимает обёрнутый формат, если он уже сохранён.
+            Альтернатива: <code className="font-mono text-[11px]">{'{ "apiKey": "AIza..." }'}</code>{' '}
+            для AI Studio API key.
+          </p>
+        </div>
       ) : (
         <div className="space-y-2">
           <Label>
@@ -270,7 +295,7 @@ export function AccountForm({ mode, account, providers, proxies }: Props) {
             onChange={(e) => setCredentials(e.target.value)}
             rows={6}
             className="font-mono text-xs"
-            placeholder='{"apiKey":"AIza..."}  или {"serviceAccount":{...}}'
+            placeholder='{"apiKey":"..."}'
           />
         </div>
       )}
