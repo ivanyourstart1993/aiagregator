@@ -1158,3 +1158,266 @@ model Export {
   @@index([status])
   @@map("export")
 }
+
+// =============================================================================
+// STAGE 17 — CRM (Lead pipeline for outbound sales)
+// =============================================================================
+
+enum LeadType {
+  TELEGRAM_CHANNEL
+  MOBILE_APP_IOS
+  MOBILE_APP_ANDROID
+  WEBSITE
+  OTHER
+}
+
+enum LeadStatus {
+  NEW
+  ENRICHED
+  READY
+  CONTACTED
+  REPLIED
+  IN_DIALOG
+  DEMO
+  WON
+  LOST_NO_REPLY
+  LOST_REJECTED
+  BLOCKED
+}
+
+enum LeadSourceKind {
+  ITUNES_SEARCH
+  PLAY_STORE_SEARCH
+  LYZEM_SEARCH
+  TGSTAT_SEARCH
+  TELEGRAM_MENTIONS
+  FACEBOOK_AD_LIBRARY
+  MANUAL
+}
+
+enum OutreachAccountStatus {
+  WARMING
+  ACTIVE
+  PAUSED
+  BLOCKED
+}
+
+enum MessageDirection {
+  INBOUND
+  OUTBOUND
+}
+
+enum MessageAuthor {
+  LEAD
+  CLAUDE
+  HUMAN
+  SYSTEM
+}
+
+// LeadSource — настройка автоматического discovery (запускается по cron).
+model LeadSource {
+  id             String         @id @default(cuid())
+  kind           LeadSourceKind
+  name           String         // human-readable label
+  // Free-form JSON: keywords, country, language, min subscribers, etc.
+  // Schema depends on `kind`. See worker discovery handlers for valid keys.
+  config         Json
+  enabled        Boolean        @default(true)
+  // Cron run cadence in minutes; null = manual trigger only
+  intervalMinutes Int?
+  lastRunAt      DateTime?
+  lastRunStatus  String?        // 'success' | 'failed'
+  lastRunError   String?        @db.Text
+  lastRunFound   Int?           // how many new leads added
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  leads Lead[]
+
+  @@index([kind, enabled])
+  @@index([enabled, intervalMinutes])
+  @@map("lead_source")
+}
+
+model Lead {
+  id            String     @id @default(cuid())
+  type          LeadType
+  // Stable external identifier within the source (channel username, app bundle id, etc.)
+  // Used for dedup with @@unique([sourceKind, externalId]).
+  externalId    String
+  sourceKind    LeadSourceKind
+  // Optional FK back to the LeadSource that discovered this lead.
+  // Manual entries leave this null.
+  sourceId      String?
+  // Display name: channel title, app name, website title, etc.
+  name          String
+  // Lead identity — at least one of these is populated for outreach.
+  url           String?    // t.me/foo, apps.apple.com/.../id123, https://...
+  telegramUsername String? // @adminuser (without @)
+  ownerEmail    String?
+  ownerName     String?
+  ownerWebsite  String?
+  // Free-form metadata: subscriber count, app rating, dev country, last post date,
+  // detected AI features in the app, mentions count, etc. Source-specific.
+  metadata      Json?
+  // Lead score 0-100 — computed by enrichment based on signals (audience size,
+  // posting cadence, AI-relevance keywords, ad spend signals).
+  score         Int        @default(0)
+  status        LeadStatus @default(NEW)
+  statusChangedAt DateTime @default(now())
+  assignedToId  String?    // user id of admin owning this lead
+  // Generated first-touch message (Claude). Persisted so it can be reviewed
+  // before sending in human-in-the-loop mode.
+  draftMessage  String?    @db.Text
+  // Reason for terminal status (LOST_*, BLOCKED).
+  closeReason   String?    @db.Text
+  // Follow-up scheduling.
+  nextActionAt  DateTime?
+  contactedAt   DateTime?
+  firstReplyAt  DateTime?
+  wonAt         DateTime?
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+
+  source        LeadSource?       @relation(fields: [sourceId], references: [id], onDelete: SetNull)
+  conversation  Conversation?
+  notes         LeadNote[]
+  statusEvents  LeadStatusEvent[]
+
+  @@unique([sourceKind, externalId])
+  @@index([status, statusChangedAt])
+  @@index([type, status])
+  @@index([assignedToId, status])
+  @@index([score])
+  @@index([nextActionAt, status])
+  @@map("lead")
+}
+
+model LeadStatusEvent {
+  id           String     @id @default(cuid())
+  leadId       String
+  fromStatus   LeadStatus?
+  toStatus     LeadStatus
+  changedById  String?    // user id; null if changed by system/worker
+  changedBySystem String? // worker name (e.g. 'inbound_classifier', 'cron_no_reply')
+  reason       String?    @db.Text
+  createdAt    DateTime   @default(now())
+
+  lead Lead @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  @@index([leadId, createdAt])
+  @@map("lead_status_event")
+}
+
+model LeadNote {
+  id        String   @id @default(cuid())
+  leadId    String
+  authorId  String?
+  body      String   @db.Text
+  createdAt DateTime @default(now())
+
+  lead Lead @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  @@index([leadId, createdAt])
+  @@map("lead_note")
+}
+
+// Conversation = thread between us and a Lead. One per lead (unique).
+model Conversation {
+  id              String   @id @default(cuid())
+  leadId          String   @unique
+  // Which outreach account is responsible for this thread.
+  outreachAccountId String?
+  lastMessageAt   DateTime?
+  // Auto-reply mode: true = Claude replies automatically (low-confidence
+  // messages still escalate to human via LeadStatusEvent).
+  autoReplyEnabled Boolean @default(false)
+  // External chat identifier from Telegram MTProto (peer id).
+  externalChatId  String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  lead            Lead             @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  outreachAccount OutreachAccount? @relation(fields: [outreachAccountId], references: [id])
+  messages        Message[]
+
+  @@index([lastMessageAt])
+  @@map("conversation")
+}
+
+model Message {
+  id              String           @id @default(cuid())
+  conversationId  String
+  direction       MessageDirection
+  author          MessageAuthor
+  authorUserId    String?          // when author=HUMAN, links to admin user
+  body            String           @db.Text
+  // Claude self-reported confidence 0..1 for OUTBOUND/CLAUDE messages.
+  // Used for escalation when below threshold.
+  claudeConfidence Decimal?        @db.Decimal(3, 2)
+  // For OUTBOUND: was the message actually delivered via Telegram.
+  delivered       Boolean          @default(false)
+  deliveryError   String?          @db.Text
+  externalMessageId String?        // Telegram message_id once sent
+  sentAt          DateTime?
+  createdAt       DateTime         @default(now())
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId, createdAt])
+  @@index([direction, delivered])
+  @@map("message")
+}
+
+// OutreachAccount — Telegram userbot account in the warming/sending pool.
+model OutreachAccount {
+  id              String                @id @default(cuid())
+  // Display label for admin (e.g. "tg-bot-1 (Berlin)").
+  name            String
+  // Telegram phone number (international format with +).
+  phone           String                @unique
+  // Encrypted MTProto session blob (Telethon string session). NULL until logged in.
+  sessionString   String?               @db.Text
+  // Telegram API credentials (api_id + api_hash) per account.
+  // Stored as JSON: { apiId: number, apiHash: string }.
+  apiCredentials  Json
+  // Optional pinning to a specific Proxy from the existing pool (so all
+  // outbound from this account egresses via the same residential IP).
+  proxyId         String?
+  status          OutreachAccountStatus @default(WARMING)
+  // Soft caps to avoid Telegram bans.
+  dailyLimit      Int                   @default(20)
+  todaySent       Int                   @default(0)
+  countersResetAt DateTime              @default(now())
+  // Warming progress — start with low limits, ramp over 14 days.
+  warmupStartedAt DateTime              @default(now())
+  // Stats
+  totalSent       Int                   @default(0)
+  lastSentAt      DateTime?
+  lastErrorAt     DateTime?
+  lastErrorMessage String?              @db.Text
+  createdAt       DateTime              @default(now())
+  updatedAt       DateTime              @updatedAt
+
+  conversations Conversation[]
+
+  @@index([status])
+  @@map("outreach_account")
+}
+
+// Reusable message template — first-touch DM, follow-ups, FAQ snippets.
+// Variables: {{channelName}}, {{ownerName}}, {{topic}}, etc. (Mustache-style).
+model OutreachTemplate {
+  id          String   @id @default(cuid())
+  slug        String   @unique // 'first-touch-tg', 'first-touch-app', 'follow-up-1', 'system-prompt'
+  name        String
+  description String?
+  body        String   @db.Text
+  // Optional: which lead types this template targets.
+  targetTypes LeadType[] @default([])
+  enabled     Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("outreach_template")
+}

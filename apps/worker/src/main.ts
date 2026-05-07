@@ -5,6 +5,7 @@ import { PrismaClient } from '@aiagg/db';
 import { createGenerationWorker } from './processors/generation.processor';
 import { createCallbackWorker } from './processors/callback.processor';
 import { createExportsWorker } from './processors/exports.processor';
+import { createCrmDiscoveryWorker } from './processors/crm-discovery.processor';
 import { WorkerAdapterRegistry } from './adapters/registry';
 import { WorkerStorage } from './storage/storage';
 
@@ -45,6 +46,9 @@ async function main(): Promise<void> {
   const exportsHandle = createExportsWorker({ redisUrl, prisma, storage });
   console.log('[worker] exports processor started (Stage 16)');
 
+  const crmDiscoveryHandle = createCrmDiscoveryWorker({ redisUrl, prisma });
+  console.log('[worker] crm-discovery processor started (Stage 17)');
+
   const shutdown = async (): Promise<void> => {
     console.log('[worker] shutting down...');
     try {
@@ -59,6 +63,11 @@ async function main(): Promise<void> {
     }
     try {
       await exportsHandle.close();
+    } catch {
+      /* swallow */
+    }
+    try {
+      await crmDiscoveryHandle.close();
     } catch {
       /* swallow */
     }

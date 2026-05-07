@@ -40,6 +40,10 @@
     "coupons": "Купоны",
     "load": "Нагрузка",
     "settings": "Настройки",
+    "crmLeads": "Лиды",
+    "crmSources": "Источники",
+    "crmTemplates": "Шаблоны",
+    "crmAccounts": "TG-аккаунты",
     "signOut": "Выйти",
     "profile": "Профиль",
     "crumb": {
@@ -53,7 +57,94 @@
       "settings": "Настройки",
       "new": "Новый",
       "edit": "Изменить",
-      "redemptions": "Применения"
+      "redemptions": "Применения",
+      "crm": "CRM",
+      "leads": "Лиды",
+      "sources": "Источники",
+      "templates": "Шаблоны"
+    }
+  },
+  "crm": {
+    "leads": {
+      "title": "Лиды",
+      "kanban": "Доска",
+      "list": "Список",
+      "newLead": "Новый лид",
+      "search": "Поиск по имени, email, @username...",
+      "type": "Тип",
+      "source": "Источник",
+      "score": "Score",
+      "status": "Статус",
+      "noLeads": "Нет лидов в этом статусе",
+      "moveTo": "Перевести в",
+      "addNote": "Добавить заметку",
+      "history": "История статусов",
+      "conversation": "Переписка",
+      "draftMessage": "Черновик сообщения",
+      "noConversation": "Переписка ещё не начата"
+    },
+    "status": {
+      "NEW": "Новый",
+      "ENRICHED": "Обогащён",
+      "READY": "Готов",
+      "CONTACTED": "Написали",
+      "REPLIED": "Ответил",
+      "IN_DIALOG": "В диалоге",
+      "DEMO": "Демо/Trial",
+      "WON": "Выиграно",
+      "LOST_NO_REPLY": "Молчание",
+      "LOST_REJECTED": "Отказ",
+      "BLOCKED": "Заблокирован"
+    },
+    "type": {
+      "TELEGRAM_CHANNEL": "TG-канал",
+      "MOBILE_APP_IOS": "iOS app",
+      "MOBILE_APP_ANDROID": "Android app",
+      "WEBSITE": "Сайт",
+      "OTHER": "Другое"
+    },
+    "sources": {
+      "title": "Источники discovery",
+      "newSource": "Новый источник",
+      "kind": "Тип",
+      "config": "Конфиг (JSON)",
+      "interval": "Интервал (мин, пусто = только вручную)",
+      "lastRun": "Последний запуск",
+      "found": "Найдено",
+      "runNow": "Запустить",
+      "enabled": "Включён",
+      "ITUNES_SEARCH": "iTunes Search API",
+      "PLAY_STORE_SEARCH": "Google Play scraper",
+      "LYZEM_SEARCH": "Lyzem (TG)",
+      "TGSTAT_SEARCH": "TGStat (TG)",
+      "TELEGRAM_MENTIONS": "TG mentions crawl",
+      "FACEBOOK_AD_LIBRARY": "FB Ad Library",
+      "MANUAL": "Ручной"
+    },
+    "templates": {
+      "title": "Шаблоны сообщений",
+      "newTemplate": "Новый шаблон",
+      "slug": "Slug",
+      "name": "Название",
+      "body": "Тело шаблона",
+      "targetTypes": "Применимо к типам",
+      "enabled": "Включён",
+      "vars": "Переменные: {{name}}, {{ownerName}}, {{topic}}, {{url}}"
+    },
+    "outreachAccounts": {
+      "title": "Telegram аккаунты для outreach",
+      "newAccount": "Добавить аккаунт",
+      "phone": "Телефон",
+      "apiId": "API ID",
+      "apiHash": "API hash",
+      "proxy": "Прокси",
+      "dailyLimit": "Лимит/день",
+      "warmupSince": "Прогрев с",
+      "totalSent": "Отправлено всего",
+      "todaySent": "Сегодня",
+      "session": "Сессия залогинена",
+      "noSession": "Нужно залогиниться",
+      "register": "Получить api_id и api_hash на my.telegram.org"
     }
   },
   "coupons": {

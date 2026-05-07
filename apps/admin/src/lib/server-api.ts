@@ -833,7 +833,332 @@ export const serverApi = {
   // ---- Stage 16: API key webhook secret ----
   rotateWebhookSecret: (id: string) =>
     apiPost<{ webhookSecret: string }>(`/internal/api-keys/${id}/rotate-webhook-secret`, {}),
+
+  // ---- Stage 17: CRM ----
+  adminListLeads: (filters?: AdminLeadFilters) =>
+    apiGet<LeadsPage>(
+      `/internal/admin/crm/leads${qs((filters ?? {}) as Record<string, string | number | boolean | undefined | null>)}`,
+    ),
+  adminGetLeadKanban: (filters?: AdminLeadKanbanFilters) =>
+    apiGet<LeadsKanban>(
+      `/internal/admin/crm/leads/kanban${qs((filters ?? {}) as Record<string, string | number | boolean | undefined | null>)}`,
+    ),
+  adminGetLead: (id: string) => apiGet<LeadDetail>(`/internal/admin/crm/leads/${id}`),
+  adminCreateLead: (body: AdminLeadCreateInput) =>
+    apiPost<LeadView>('/internal/admin/crm/leads', body),
+  adminUpdateLead: (id: string, body: AdminLeadUpdateInput) =>
+    apiPatch<LeadView>(`/internal/admin/crm/leads/${id}`, body),
+  adminMoveLead: (id: string, body: { toStatus: LeadStatus; reason?: string }) =>
+    apiPost<LeadView>(`/internal/admin/crm/leads/${id}/move`, body),
+  adminDeleteLead: (id: string) =>
+    apiDelete<{ ok: true }>(`/internal/admin/crm/leads/${id}`),
+  adminAddLeadNote: (id: string, body: string) =>
+    apiPost<LeadNoteView>(`/internal/admin/crm/leads/${id}/notes`, { body }),
+
+  adminListLeadSources: () =>
+    apiGet<{ items: LeadSourceView[] }>('/internal/admin/crm/sources'),
+  adminGetLeadSource: (id: string) =>
+    apiGet<LeadSourceView>(`/internal/admin/crm/sources/${id}`),
+  adminCreateLeadSource: (body: AdminLeadSourceInput) =>
+    apiPost<LeadSourceView>('/internal/admin/crm/sources', body),
+  adminUpdateLeadSource: (id: string, body: Partial<AdminLeadSourceInput>) =>
+    apiPatch<LeadSourceView>(`/internal/admin/crm/sources/${id}`, body),
+  adminDeleteLeadSource: (id: string) =>
+    apiDelete<{ ok: true }>(`/internal/admin/crm/sources/${id}`),
+  adminRunLeadSource: (id: string) =>
+    apiPost<{ ok: true; queued: true }>(`/internal/admin/crm/sources/${id}/run`, {}),
+
+  adminListOutreachTemplates: () =>
+    apiGet<{ items: OutreachTemplateView[] }>('/internal/admin/crm/templates'),
+  adminGetOutreachTemplate: (id: string) =>
+    apiGet<OutreachTemplateView>(`/internal/admin/crm/templates/${id}`),
+  adminCreateOutreachTemplate: (body: AdminOutreachTemplateInput) =>
+    apiPost<OutreachTemplateView>('/internal/admin/crm/templates', body),
+  adminUpdateOutreachTemplate: (id: string, body: Partial<AdminOutreachTemplateInput>) =>
+    apiPatch<OutreachTemplateView>(`/internal/admin/crm/templates/${id}`, body),
+  adminDeleteOutreachTemplate: (id: string) =>
+    apiDelete<{ ok: true }>(`/internal/admin/crm/templates/${id}`),
+
+  adminListOutreachAccounts: () =>
+    apiGet<{ items: OutreachAccountView[] }>('/internal/admin/crm/outreach-accounts'),
+  adminGetOutreachAccount: (id: string) =>
+    apiGet<OutreachAccountView>(`/internal/admin/crm/outreach-accounts/${id}`),
+  adminCreateOutreachAccount: (body: AdminOutreachAccountInput) =>
+    apiPost<OutreachAccountView>('/internal/admin/crm/outreach-accounts', body),
+  adminUpdateOutreachAccount: (id: string, body: AdminOutreachAccountUpdateInput) =>
+    apiPatch<OutreachAccountView>(`/internal/admin/crm/outreach-accounts/${id}`, body),
+  adminDeleteOutreachAccount: (id: string) =>
+    apiDelete<{ ok: true }>(`/internal/admin/crm/outreach-accounts/${id}`),
 };
+
+// ---- Stage 17: CRM types ----
+export type LeadType =
+  | 'TELEGRAM_CHANNEL'
+  | 'MOBILE_APP_IOS'
+  | 'MOBILE_APP_ANDROID'
+  | 'WEBSITE'
+  | 'OTHER';
+
+export type LeadStatus =
+  | 'NEW'
+  | 'ENRICHED'
+  | 'READY'
+  | 'CONTACTED'
+  | 'REPLIED'
+  | 'IN_DIALOG'
+  | 'DEMO'
+  | 'WON'
+  | 'LOST_NO_REPLY'
+  | 'LOST_REJECTED'
+  | 'BLOCKED';
+
+export type LeadSourceKind =
+  | 'ITUNES_SEARCH'
+  | 'PLAY_STORE_SEARCH'
+  | 'LYZEM_SEARCH'
+  | 'TGSTAT_SEARCH'
+  | 'TELEGRAM_MENTIONS'
+  | 'FACEBOOK_AD_LIBRARY'
+  | 'MANUAL';
+
+export type OutreachAccountStatusValue =
+  | 'WARMING'
+  | 'ACTIVE'
+  | 'PAUSED'
+  | 'BLOCKED';
+
+export type MessageDirection = 'INBOUND' | 'OUTBOUND';
+export type MessageAuthor = 'LEAD' | 'CLAUDE' | 'HUMAN' | 'SYSTEM';
+
+export interface LeadView {
+  id: string;
+  type: LeadType;
+  externalId: string;
+  sourceKind: LeadSourceKind;
+  sourceId: string | null;
+  name: string;
+  url: string | null;
+  telegramUsername: string | null;
+  ownerEmail: string | null;
+  ownerName: string | null;
+  ownerWebsite: string | null;
+  metadata: Record<string, unknown> | null;
+  score: number;
+  status: LeadStatus;
+  statusChangedAt: string;
+  assignedToId: string | null;
+  draftMessage: string | null;
+  closeReason: string | null;
+  nextActionAt: string | null;
+  contactedAt: string | null;
+  firstReplyAt: string | null;
+  wonAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+  source?: { id: string; name: string; kind: LeadSourceKind } | null;
+}
+
+export interface LeadsPage {
+  items: LeadView[];
+  total: number;
+  page: number;
+  pageSize: number;
+}
+
+export interface LeadKanbanCardView
+  extends Pick<LeadView, 'id' | 'type' | 'name' | 'telegramUsername' | 'ownerEmail' | 'score' | 'status' | 'statusChangedAt' | 'url' | 'metadata'> {
+  source: { name: string; kind: LeadSourceKind } | null;
+}
+
+export interface LeadsKanban {
+  columns: Array<{
+    status: LeadStatus;
+    total: number;
+    items: LeadKanbanCardView[];
+  }>;
+}
+
+export interface LeadNoteView {
+  id: string;
+  leadId: string;
+  authorId: string | null;
+  body: string;
+  createdAt: string;
+}
+
+export interface LeadStatusEventView {
+  id: string;
+  leadId: string;
+  fromStatus: LeadStatus | null;
+  toStatus: LeadStatus;
+  changedById: string | null;
+  changedBySystem: string | null;
+  reason: string | null;
+  createdAt: string;
+}
+
+export interface LeadConversationMessageView {
+  id: string;
+  conversationId: string;
+  direction: MessageDirection;
+  author: MessageAuthor;
+  authorUserId: string | null;
+  body: string;
+  claudeConfidence: string | number | null;
+  delivered: boolean;
+  deliveryError: string | null;
+  externalMessageId: string | null;
+  sentAt: string | null;
+  createdAt: string;
+}
+
+export interface LeadConversationView {
+  id: string;
+  leadId: string;
+  outreachAccountId: string | null;
+  outreachAccount: {
+    id: string;
+    name: string;
+    phone: string;
+    status: OutreachAccountStatusValue;
+  } | null;
+  lastMessageAt: string | null;
+  autoReplyEnabled: boolean;
+  externalChatId: string | null;
+  createdAt: string;
+  updatedAt: string;
+  messages: LeadConversationMessageView[];
+}
+
+export interface LeadDetail extends LeadView {
+  source: { id: string; name: string; kind: LeadSourceKind } | null;
+  notes: LeadNoteView[];
+  statusEvents: LeadStatusEventView[];
+  conversation: LeadConversationView | null;
+}
+
+export interface AdminLeadFilters {
+  q?: string;
+  status?: LeadStatus;
+  type?: LeadType;
+  sourceId?: string;
+  assignedToId?: string;
+  minScore?: number;
+  page?: number;
+  pageSize?: number;
+}
+
+export interface AdminLeadKanbanFilters {
+  q?: string;
+  type?: LeadType;
+  sourceId?: string;
+  limitPerColumn?: number;
+}
+
+export interface AdminLeadCreateInput {
+  type: LeadType;
+  externalId: string;
+  name: string;
+  url?: string;
+  telegramUsername?: string;
+  ownerEmail?: string;
+  ownerName?: string;
+  score?: number;
+  metadata?: Record<string, unknown>;
+}
+
+export interface AdminLeadUpdateInput {
+  status?: LeadStatus;
+  assignedToId?: string | null;
+  draftMessage?: string | null;
+  ownerEmail?: string | null;
+  ownerName?: string | null;
+  telegramUsername?: string | null;
+  score?: number;
+  closeReason?: string | null;
+  nextActionAt?: string | null;
+}
+
+export interface LeadSourceView {
+  id: string;
+  kind: LeadSourceKind;
+  name: string;
+  config: Record<string, unknown>;
+  enabled: boolean;
+  intervalMinutes: number | null;
+  lastRunAt: string | null;
+  lastRunStatus: string | null;
+  lastRunError: string | null;
+  lastRunFound: number | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AdminLeadSourceInput {
+  kind: LeadSourceKind;
+  name: string;
+  config: Record<string, unknown>;
+  enabled?: boolean;
+  intervalMinutes?: number | null;
+}
+
+export interface OutreachTemplateView {
+  id: string;
+  slug: string;
+  name: string;
+  description: string | null;
+  body: string;
+  targetTypes: LeadType[];
+  enabled: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AdminOutreachTemplateInput {
+  slug: string;
+  name: string;
+  description?: string;
+  body: string;
+  targetTypes?: LeadType[];
+  enabled?: boolean;
+}
+
+export interface OutreachAccountView {
+  id: string;
+  name: string;
+  phone: string;
+  proxyId: string | null;
+  proxy: { id: string; name: string; host: string; country: string | null } | null;
+  status: OutreachAccountStatusValue;
+  dailyLimit: number;
+  todaySent: number;
+  warmupStartedAt: string;
+  totalSent: number;
+  lastSentAt: string | null;
+  lastErrorAt: string | null;
+  lastErrorMessage: string | null;
+  hasSession: boolean;
+  apiId: number | null;
+  apiHashMasked: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AdminOutreachAccountInput {
+  name: string;
+  phone: string;
+  apiId: number;
+  apiHash: string;
+  proxyId?: string | null;
+  dailyLimit?: number;
+}
+
+export interface AdminOutreachAccountUpdateInput {
+  name?: string;
+  proxyId?: string | null;
+  dailyLimit?: number;
+  status?: OutreachAccountStatusValue;
+}
 
 // ---- Stage 7+11 types ----
 export type ProxyProtocol = 'HTTP' | 'HTTPS' | 'SOCKS5';

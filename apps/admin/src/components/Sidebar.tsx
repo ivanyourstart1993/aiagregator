@@ -9,6 +9,10 @@ import {
   Activity,
   Settings,
   Ticket,
+  Target,
+  Radar,
+  MessageSquare,
+  Send,
   type LucideIcon,
 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
@@ -26,18 +30,27 @@ interface Item {
     | 'tasks'
     | 'coupons'
     | 'load'
-    | 'settings';
+    | 'settings'
+    | 'crmLeads'
+    | 'crmSources'
+    | 'crmTemplates'
+    | 'crmAccounts';
+  group?: 'main' | 'crm';
 }
 
 export const NAV_ITEMS: Item[] = [
-  { href: '/', icon: LayoutDashboard, key: 'dashboard' },
-  { href: '/users', icon: Users, key: 'users' },
-  { href: '/providers/accounts', icon: Boxes, key: 'providerAccounts' },
-  { href: '/providers/proxies', icon: Shield, key: 'providerProxies' },
-  { href: '/tasks', icon: ListTree, key: 'tasks' },
-  { href: '/coupons', icon: Ticket, key: 'coupons' },
-  { href: '/load', icon: Activity, key: 'load' },
-  { href: '/settings', icon: Settings, key: 'settings' },
+  { href: '/', icon: LayoutDashboard, key: 'dashboard', group: 'main' },
+  { href: '/users', icon: Users, key: 'users', group: 'main' },
+  { href: '/providers/accounts', icon: Boxes, key: 'providerAccounts', group: 'main' },
+  { href: '/providers/proxies', icon: Shield, key: 'providerProxies', group: 'main' },
+  { href: '/tasks', icon: ListTree, key: 'tasks', group: 'main' },
+  { href: '/coupons', icon: Ticket, key: 'coupons', group: 'main' },
+  { href: '/crm/leads', icon: Target, key: 'crmLeads', group: 'crm' },
+  { href: '/crm/sources', icon: Radar, key: 'crmSources', group: 'crm' },
+  { href: '/crm/templates', icon: MessageSquare, key: 'crmTemplates', group: 'crm' },
+  { href: '/crm/accounts', icon: Send, key: 'crmAccounts', group: 'crm' },
+  { href: '/load', icon: Activity, key: 'load', group: 'main' },
+  { href: '/settings', icon: Settings, key: 'settings', group: 'main' },
 ];
 
 function isActive(pathname: string, href: string): boolean {
@@ -77,27 +90,33 @@ export function Sidebar({ collapsed }: { collapsed: boolean }) {
       </Link>
 
       <nav className="flex-1 space-y-1 p-2">
-        {NAV_ITEMS.map((it) => {
+        {NAV_ITEMS.map((it, idx) => {
           const active = isActive(pathname, it.href);
           const Icon = it.icon;
           const label = t(it.key);
+          const prev = NAV_ITEMS[idx - 1];
+          const showDivider = prev && prev.group !== it.group;
           return (
-            <Link
-              key={it.key}
-              href={it.href}
-              title={collapsed ? label : undefined}
-              aria-label={label}
-              className={cn(
-                'flex h-9 items-center gap-3 rounded-md px-2.5 transition-colors',
-                collapsed ? 'justify-center' : 'justify-start',
-                active
-                  ? 'bg-accent text-accent-foreground'
-                  : 'text-muted-foreground hover:bg-accent/50 hover:text-foreground',
+            <div key={it.key}>
+              {showDivider && (
+                <div className="my-2 border-t border-border" aria-hidden />
               )}
-            >
-              <Icon className="h-4 w-4 shrink-0" />
-              {!collapsed && <span className="truncate text-sm">{label}</span>}
-            </Link>
+              <Link
+                href={it.href}
+                title={collapsed ? label : undefined}
+                aria-label={label}
+                className={cn(
+                  'flex h-9 items-center gap-3 rounded-md px-2.5 transition-colors',
+                  collapsed ? 'justify-center' : 'justify-start',
+                  active
+                    ? 'bg-accent text-accent-foreground'
+                    : 'text-muted-foreground hover:bg-accent/50 hover:text-foreground',
+                )}
+              >
+                <Icon className="h-4 w-4 shrink-0" />
+                {!collapsed && <span className="truncate text-sm">{label}</span>}
+              </Link>
+            </div>
           );
         })}
       </nav>
@@ -114,24 +133,28 @@ export function SidebarFull({ onNavigate }: { onNavigate?: () => void }) {
 
   return (
     <nav className="flex-1 space-y-0.5 px-3 py-3">
-      {NAV_ITEMS.map((it) => {
+      {NAV_ITEMS.map((it, idx) => {
         const active = isActive(pathname, it.href);
         const Icon = it.icon;
+        const prev = NAV_ITEMS[idx - 1];
+        const showDivider = prev && prev.group !== it.group;
         return (
-          <Link
-            key={it.key}
-            href={it.href}
-            onClick={onNavigate}
-            className={cn(
-              'flex items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors',
-              active
-                ? 'bg-accent text-accent-foreground'
-                : 'text-muted-foreground hover:bg-accent/50 hover:text-foreground',
-            )}
-          >
-            <Icon className="h-4 w-4" />
-            <span>{t(it.key)}</span>
-          </Link>
+          <div key={it.key}>
+            {showDivider && <div className="my-2 border-t border-border" aria-hidden />}
+            <Link
+              href={it.href}
+              onClick={onNavigate}
+              className={cn(
+                'flex items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors',
+                active
+                  ? 'bg-accent text-accent-foreground'
+                  : 'text-muted-foreground hover:bg-accent/50 hover:text-foreground',
+              )}
+            >
+              <Icon className="h-4 w-4" />
+              <span>{t(it.key)}</span>
+            </Link>
+          </div>
         );
       })}
     </nav>

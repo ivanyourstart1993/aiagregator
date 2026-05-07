@@ -40,6 +40,13 @@ export {
   AlertStatus,
   ExportType,
   ExportStatus,
+  // CRM (Stage 17)
+  LeadType,
+  LeadStatus,
+  LeadSourceKind,
+  OutreachAccountStatus,
+  MessageDirection,
+  MessageAuthor,
 } from '@prisma/client';
 
 export type * from '@prisma/client';

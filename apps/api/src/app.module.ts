@@ -35,6 +35,7 @@ import { SystemSettingsModule } from './modules/system-settings/system-settings.
 import { FilesModule } from './modules/files/files.module';
 import { ExportsModule } from './modules/exports/exports.module';
 import { SupportModule } from './modules/support/support.module';
+import { CrmModule } from './modules/crm/crm.module';
 import { RedisModule } from './common/redis/redis.module';
 import { StorageModule } from './common/storage/storage.module';
 
@@ -92,6 +93,7 @@ import { StorageModule } from './common/storage/storage.module';
     FilesModule,
     ExportsModule,
     SupportModule,
+    CrmModule,
   ],
   providers: [
     { provide: APP_FILTER, useClass: PublicErrorFilter },

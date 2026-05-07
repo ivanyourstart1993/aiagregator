@@ -5,6 +5,9 @@ import type { ConnectionOptions } from 'bullmq';
 import {
   CALLBACK_DLQ,
   CALLBACK_QUEUE,
+  CRM_DISCOVERY_QUEUE,
+  CRM_ENRICHMENT_QUEUE,
+  CRM_OUTREACH_QUEUE,
   EMAIL_QUEUE,
   EXPORTS_QUEUE,
   GENERATION_DLQ,
@@ -39,6 +42,9 @@ function parseRedisUrl(url: string): ConnectionOptions {
     BullModule.registerQueue({ name: EXPORTS_QUEUE }),
     BullModule.registerQueue({ name: GENERATION_DLQ }),
     BullModule.registerQueue({ name: CALLBACK_DLQ }),
+    BullModule.registerQueue({ name: CRM_DISCOVERY_QUEUE }),
+    BullModule.registerQueue({ name: CRM_ENRICHMENT_QUEUE }),
+    BullModule.registerQueue({ name: CRM_OUTREACH_QUEUE }),
   ],
   exports: [BullModule],
 })

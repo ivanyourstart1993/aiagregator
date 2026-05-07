@@ -40,6 +40,10 @@
     "coupons": "Coupons",
     "load": "Load",
     "settings": "Settings",
+    "crmLeads": "Leads",
+    "crmSources": "Sources",
+    "crmTemplates": "Templates",
+    "crmAccounts": "TG accounts",
     "signOut": "Sign out",
     "profile": "Profile",
     "crumb": {
@@ -53,7 +57,94 @@
       "settings": "Settings",
       "new": "New",
       "edit": "Edit",
-      "redemptions": "Redemptions"
+      "redemptions": "Redemptions",
+      "crm": "CRM",
+      "leads": "Leads",
+      "sources": "Sources",
+      "templates": "Templates"
+    }
+  },
+  "crm": {
+    "leads": {
+      "title": "Leads",
+      "kanban": "Board",
+      "list": "List",
+      "newLead": "New lead",
+      "search": "Search by name, email, @username...",
+      "type": "Type",
+      "source": "Source",
+      "score": "Score",
+      "status": "Status",
+      "noLeads": "No leads in this status",
+      "moveTo": "Move to",
+      "addNote": "Add note",
+      "history": "Status history",
+      "conversation": "Conversation",
+      "draftMessage": "Draft message",
+      "noConversation": "Conversation not started yet"
+    },
+    "status": {
+      "NEW": "New",
+      "ENRICHED": "Enriched",
+      "READY": "Ready",
+      "CONTACTED": "Contacted",
+      "REPLIED": "Replied",
+      "IN_DIALOG": "In dialog",
+      "DEMO": "Demo/Trial",
+      "WON": "Won",
+      "LOST_NO_REPLY": "No reply",
+      "LOST_REJECTED": "Rejected",
+      "BLOCKED": "Blocked"
+    },
+    "type": {
+      "TELEGRAM_CHANNEL": "TG channel",
+      "MOBILE_APP_IOS": "iOS app",
+      "MOBILE_APP_ANDROID": "Android app",
+      "WEBSITE": "Website",
+      "OTHER": "Other"
+    },
+    "sources": {
+      "title": "Discovery sources",
+      "newSource": "New source",
+      "kind": "Kind",
+      "config": "Config (JSON)",
+      "interval": "Interval (min, empty = manual only)",
+      "lastRun": "Last run",
+      "found": "Found",
+      "runNow": "Run now",
+      "enabled": "Enabled",
+      "ITUNES_SEARCH": "iTunes Search API",
+      "PLAY_STORE_SEARCH": "Google Play scraper",
+      "LYZEM_SEARCH": "Lyzem (TG)",
+      "TGSTAT_SEARCH": "TGStat (TG)",
+      "TELEGRAM_MENTIONS": "TG mentions crawl",
+      "FACEBOOK_AD_LIBRARY": "FB Ad Library",
+      "MANUAL": "Manual"
+    },
+    "templates": {
+      "title": "Message templates",
+      "newTemplate": "New template",
+      "slug": "Slug",
+      "name": "Name",
+      "body": "Template body",
+      "targetTypes": "Applies to types",
+      "enabled": "Enabled",
+      "vars": "Variables: {{name}}, {{ownerName}}, {{topic}}, {{url}}"
+    },
+    "outreachAccounts": {
+      "title": "Telegram outreach accounts",
+      "newAccount": "Add account",
+      "phone": "Phone",
+      "apiId": "API ID",
+      "apiHash": "API hash",
+      "proxy": "Proxy",
+      "dailyLimit": "Daily limit",
+      "warmupSince": "Warming since",
+      "totalSent": "Total sent",
+      "todaySent": "Today",
+      "session": "Session logged in",
+      "noSession": "Login required",
+      "register": "Get api_id and api_hash at my.telegram.org"
     }
   },
   "coupons": {
