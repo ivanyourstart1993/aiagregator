@@ -89,9 +89,50 @@ export class AdminTasksController {
       : [];
     const methodById = new Map(methods.map((m) => [m.id, m]));
 
+    // For each task, resolve the *final* ProviderAttempt — the one that
+    // actually served the result (success), or the last failed attempt if
+    // the task itself failed. Pick the row with the highest attemptNumber
+    // per taskId.
+    const taskIds = items.map((t) => t.id);
+    const attempts = taskIds.length
+      ? await this.prisma.providerAttempt.findMany({
+          where: { taskId: { in: taskIds } },
+          orderBy: [{ taskId: 'asc' }, { attemptNumber: 'desc' }],
+          select: {
+            taskId: true,
+            attemptNumber: true,
+            providerAccountId: true,
+            proxyId: true,
+            status: true,
+            providerAccount: { select: { id: true, name: true } },
+          },
+        })
+      : [];
+    const finalAttemptByTask = new Map<string, (typeof attempts)[number]>();
+    for (const a of attempts) {
+      if (!finalAttemptByTask.has(a.taskId)) finalAttemptByTask.set(a.taskId, a);
+    }
+    // Batch-fetch proxies referenced by final attempts (ProviderAttempt has
+    // no `proxy` relation — only the FK column).
+    const proxyIds = Array.from(
+      new Set(
+        Array.from(finalAttemptByTask.values())
+          .map((a) => a.proxyId)
+          .filter((x): x is string => !!x),
+      ),
+    );
+    const proxies = proxyIds.length
+      ? await this.prisma.proxy.findMany({
+          where: { id: { in: proxyIds } },
+          select: { id: true, name: true, host: true, port: true, country: true },
+        })
+      : [];
+    const proxyById = new Map(proxies.map((p) => [p.id, p]));
+
     return {
       items: items.map((t) => {
         const m = methodById.get(t.methodId);
+        const att = finalAttemptByTask.get(t.id);
         return {
           id: t.id,
           status: t.status,
@@ -114,6 +155,17 @@ export class AdminTasksController {
               }
             : null,
           apiRequest: t.apiRequest,
+          providerAccount: att?.providerAccount
+            ? { id: att.providerAccount.id, name: att.providerAccount.name }
+            : null,
+          proxy: att?.proxyId
+            ? (() => {
+                const p = proxyById.get(att.proxyId);
+                return p
+                  ? { id: p.id, name: p.name, host: p.host, port: p.port, country: p.country }
+                  : null;
+              })()
+            : null,
         };
       }),
       total,

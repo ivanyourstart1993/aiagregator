@@ -1252,6 +1252,14 @@ export interface AdminTaskListItem {
     bundleKey: string | null;
     idempotencyKey: string | null;
   } | null;
+  providerAccount: { id: string; name: string } | null;
+  proxy: {
+    id: string;
+    name: string;
+    host: string;
+    port: number;
+    country: string | null;
+  } | null;
 }
 
 export interface AdminTasksPage {

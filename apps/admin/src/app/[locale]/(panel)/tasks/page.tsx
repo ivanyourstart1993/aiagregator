@@ -89,6 +89,8 @@ export default async function TasksPage({ searchParams }: Props) {
                 <th className="px-4 py-3 text-left">Длит.</th>
                 <th className="px-4 py-3 text-left">Юзер</th>
                 <th className="px-4 py-3 text-left">Метод</th>
+                <th className="px-4 py-3 text-left">Аккаунт</th>
+                <th className="px-4 py-3 text-left">Прокси</th>
                 <th className="px-4 py-3 text-left">Ошибка</th>
               </tr>
             </thead>
@@ -113,6 +115,24 @@ export default async function TasksPage({ searchParams }: Props) {
                       : '—'}
                   </td>
                   <td
+                    className="max-w-[160px] truncate px-4 py-3 font-mono text-muted-foreground"
+                    title={t.providerAccount?.name ?? ''}
+                  >
+                    {t.providerAccount?.name ?? '—'}
+                  </td>
+                  <td
+                    className="max-w-[180px] truncate px-4 py-3 font-mono text-muted-foreground"
+                    title={
+                      t.proxy
+                        ? `${t.proxy.name} · ${t.proxy.host}:${t.proxy.port}${t.proxy.country ? ' · ' + t.proxy.country : ''}`
+                        : ''
+                    }
+                  >
+                    {t.proxy
+                      ? `${t.proxy.host}${t.proxy.country ? ' · ' + t.proxy.country : ''}`
+                      : '—'}
+                  </td>
+                  <td
                     className="max-w-[220px] truncate px-4 py-3 font-mono text-destructive"
                     title={t.errorMessage ?? ''}
                   >
@@ -123,7 +143,7 @@ export default async function TasksPage({ searchParams }: Props) {
               {items.length === 0 ? (
                 <tr>
                   <td
-                    colSpan={6}
+                    colSpan={8}
                     className="px-4 py-12 text-center text-sm text-muted-foreground"
                   >
                     Задач не найдено
