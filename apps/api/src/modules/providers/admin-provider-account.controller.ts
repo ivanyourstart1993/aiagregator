@@ -218,6 +218,89 @@ export class AdminProviderAccountController {
     return this.toView(acc);
   }
 
+  // Recent ProviderAttempt rows for an account — paginated, newest first.
+  // Used by the account detail page to show a live debug log.
+  @Get(':id/attempts')
+  async attempts(
+    @Param('id') id: string,
+    @Query('page', new DefaultValuePipe(1), ParseIntPipe) page: number,
+    @Query('pageSize', new DefaultValuePipe(20), ParseIntPipe) pageSizeRaw: number,
+  ) {
+    const pageSize = Math.min(Math.max(pageSizeRaw, 1), 100);
+    const skip = (Math.max(page, 1) - 1) * pageSize;
+    const acc = await this.prisma.providerAccount.findUnique({ where: { id } });
+    if (!acc) throw new NotFoundException();
+    const [items, total] = await Promise.all([
+      this.prisma.providerAttempt.findMany({
+        where: { providerAccountId: id },
+        orderBy: { startedAt: 'desc' },
+        skip,
+        take: pageSize,
+        select: {
+          id: true,
+          taskId: true,
+          attemptNumber: true,
+          status: true,
+          errorType: true,
+          errorCode: true,
+          errorMessage: true,
+          providerJobId: true,
+          providerCostUnits: true,
+          startedAt: true,
+          finishedAt: true,
+          durationMs: true,
+          proxyId: true,
+        },
+      }),
+      this.prisma.providerAttempt.count({ where: { providerAccountId: id } }),
+    ]);
+    // Resolve proxy names in one batch.
+    const proxyIds = Array.from(
+      new Set(items.map((a) => a.proxyId).filter((x): x is string => !!x)),
+    );
+    const proxies = proxyIds.length
+      ? await this.prisma.proxy.findMany({
+          where: { id: { in: proxyIds } },
+          select: { id: true, name: true, host: true, port: true, country: true },
+        })
+      : [];
+    const proxyById = new Map(proxies.map((p) => [p.id, p]));
+    return {
+      items: items.map((a) => ({
+        id: a.id,
+        taskId: a.taskId,
+        attemptNumber: a.attemptNumber,
+        status: a.status,
+        errorType: a.errorType,
+        errorCode: a.errorCode,
+        errorMessage: a.errorMessage,
+        providerJobId: a.providerJobId,
+        providerCostUnits:
+          a.providerCostUnits != null ? a.providerCostUnits.toString() : null,
+        startedAt: a.startedAt,
+        finishedAt: a.finishedAt,
+        durationMs: a.durationMs,
+        proxy: a.proxyId
+          ? (() => {
+              const p = proxyById.get(a.proxyId);
+              return p
+                ? {
+                    id: p.id,
+                    name: p.name,
+                    host: p.host,
+                    port: p.port,
+                    country: p.country,
+                  }
+                : null;
+            })()
+          : null,
+      })),
+      total,
+      page,
+      pageSize,
+    };
+  }
+
   // Stage 11 (full) — usage / error breakdown for an account, derived from
   // ProviderAttempt rows. `from`/`to` are ISO timestamps; default = last 7d.
   @Get(':id/stats')

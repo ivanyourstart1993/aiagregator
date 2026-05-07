@@ -677,6 +677,13 @@ export const serverApi = {
     apiGet<ProviderAccountStats>(
       `/internal/admin/providers/accounts/${id}/stats${qs({ ...filters })}`,
     ),
+  adminListProviderAccountAttempts: (
+    id: string,
+    filters?: { page?: number; pageSize?: number },
+  ) =>
+    apiGet<ProviderAccountAttemptsPage>(
+      `/internal/admin/providers/accounts/${id}/attempts${qs({ ...filters })}`,
+    ),
 
   // ---- Stage 7+11: Proxies ----
   adminListProxies: () => apiGet<ProxyView[] | { items: ProxyView[] }>('/internal/admin/providers/proxies'),
@@ -948,6 +955,35 @@ export interface UpdateProviderAccountInput {
   dailyLimit?: number | null;
   monthlyLimit?: number | null;
   maxConcurrentTasks?: number | null;
+}
+
+export interface ProviderAccountAttempt {
+  id: string;
+  taskId: string;
+  attemptNumber: number;
+  status: string;
+  errorType: string | null;
+  errorCode: string | null;
+  errorMessage: string | null;
+  providerJobId: string | null;
+  providerCostUnits: string | null;
+  startedAt: string;
+  finishedAt: string | null;
+  durationMs: number | null;
+  proxy: {
+    id: string;
+    name: string;
+    host: string;
+    port: number;
+    country: string | null;
+  } | null;
+}
+
+export interface ProviderAccountAttemptsPage {
+  items: ProviderAccountAttempt[];
+  total: number;
+  page: number;
+  pageSize: number;
 }
 
 export interface ProviderAccountStats {
