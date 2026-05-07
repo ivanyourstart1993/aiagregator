@@ -55,6 +55,24 @@ export class ResendOutreachWebhookController {
     @Headers('svix-timestamp') svixTimestamp?: string,
     @Headers('svix-signature') svixSignature?: string,
   ) {
+    try {
+      return await this.doHandle(req, svixId, svixTimestamp, svixSignature);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      const stack = e instanceof Error ? e.stack : undefined;
+      this.logger.error(`[outreach-webhook] failed: ${msg}\n${stack}`);
+      // Re-throw HttpException as-is (so 4xx come through), wrap others.
+      if (e && typeof e === 'object' && 'getStatus' in e) throw e;
+      throw new BadRequestException({ message: 'webhook_handler_error', detail: msg });
+    }
+  }
+
+  private async doHandle(
+    req: Request,
+    svixId?: string,
+    svixTimestamp?: string,
+    svixSignature?: string,
+  ) {
     let raw = '';
     if (Buffer.isBuffer(req.body)) {
       raw = req.body.toString('utf8');
