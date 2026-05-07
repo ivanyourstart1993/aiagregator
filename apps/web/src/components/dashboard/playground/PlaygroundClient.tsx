@@ -34,7 +34,13 @@ type TaskType =
   | 'text_to_video_fast_1080p'
   | 'text_to_video_quality_1080p'
   | 'text_to_video_kling_std'
-  | 'text_to_video_kling_pro';
+  | 'text_to_video_kling_pro'
+  | 'text_to_video_kling16_std'
+  | 'text_to_video_kling16_pro'
+  | 'text_to_video_kling21m_pro'
+  | 'text_to_video_kling25_pro'
+  | 'text_to_video_klingv3_std'
+  | 'text_to_video_klingv3_pro';
 
 interface PresetSpec {
   provider: string;
@@ -137,6 +143,72 @@ const PRESETS: Record<TaskType, PresetSpec> = {
     needsVideo: true,
     approxUsd: 0.4,
   },
+  text_to_video_kling16_std: {
+    provider: 'kling_ai',
+    model: 'kling-v1-6',
+    method: 'text_to_video',
+    imageMethod: 'image_to_video',
+    durationOptions: [5, 10],
+    durationBase: 5,
+    mode: 'standard',
+    needsVideo: true,
+    approxUsd: 0.14,
+  },
+  text_to_video_kling16_pro: {
+    provider: 'kling_ai',
+    model: 'kling-v1-6',
+    method: 'text_to_video',
+    imageMethod: 'image_to_video',
+    durationOptions: [5, 10],
+    durationBase: 5,
+    mode: 'pro',
+    needsVideo: true,
+    approxUsd: 0.28,
+  },
+  text_to_video_kling21m_pro: {
+    provider: 'kling_ai',
+    model: 'kling-v2-1-master',
+    method: 'text_to_video',
+    imageMethod: 'image_to_video',
+    durationOptions: [5, 10],
+    durationBase: 5,
+    mode: 'pro',
+    needsVideo: true,
+    approxUsd: 0.7,
+  },
+  text_to_video_kling25_pro: {
+    provider: 'kling_ai',
+    model: 'kling-v2-5-turbo',
+    method: 'text_to_video',
+    imageMethod: 'image_to_video',
+    durationOptions: [5, 10],
+    durationBase: 5,
+    mode: 'pro',
+    needsVideo: true,
+    approxUsd: 0.5,
+  },
+  text_to_video_klingv3_std: {
+    provider: 'kling_ai',
+    model: 'kling-v3',
+    method: 'text_to_video',
+    imageMethod: 'image_to_video',
+    durationOptions: [5, 10],
+    durationBase: 5,
+    mode: 'standard',
+    needsVideo: true,
+    approxUsd: 0.5,
+  },
+  text_to_video_klingv3_pro: {
+    provider: 'kling_ai',
+    model: 'kling-v3',
+    method: 'text_to_video',
+    imageMethod: 'image_to_video',
+    durationOptions: [5, 10],
+    durationBase: 5,
+    mode: 'pro',
+    needsVideo: true,
+    approxUsd: 0.9,
+  },
 };
 
 const TASK_GROUPS: Array<{ labelKey: string; types: TaskType[] }> = [
@@ -153,8 +225,14 @@ const TASK_GROUPS: Array<{ labelKey: string; types: TaskType[] }> = [
     types: [
       'text_to_video_fast_1080p',
       'text_to_video_quality_1080p',
+      'text_to_video_kling16_std',
+      'text_to_video_kling16_pro',
+      'text_to_video_kling21m_pro',
+      'text_to_video_kling25_pro',
       'text_to_video_kling_std',
       'text_to_video_kling_pro',
+      'text_to_video_klingv3_std',
+      'text_to_video_klingv3_pro',
     ],
   },
 ];

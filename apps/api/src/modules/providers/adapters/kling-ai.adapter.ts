@@ -10,10 +10,33 @@ import {
   type ProviderAdapter,
 } from './provider-adapter.interface';
 
-const SUPPORTED_MODELS = new Set(['kling-2.6', 'kling-v3', 'kling-o1']);
+const SUPPORTED_MODELS = new Set([
+  // Catalog "legacy" codes — kept for backward compatibility, mapped below.
+  'kling-2.6',
+  'kling-v3',
+  // Real Kling API model_name values (preferred; pass through unchanged).
+  'kling-v1-5',
+  'kling-v1-6',
+  'kling-v2-1-master',
+  'kling-v2-5-turbo',
+  'kling-v2-6',
+  'kling-v3-0',
+]);
 const SUPPORTED_METHODS = new Set(['text_to_video', 'image_to_video']);
 
 const KLING_BASE = 'https://api-singapore.klingai.com';
+
+// Map our internal catalog model.code values onto the strings Kling's
+// API actually expects in `model_name`. Newer catalog entries already use
+// the API-canonical codes and pass through unchanged.
+const MODEL_CODE_TO_API_NAME: Record<string, string> = {
+  'kling-2.6': 'kling-v2-6',
+  'kling-v3': 'kling-v3-0',
+};
+
+function realModelName(code: string): string {
+  return MODEL_CODE_TO_API_NAME[code] ?? code;
+}
 
 interface KlingTaskResult {
   videos?: Array<{ url?: string; duration?: string | number }>;
@@ -156,7 +179,7 @@ export class KlingAiAdapter implements ProviderAdapter {
         : `${KLING_BASE}/v1/videos/text2video`;
 
     const body: Record<string, unknown> = {
-      model_name: model.code,
+      model_name: realModelName(model.code),
       duration: pickDuration(params),
       mode: pickMode(params),
       aspect_ratio: pickString(params, 'aspect_ratio', 'aspectRatio') ?? '16:9',
