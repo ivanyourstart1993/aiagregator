@@ -55,7 +55,14 @@ export class ResendOutreachWebhookController {
     @Headers('svix-timestamp') svixTimestamp?: string,
     @Headers('svix-signature') svixSignature?: string,
   ) {
-    const raw = req.body instanceof Buffer ? req.body.toString('utf8') : '';
+    let raw = '';
+    if (Buffer.isBuffer(req.body)) {
+      raw = req.body.toString('utf8');
+    } else if (typeof req.body === 'string') {
+      raw = req.body;
+    } else if (req.body && typeof req.body === 'object') {
+      raw = JSON.stringify(req.body);
+    }
     if (!raw) throw new BadRequestException('empty body');
 
     if (this.secret) {
