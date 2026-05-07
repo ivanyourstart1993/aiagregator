@@ -19,7 +19,8 @@
     "bullmq": "^5.34.5",
     "google-play-scraper": "^10.1.2",
     "https-proxy-agent": "^7.0.5",
-    "ioredis": "^5.4.2"
+    "ioredis": "^5.4.2",
+    "resend": "^4.0.1"
   },
   "devDependencies": {
     "@aiagg/eslint-config": "workspace:*",

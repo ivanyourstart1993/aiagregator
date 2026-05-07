@@ -36,6 +36,10 @@ async function bootstrap(): Promise<void> {
   // payloads cheaply.
   app.use('/webhooks/cryptomus', express.raw({ type: '*/*', limit: '256kb' }));
   app.use('/webhooks/oxapay', express.raw({ type: '*/*', limit: '256kb' }));
+  // Resend webhooks (Svix). Inbound emails can carry attachments — bump
+  // limit to 5MB so a forwarded screenshot doesn't bounce.
+  app.use('/webhooks/resend-outreach', express.raw({ type: '*/*', limit: '256kb' }));
+  app.use('/webhooks/resend-inbound', express.raw({ type: '*/*', limit: '5mb' }));
   // Playground image uploads come in as raw image/* bodies (no multipart,
   // keeps us off multer). 15MB ceiling matches the controller-side check.
   app.use(

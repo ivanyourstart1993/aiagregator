@@ -36,6 +36,7 @@ import { FilesModule } from './modules/files/files.module';
 import { ExportsModule } from './modules/exports/exports.module';
 import { SupportModule } from './modules/support/support.module';
 import { CrmModule } from './modules/crm/crm.module';
+import { CrmEmailModule } from './modules/crm-email/crm-email.module';
 import { RedisModule } from './common/redis/redis.module';
 import { StorageModule } from './common/storage/storage.module';
 
@@ -94,6 +95,7 @@ import { StorageModule } from './common/storage/storage.module';
     ExportsModule,
     SupportModule,
     CrmModule,
+    CrmEmailModule,
   ],
   providers: [
     { provide: APP_FILTER, useClass: PublicErrorFilter },

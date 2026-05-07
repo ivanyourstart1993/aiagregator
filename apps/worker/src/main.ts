@@ -6,6 +6,7 @@ import { createGenerationWorker } from './processors/generation.processor';
 import { createCallbackWorker } from './processors/callback.processor';
 import { createExportsWorker } from './processors/exports.processor';
 import { createCrmDiscoveryWorker } from './processors/crm-discovery.processor';
+import { createCrmEmailWorker } from './processors/crm-email.processor';
 import { WorkerAdapterRegistry } from './adapters/registry';
 import { WorkerStorage } from './storage/storage';
 
@@ -49,6 +50,32 @@ async function main(): Promise<void> {
   const crmDiscoveryHandle = createCrmDiscoveryWorker({ redisUrl, prisma });
   console.log('[worker] crm-discovery processor started (Stage 17)');
 
+  // CRM email outreach — only spin up if Resend credentials present.
+  const outreachApiKey =
+    process.env.RESEND_OUTREACH_API_KEY ?? process.env.RESEND_API_KEY ?? '';
+  const outreachFrom =
+    process.env.RESEND_OUTREACH_FROM ?? process.env.RESEND_FROM ?? '';
+  const unsubscribeBaseUrl = process.env.API_PUBLIC_BASE_URL ?? 'https://api.aigenway.com';
+  const unsubscribeSecret =
+    process.env.UNSUBSCRIBE_TOKEN_SECRET ?? 'dev-unsubscribe-secret-change-me!!!';
+  let crmEmailHandle: { close: () => Promise<void> } | null = null;
+  if (outreachApiKey && outreachFrom) {
+    crmEmailHandle = createCrmEmailWorker({
+      redisUrl,
+      prisma,
+      apiKey: outreachApiKey,
+      fromAddress: outreachFrom,
+      replyTo: process.env.RESEND_OUTREACH_REPLY_TO,
+      unsubscribeBaseUrl,
+      unsubscribeTokenSecret: unsubscribeSecret,
+    });
+    console.log('[worker] crm-email processor started (Stage 18)');
+  } else {
+    console.log(
+      '[worker] crm-email processor SKIPPED — set RESEND_OUTREACH_API_KEY and RESEND_OUTREACH_FROM to enable',
+    );
+  }
+
   const shutdown = async (): Promise<void> => {
     console.log('[worker] shutting down...');
     try {
@@ -70,6 +97,13 @@ async function main(): Promise<void> {
       await crmDiscoveryHandle.close();
     } catch {
       /* swallow */
+    }
+    if (crmEmailHandle) {
+      try {
+        await crmEmailHandle.close();
+      } catch {
+        /* swallow */
+      }
     }
     try {
       await prisma.$disconnect();

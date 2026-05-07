@@ -29,6 +29,38 @@ export const envSchema = z
     RESEND_API_KEY: z.string().optional().or(z.literal('').transform(() => undefined)),
     RESEND_FROM: z.string().default('onboarding@example.com'),
 
+    // Stage 18 — CRM cold-outreach mailer. Falls back to RESEND_API_KEY/RESEND_FROM
+    // if these are unset; recommended to use a separate API key (operational
+    // hygiene — revokable independently if abuse complaints spike).
+    RESEND_OUTREACH_API_KEY: z
+      .string()
+      .optional()
+      .or(z.literal('').transform(() => undefined)),
+    RESEND_OUTREACH_FROM: z
+      .string()
+      .optional()
+      .or(z.literal('').transform(() => undefined)),
+    RESEND_OUTREACH_REPLY_TO: z
+      .string()
+      .optional()
+      .or(z.literal('').transform(() => undefined)),
+    // Webhook signing secrets (set in Resend dashboard → Webhooks → endpoint).
+    // Used to verify Svix-Signature on incoming webhooks.
+    RESEND_OUTREACH_WEBHOOK_SECRET: z
+      .string()
+      .optional()
+      .or(z.literal('').transform(() => undefined)),
+    RESEND_INBOUND_WEBHOOK_SECRET: z
+      .string()
+      .optional()
+      .or(z.literal('').transform(() => undefined)),
+    // Pepper for HMAC-SHA256 signing of unsubscribe tokens. Reuse a 32+ char
+    // secret; rotating invalidates all existing unsubscribe links (so don't).
+    UNSUBSCRIBE_TOKEN_SECRET: z
+      .string()
+      .min(16, 'UNSUBSCRIBE_TOKEN_SECRET must be at least 16 chars')
+      .default('dev-unsubscribe-secret-change-me!!!'),
+
     SMTP_HOST: z.string().default('localhost'),
     SMTP_PORT: z.coerce.number().int().positive().default(1025),
     SMTP_FROM: z.string().default('onboarding@localhost'),

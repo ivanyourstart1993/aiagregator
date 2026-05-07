@@ -4,12 +4,14 @@ import { revalidatePath } from 'next/cache';
 import {
   ApiError,
   serverApi,
+  type AdminEmailCampaignInput,
   type AdminLeadCreateInput,
   type AdminLeadSourceInput,
   type AdminLeadUpdateInput,
   type AdminOutreachAccountInput,
   type AdminOutreachAccountUpdateInput,
   type AdminOutreachTemplateInput,
+  type EmailCampaignView,
   type LeadStatus,
   type LeadView,
   type LeadSourceView,
@@ -211,6 +213,84 @@ export async function deleteOutreachAccountAction(
   try {
     await serverApi.adminDeleteOutreachAccount(id);
     revalidatePath('/(panel)/crm/accounts', 'page');
+    return { ok: true };
+  } catch (err) {
+    return fail(err);
+  }
+}
+
+// ---- Email campaigns ----
+
+export async function createEmailCampaignAction(
+  input: AdminEmailCampaignInput,
+): Promise<MutationResult<EmailCampaignView>> {
+  try {
+    const data = await serverApi.adminCreateEmailCampaign(input);
+    revalidatePath('/(panel)/crm/campaigns', 'page');
+    return { ok: true, data };
+  } catch (err) {
+    return fail(err);
+  }
+}
+
+export async function updateEmailCampaignAction(
+  id: string,
+  input: Partial<AdminEmailCampaignInput>,
+): Promise<MutationResult<EmailCampaignView>> {
+  try {
+    const data = await serverApi.adminUpdateEmailCampaign(id, input);
+    revalidatePath('/(panel)/crm/campaigns', 'page');
+    revalidatePath(`/(panel)/crm/campaigns/${id}`, 'page');
+    return { ok: true, data };
+  } catch (err) {
+    return fail(err);
+  }
+}
+
+export async function deleteEmailCampaignAction(
+  id: string,
+): Promise<MutationResult> {
+  try {
+    await serverApi.adminDeleteEmailCampaign(id);
+    revalidatePath('/(panel)/crm/campaigns', 'page');
+    return { ok: true };
+  } catch (err) {
+    return fail(err);
+  }
+}
+
+export async function runEmailCampaignAction(
+  id: string,
+): Promise<MutationResult<{ queued: number; skipped: number; audienceSize: number }>> {
+  try {
+    const data = await serverApi.adminRunEmailCampaign(id);
+    revalidatePath('/(panel)/crm/campaigns', 'page');
+    revalidatePath(`/(panel)/crm/campaigns/${id}`, 'page');
+    return { ok: true, data };
+  } catch (err) {
+    return fail(err);
+  }
+}
+
+export async function pauseEmailCampaignAction(
+  id: string,
+): Promise<MutationResult<EmailCampaignView>> {
+  try {
+    const data = await serverApi.adminPauseEmailCampaign(id);
+    revalidatePath('/(panel)/crm/campaigns', 'page');
+    return { ok: true, data };
+  } catch (err) {
+    return fail(err);
+  }
+}
+
+export async function sendEmailToLeadAction(
+  leadId: string,
+  body: { templateSlug?: string; subject?: string; body?: string },
+): Promise<MutationResult> {
+  try {
+    await serverApi.adminSendEmailToLead(leadId, body);
+    revalidatePath(`/(panel)/crm/leads/${leadId}`, 'page');
     return { ok: true };
   } catch (err) {
     return fail(err);

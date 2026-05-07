@@ -13,6 +13,7 @@ import {
   Radar,
   MessageSquare,
   Send,
+  Mail,
   type LucideIcon,
 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
@@ -34,7 +35,8 @@ interface Item {
     | 'crmLeads'
     | 'crmSources'
     | 'crmTemplates'
-    | 'crmAccounts';
+    | 'crmAccounts'
+    | 'crmCampaigns';
   group?: 'main' | 'crm';
 }
 
@@ -46,6 +48,7 @@ export const NAV_ITEMS: Item[] = [
   { href: '/tasks', icon: ListTree, key: 'tasks', group: 'main' },
   { href: '/coupons', icon: Ticket, key: 'coupons', group: 'main' },
   { href: '/crm/leads', icon: Target, key: 'crmLeads', group: 'crm' },
+  { href: '/crm/campaigns', icon: Mail, key: 'crmCampaigns', group: 'crm' },
   { href: '/crm/sources', icon: Radar, key: 'crmSources', group: 'crm' },
   { href: '/crm/templates', icon: MessageSquare, key: 'crmTemplates', group: 'crm' },
   { href: '/crm/accounts', icon: Send, key: 'crmAccounts', group: 'crm' },

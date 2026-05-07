@@ -41,6 +41,7 @@
     "load": "Load",
     "settings": "Settings",
     "crmLeads": "Leads",
+    "crmCampaigns": "Email campaigns",
     "crmSources": "Sources",
     "crmTemplates": "Templates",
     "crmAccounts": "TG accounts",

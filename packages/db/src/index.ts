@@ -47,6 +47,10 @@ export {
   OutreachAccountStatus,
   MessageDirection,
   MessageAuthor,
+  // CRM email (Stage 18)
+  EmailCampaignStatus,
+  EmailDeliveryStatus,
+  EmailSuppressionReason,
 } from '@prisma/client';
 
 export type * from '@prisma/client';

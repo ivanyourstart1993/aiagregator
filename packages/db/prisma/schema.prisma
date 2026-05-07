@@ -1421,3 +1421,121 @@ model OutreachTemplate {
 
   @@map("outreach_template")
 }
+
+// =============================================================================
+// STAGE 18 — CRM Email outreach (Resend send + inbound)
+// =============================================================================
+
+enum EmailCampaignStatus {
+  DRAFT
+  RUNNING
+  PAUSED
+  COMPLETED
+  CANCELLED
+}
+
+enum EmailDeliveryStatus {
+  QUEUED      // job sitting in BullMQ, not yet sent
+  SENDING     // worker picked it up, about to call Resend
+  SENT        // Resend accepted (got an external_id)
+  DELIVERED   // Resend webhook: delivered
+  BOUNCED     // hard bounce
+  COMPLAINED  // spam complaint — auto-suppress this address forever
+  REPLIED     // inbound webhook matched — reply landed in CRM
+  FAILED      // send error before reaching Resend
+  SKIPPED     // suppressed before sending (in suppression list)
+}
+
+enum EmailSuppressionReason {
+  BOUNCE
+  COMPLAINT
+  UNSUBSCRIBE
+  MANUAL
+}
+
+model EmailCampaign {
+  id          String              @id @default(cuid())
+  name        String
+  description String?
+  // FK to OutreachTemplate.slug — lookup at send time so template edits propagate.
+  templateSlug String
+  // Subject line is per-campaign (template body is the email body). Mustache variables
+  // like {{name}}, {{ownerName}}, {{type}} apply to both subject and body.
+  subject     String
+  // JSON filter shape persisted with the campaign so re-running picks the
+  // same audience (or refreshed audience). Schema:
+  //   { type?: LeadType, minScore?: number, sourceId?: string, status?: LeadStatus }
+  audienceFilter Json
+  // Throttling — soft cap per hour of how many emails worker dispatches
+  // for this campaign. Defaults to a conservative 20/hour to ramp gently.
+  hourlyCap    Int                @default(20)
+  status       EmailCampaignStatus @default(DRAFT)
+  // Counters refreshed on each delivery state change (cheap aggregate).
+  totalAudience Int               @default(0)
+  totalSent     Int               @default(0)
+  totalDelivered Int              @default(0)
+  totalBounced  Int               @default(0)
+  totalReplied  Int               @default(0)
+  totalComplained Int             @default(0)
+  startedAt    DateTime?
+  finishedAt   DateTime?
+  createdById  String?
+  createdAt    DateTime           @default(now())
+  updatedAt    DateTime           @updatedAt
+
+  deliveries EmailDelivery[]
+
+  @@index([status, createdAt])
+  @@map("email_campaign")
+}
+
+model EmailDelivery {
+  id            String              @id @default(cuid())
+  campaignId    String?
+  leadId        String
+  // Snapshot of address used (lead.ownerEmail at send time — lead may change later).
+  toEmail       String
+  subject       String              @db.Text
+  // Resend ID returned by send call; null until SENT.
+  resendId      String?             @unique
+  status        EmailDeliveryStatus @default(QUEUED)
+  // Last error text when status=FAILED or BOUNCED.
+  errorMessage  String?             @db.Text
+  // Detailed timestamps populated by webhook events.
+  sentAt        DateTime?
+  deliveredAt   DateTime?
+  openedAt      DateTime?           // we DON'T inject open-tracking pixels (hurts deliverability)
+                                    // but Resend sometimes infers from inbound — store anyway
+  bouncedAt     DateTime?
+  complainedAt  DateTime?
+  repliedAt     DateTime?
+  // Signed token for the unsubscribe link in this email's footer.
+  // Lookup is on the (id, signature) pair so we don't need to index this column.
+  unsubscribeToken String           @unique
+  createdAt     DateTime            @default(now())
+  updatedAt     DateTime            @updatedAt
+
+  campaign EmailCampaign? @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+
+  @@index([leadId, createdAt])
+  @@index([campaignId, status])
+  @@index([status, createdAt])
+  @@map("email_delivery")
+}
+
+// Suppression list — never email these addresses again. Checked before every
+// send. Auto-populated by webhooks (bounce/complaint) and unsubscribe link.
+model EmailSuppression {
+  id        String                @id @default(cuid())
+  email     String                @unique // case-insensitive lookup at app layer
+  reason    EmailSuppressionReason
+  // Free-form context (the bounce reason from Resend, who clicked unsubscribe, etc).
+  notes     String?               @db.Text
+  // If non-null, suppression auto-expires (e.g. soft bounce — try again in 30 days).
+  // For COMPLAINT and UNSUBSCRIBE leave NULL = forever.
+  expiresAt DateTime?
+  createdAt DateTime              @default(now())
+
+  @@index([email])
+  @@map("email_suppression")
+}

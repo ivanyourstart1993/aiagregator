@@ -889,7 +889,151 @@ export const serverApi = {
     apiPatch<OutreachAccountView>(`/internal/admin/crm/outreach-accounts/${id}`, body),
   adminDeleteOutreachAccount: (id: string) =>
     apiDelete<{ ok: true }>(`/internal/admin/crm/outreach-accounts/${id}`),
+
+  // ---- Stage 18: CRM Email outreach ----
+  adminListEmailCampaigns: () =>
+    apiGet<{
+      items: EmailCampaignView[];
+      configured: boolean;
+      fromAddress: string;
+    }>('/internal/admin/crm/email-campaigns'),
+  adminGetEmailCampaign: (id: string) =>
+    apiGet<{
+      campaign: EmailCampaignView;
+      recentDeliveries: EmailDeliveryView[];
+    }>(`/internal/admin/crm/email-campaigns/${id}`),
+  adminCreateEmailCampaign: (body: AdminEmailCampaignInput) =>
+    apiPost<EmailCampaignView>('/internal/admin/crm/email-campaigns', body),
+  adminUpdateEmailCampaign: (id: string, body: Partial<AdminEmailCampaignInput>) =>
+    apiPatch<EmailCampaignView>(`/internal/admin/crm/email-campaigns/${id}`, body),
+  adminDeleteEmailCampaign: (id: string) =>
+    apiDelete<{ ok: true }>(`/internal/admin/crm/email-campaigns/${id}`),
+  adminRunEmailCampaign: (id: string) =>
+    apiPost<{ ok: true; queued: number; skipped: number; audienceSize: number }>(
+      `/internal/admin/crm/email-campaigns/${id}/run`,
+      {},
+    ),
+  adminPauseEmailCampaign: (id: string) =>
+    apiPost<EmailCampaignView>(`/internal/admin/crm/email-campaigns/${id}/pause`, {}),
+  adminPreviewEmailCampaign: (id: string, limit?: number) =>
+    apiPost<{
+      from: string;
+      template: { slug: string; name: string };
+      previews: Array<{
+        leadId: string;
+        leadName: string;
+        toEmail: string | null;
+        subject: string;
+        body: string;
+      }>;
+    }>(`/internal/admin/crm/email-campaigns/${id}/preview`, { limit: limit ?? 3 }),
+
+  adminSendEmailToLead: (
+    leadId: string,
+    body: { templateSlug?: string; subject?: string; body?: string },
+  ) =>
+    apiPost<{ ok: true; queued: true }>(
+      `/internal/admin/crm/email/leads/${leadId}/send`,
+      body,
+    ),
+  adminListLeadDeliveries: (leadId: string) =>
+    apiGet<{ items: EmailDeliveryView[] }>(
+      `/internal/admin/crm/email/leads/${leadId}/deliveries`,
+    ),
+  adminListEmailSuppressions: () =>
+    apiGet<{ items: EmailSuppressionView[] }>(
+      '/internal/admin/crm/email/suppressions',
+    ),
+  adminAddEmailSuppression: (body: { email: string; reason?: EmailSuppressionReasonValue; notes?: string }) =>
+    apiPost<EmailSuppressionView>('/internal/admin/crm/email/suppressions', body),
+  adminRemoveEmailSuppression: (id: string) =>
+    apiDelete<{ ok: true }>(`/internal/admin/crm/email/suppressions/${id}`),
 };
+
+// ---- Stage 18: CRM Email types ----
+export type EmailCampaignStatusValue =
+  | 'DRAFT'
+  | 'RUNNING'
+  | 'PAUSED'
+  | 'COMPLETED'
+  | 'CANCELLED';
+
+export type EmailDeliveryStatusValue =
+  | 'QUEUED'
+  | 'SENDING'
+  | 'SENT'
+  | 'DELIVERED'
+  | 'BOUNCED'
+  | 'COMPLAINED'
+  | 'REPLIED'
+  | 'FAILED'
+  | 'SKIPPED';
+
+export type EmailSuppressionReasonValue =
+  | 'BOUNCE'
+  | 'COMPLAINT'
+  | 'UNSUBSCRIBE'
+  | 'MANUAL';
+
+export interface EmailCampaignView {
+  id: string;
+  name: string;
+  description: string | null;
+  templateSlug: string;
+  subject: string;
+  audienceFilter: Record<string, unknown>;
+  hourlyCap: number;
+  status: EmailCampaignStatusValue;
+  totalAudience: number;
+  totalSent: number;
+  totalDelivered: number;
+  totalBounced: number;
+  totalReplied: number;
+  totalComplained: number;
+  startedAt: string | null;
+  finishedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface EmailDeliveryView {
+  id: string;
+  campaignId: string | null;
+  leadId: string;
+  toEmail: string;
+  subject: string;
+  resendId: string | null;
+  status: EmailDeliveryStatusValue;
+  errorMessage: string | null;
+  sentAt: string | null;
+  deliveredAt: string | null;
+  bouncedAt: string | null;
+  repliedAt: string | null;
+  createdAt: string;
+}
+
+export interface EmailSuppressionView {
+  id: string;
+  email: string;
+  reason: EmailSuppressionReasonValue;
+  notes: string | null;
+  expiresAt: string | null;
+  createdAt: string;
+}
+
+export interface AdminEmailCampaignInput {
+  name: string;
+  description?: string;
+  templateSlug: string;
+  subject: string;
+  audienceFilter: {
+    type?: LeadType;
+    minScore?: number;
+    sourceId?: string;
+    status?: LeadStatus;
+  };
+  hourlyCap?: number;
+}
 
 // ---- Stage 17: CRM types ----
 export type LeadType =

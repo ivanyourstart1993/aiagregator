@@ -2,6 +2,7 @@ import { notFound } from 'next/navigation';
 import { Link } from '@/i18n/navigation';
 import { ApiError, serverApi } from '@/lib/server-api';
 import { LeadActionsBar } from '@/components/crm/LeadActionsBar';
+import { SendLeadEmailButton } from '@/components/crm/SendLeadEmailButton';
 import { Button } from '@/components/ui/button';
 
 interface Props {
@@ -29,6 +30,22 @@ export default async function LeadDetailPage({ params }: Props) {
   } catch (err) {
     if (err instanceof ApiError && err.status === 404) notFound();
     throw err;
+  }
+
+  let enabledTemplates: Awaited<ReturnType<typeof serverApi.adminListOutreachTemplates>>['items'] = [];
+  try {
+    const r = await serverApi.adminListOutreachTemplates();
+    enabledTemplates = r.items.filter((t) => t.enabled);
+  } catch {
+    /* ignore */
+  }
+
+  let emailDeliveries: Awaited<ReturnType<typeof serverApi.adminListLeadDeliveries>>['items'] = [];
+  try {
+    const r = await serverApi.adminListLeadDeliveries(id);
+    emailDeliveries = r.items;
+  } catch {
+    /* ignore */
   }
 
   return (
@@ -61,13 +78,20 @@ export default async function LeadDetailPage({ params }: Props) {
               ) : null}
             </div>
           </div>
-          {lead.url ? (
-            <Button asChild variant="outline" size="sm">
-              <a href={lead.url} target="_blank" rel="noopener noreferrer">
-                Открыть источник ↗
-              </a>
-            </Button>
-          ) : null}
+          <div className="flex items-center gap-2">
+            <SendLeadEmailButton
+              leadId={lead.id}
+              ownerEmail={lead.ownerEmail}
+              templates={enabledTemplates}
+            />
+            {lead.url ? (
+              <Button asChild variant="outline" size="sm">
+                <a href={lead.url} target="_blank" rel="noopener noreferrer">
+                  Открыть источник ↗
+                </a>
+              </Button>
+            ) : null}
+          </div>
         </header>
 
         <section className="grid grid-cols-2 gap-3 rounded-md border border-border bg-card p-4 text-sm">
@@ -206,6 +230,45 @@ export default async function LeadDetailPage({ params }: Props) {
               )}
             </ul>
           </div>
+        </section>
+
+        <section className="rounded-md border border-border bg-card">
+          <header className="border-b border-border px-4 py-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+            История email ({emailDeliveries.length})
+          </header>
+          {emailDeliveries.length === 0 ? (
+            <div className="px-4 py-6 text-center text-sm text-muted-foreground">
+              Писем ещё не было
+            </div>
+          ) : (
+            <ul className="divide-y divide-border">
+              {emailDeliveries.map((d) => (
+                <li key={d.id} className="px-4 py-2 text-sm">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="truncate font-medium">{d.subject}</span>
+                    <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 text-xs">
+                      {d.status}
+                    </span>
+                  </div>
+                  <div className="mt-0.5 flex flex-wrap gap-3 text-xs text-muted-foreground">
+                    <span>sent: {fmt(d.sentAt)}</span>
+                    <span>delivered: {fmt(d.deliveredAt)}</span>
+                    {d.repliedAt ? (
+                      <span className="text-primary">replied: {fmt(d.repliedAt)}</span>
+                    ) : null}
+                    {d.bouncedAt ? (
+                      <span className="text-rose-500">bounced</span>
+                    ) : null}
+                  </div>
+                  {d.errorMessage ? (
+                    <div className="mt-0.5 text-xs text-rose-500">
+                      {d.errorMessage}
+                    </div>
+                  ) : null}
+                </li>
+              ))}
+            </ul>
+          )}
         </section>
       </div>
 

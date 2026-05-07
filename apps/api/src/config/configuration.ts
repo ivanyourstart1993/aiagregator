@@ -16,6 +16,18 @@ export interface MailConfig {
   smtpFrom: string;
 }
 
+export interface OutreachMailConfig {
+  // Falls back to MailConfig.resendApiKey if unset.
+  apiKey?: string;
+  // Falls back to MailConfig.resendFrom. Format: 'Name <addr@domain>' or 'addr@domain'.
+  from: string;
+  // Optional Reply-To override. If unset, replies go to the From: address
+  // (which only works if it's a real mailbox).
+  replyTo?: string;
+  webhookSecret?: string;
+  inboundWebhookSecret?: string;
+}
+
 export interface RedisConfig {
   url: string;
 }
@@ -29,6 +41,8 @@ export interface AppConfig {
   redis: RedisConfig;
   auth: AuthConfig;
   mail: MailConfig;
+  outreachMail: OutreachMailConfig;
+  unsubscribeTokenSecret: string;
 }
 
 export function buildConfig(env: AppEnv): AppConfig {
@@ -53,5 +67,13 @@ export function buildConfig(env: AppEnv): AppConfig {
       smtpPort: env.SMTP_PORT,
       smtpFrom: env.SMTP_FROM,
     },
+    outreachMail: {
+      apiKey: env.RESEND_OUTREACH_API_KEY ?? env.RESEND_API_KEY,
+      from: env.RESEND_OUTREACH_FROM ?? env.RESEND_FROM,
+      replyTo: env.RESEND_OUTREACH_REPLY_TO,
+      webhookSecret: env.RESEND_OUTREACH_WEBHOOK_SECRET,
+      inboundWebhookSecret: env.RESEND_INBOUND_WEBHOOK_SECRET,
+    },
+    unsubscribeTokenSecret: env.UNSUBSCRIBE_TOKEN_SECRET,
   };
 }

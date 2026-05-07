@@ -6,6 +6,7 @@ import {
   CALLBACK_DLQ,
   CALLBACK_QUEUE,
   CRM_DISCOVERY_QUEUE,
+  CRM_EMAIL_OUTREACH_QUEUE,
   CRM_ENRICHMENT_QUEUE,
   CRM_OUTREACH_QUEUE,
   EMAIL_QUEUE,
@@ -45,6 +46,7 @@ function parseRedisUrl(url: string): ConnectionOptions {
     BullModule.registerQueue({ name: CRM_DISCOVERY_QUEUE }),
     BullModule.registerQueue({ name: CRM_ENRICHMENT_QUEUE }),
     BullModule.registerQueue({ name: CRM_OUTREACH_QUEUE }),
+    BullModule.registerQueue({ name: CRM_EMAIL_OUTREACH_QUEUE }),
   ],
   exports: [BullModule],
 })
