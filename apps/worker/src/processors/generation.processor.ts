@@ -144,6 +144,18 @@ const WARMUP_RAMP: { days: number; factor: number }[] = [
 // when debugging.
 const PROXY_REQUIRED = (process.env.BALANCER_PROXY_REQUIRED ?? 'true') === 'true';
 
+// PROXY_OPTIONAL_PROVIDERS — comma-separated provider codes that ignore
+// PROXY_REQUIRED (i.e. accounts without a proxy are still eligible). Used
+// for providers where IP fingerprinting is a non-issue (e.g. Kling AI signs
+// every request with HMAC over access/secret pair, so the source IP isn't
+// part of the abuse signal).
+const PROXY_OPTIONAL_PROVIDERS = new Set(
+  (process.env.BALANCER_PROXY_OPTIONAL_PROVIDERS ?? 'kling_ai')
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean),
+);
+
 function warmupFactor(warmupStartedAt: Date | null): number {
   if (!warmupStartedAt) return 1;
   const days = (Date.now() - warmupStartedAt.getTime()) / (24 * 60 * 60 * 1000);
@@ -166,12 +178,23 @@ async function pickAccount(
 } | null> {
   const now = new Date();
 
+  // Resolve provider.code once so we can decide whether the proxy filter
+  // applies (per-provider override via BALANCER_PROXY_OPTIONAL_PROVIDERS).
+  const provider = await prisma.provider.findUnique({
+    where: { id: providerId },
+    select: { code: true },
+  });
+  const proxyOptionalForThisProvider = provider
+    ? PROXY_OPTIONAL_PROVIDERS.has(provider.code)
+    : false;
+  const enforceProxy = PROXY_REQUIRED && !proxyOptionalForThisProvider;
+
   // Selector predicate:
   // - status ACTIVE, OR status COOLDOWN with cooldown expired → eligible
   //   (we'll flip COOLDOWN→ACTIVE atomically below before returning)
   // - rotationEnabled
   // - excluded ids (already-tried in this task)
-  // - if PROXY_REQUIRED: proxyId set AND linked Proxy is ACTIVE
+  // - if enforceProxy: proxyId set AND linked Proxy is ACTIVE
   // - cooldownUntil null OR <= now (lazy expiry — no cron needed)
   const candidates = await prisma.providerAccount.findMany({
     where: {
@@ -185,7 +208,7 @@ async function pickAccount(
           cooldownUntil: { lte: now },
         },
       ],
-      ...(PROXY_REQUIRED
+      ...(enforceProxy
         ? {
             proxyId: { not: null },
             proxy: { status: ProxyStatus.ACTIVE },
