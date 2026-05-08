@@ -76,13 +76,14 @@ function usagePct(used?: number | null, limit?: number | null): string {
   return `${Math.round((u / limit) * 100)}%`;
 }
 
-// Re-order accounts so that a Google `banana` row is immediately followed
-// by its sibling `veo` row (matched by name + proxyId — the convention is
-// "Foo" under banana paired with "Foo (google_veo)" under veo). The
-// sibling is marked `pairedChild=true` so the renderer can indent it.
+// Pair Google banana ↔ veo accounts (matched by base name + proxyId) so
+// the operator sees one row per Service Account, not two. Per-clone state
+// (status, usage, errors) is rendered side-by-side inside that row.
 interface RenderRow {
-  account: ProviderAccountView;
-  pairedChild: boolean;
+  banana?: ProviderAccountView;
+  veo?: ProviderAccountView;
+  /** Used as React key and for the "main" link target. */
+  primary: ProviderAccountView;
 }
 
 function arrangePairs(items: ProviderAccountView[]): RenderRow[] {
@@ -102,17 +103,14 @@ function arrangePairs(items: ProviderAccountView[]): RenderRow[] {
   const usedVeoIds = new Set<string>();
   const rows: RenderRow[] = [];
   for (const b of banana) {
-    rows.push({ account: b, pairedChild: false });
     const v = veoByKey.get(`${b.name}|${b.proxyId ?? ''}`);
-    if (v) {
-      rows.push({ account: v, pairedChild: true });
-      usedVeoIds.add(v.id);
-    }
+    if (v) usedVeoIds.add(v.id);
+    rows.push({ banana: b, veo: v, primary: b });
   }
   for (const v of veo) {
-    if (!usedVeoIds.has(v.id)) rows.push({ account: v, pairedChild: false });
+    if (!usedVeoIds.has(v.id)) rows.push({ veo: v, primary: v });
   }
-  for (const o of others) rows.push({ account: o, pairedChild: false });
+  for (const o of others) rows.push({ primary: o });
   return rows;
 }
 
@@ -192,94 +190,175 @@ export default async function ProviderAccountsPage({ searchParams }: Props) {
             </tr>
           </thead>
           <tbody className="divide-y divide-border">
-            {arrangePairs(items).map(({ account: a, pairedChild }) => {
+            {arrangePairs(items).map((row) => {
+              const a = row.primary;
               const wd = warmupDay(a.warmupStartedAt, a.createdAt);
               const inWarmup = wd < 7;
-              const inCooldown =
-                a.cooldownUntil && new Date(a.cooldownUntil).getTime() > Date.now();
-              const displayName = pairedChild
-                ? a.name.replace(/\s*\(google_veo\)\s*$/, '')
-                : a.name;
+              const isPair = !!row.banana && !!row.veo;
+              const displayName = a.name.replace(/\s*\(google_veo\)\s*$/, '');
+
+              // Provider label: "google · banana+veo" for pairs, raw code otherwise.
+              const providerLabel = isPair
+                ? 'google · banana+veo'
+                : a.providerCode ?? a.providerId;
+
+              // Per-clone helpers.
+              const renderClone = (
+                clone: ProviderAccountView | undefined,
+                tag: 'IMG' | 'VID',
+              ) => {
+                if (!clone) return null;
+                const inCd =
+                  clone.cooldownUntil &&
+                  new Date(clone.cooldownUntil).getTime() > Date.now();
+                return {
+                  clone,
+                  tag,
+                  inCd,
+                };
+              };
+              const clones = [
+                renderClone(row.banana, 'IMG'),
+                renderClone(row.veo, 'VID'),
+              ].filter((x): x is NonNullable<typeof x> => !!x);
+
               return (
-                <tr
-                  key={a.id}
-                  className={
-                    pairedChild
-                      ? 'bg-muted/10 hover:bg-muted/20'
-                      : 'hover:bg-muted/20'
-                  }
-                >
-                  <td className="px-4 py-3 font-medium">
-                    {pairedChild ? (
-                      <Link
-                        href={`/providers/accounts/${a.id}`}
-                        className="ml-4 inline-flex items-center gap-2 text-muted-foreground hover:text-foreground hover:underline"
-                      >
-                        <span className="font-mono text-xs">└─</span>
-                        <span className="text-sm">видео</span>
-                      </Link>
-                    ) : (
-                      <Link
-                        href={`/providers/accounts/${a.id}`}
-                        className="hover:underline"
-                      >
-                        {displayName}
-                      </Link>
-                    )}
+                <tr key={a.id} className="hover:bg-muted/20">
+                  <td className="px-4 py-3 align-top font-medium">
+                    <Link
+                      href={`/providers/accounts/${a.id}`}
+                      className="hover:underline"
+                    >
+                      {displayName}
+                    </Link>
+                    {isPair ? (
+                      <div className="mt-0.5 text-[10px] uppercase tracking-wider text-muted-foreground">
+                        shared SA · фото + видео
+                      </div>
+                    ) : null}
                   </td>
-                  <td className="px-4 py-3 font-mono text-xs text-muted-foreground">
-                    {a.providerCode ?? a.providerId}
+                  <td className="px-4 py-3 align-top font-mono text-xs text-muted-foreground">
+                    {providerLabel}
                   </td>
-                  <td className="px-4 py-3">
-                    <div className="flex flex-col items-start gap-1">
-                      <span className={statusColor(a.status)}>{a.status}</span>
-                      {BILLING_STATUSES.has(a.status) ? (
-                        <span className="text-[10px] text-destructive">⚠ Биллинг</span>
-                      ) : null}
+                  <td className="px-4 py-3 align-top">
+                    <div className="space-y-1">
+                      {clones.map(({ clone, tag }) => (
+                        <Link
+                          key={tag}
+                          href={`/providers/accounts/${clone.id}`}
+                          className="flex items-center gap-2 hover:opacity-80"
+                          title={`${tag} → edit`}
+                        >
+                          {isPair ? (
+                            <span className="w-7 font-mono text-[10px] text-muted-foreground">
+                              {tag}
+                            </span>
+                          ) : null}
+                          <span className={statusColor(clone.status)}>
+                            {clone.status}
+                          </span>
+                          {BILLING_STATUSES.has(clone.status) ? (
+                            <span className="text-[10px] text-destructive">⚠</span>
+                          ) : null}
+                        </Link>
+                      ))}
                     </div>
                   </td>
-                  <td className="px-4 py-3 text-xs">
+                  <td className="px-4 py-3 align-top text-xs">
                     {a.proxy ? (
-                      <span className="text-muted-foreground" title={`${a.proxy.host}:${a.proxy.port}`}>
+                      <span
+                        className="text-muted-foreground"
+                        title={`${a.proxy.host}:${a.proxy.port}`}
+                      >
                         {a.proxy.name}
                       </span>
                     ) : (
                       <span className="text-destructive">— нет —</span>
                     )}
                   </td>
-                  <td className="px-4 py-3 text-right font-mono text-xs">
-                    {a.todayUsed ?? 0}
-                    {a.dailyLimit
-                      ? ` / ${a.dailyLimit}  (${usagePct(a.todayUsed, a.dailyLimit)})`
-                      : ''}
+                  <td className="px-4 py-3 align-top text-right font-mono text-xs">
+                    <div className="space-y-1">
+                      {clones.map(({ clone, tag }) => (
+                        <div
+                          key={tag}
+                          className="flex items-center justify-end gap-2"
+                        >
+                          {isPair ? (
+                            <span className="text-[10px] text-muted-foreground">
+                              {tag}
+                            </span>
+                          ) : null}
+                          <span>
+                            {clone.todayUsed ?? 0}
+                            {clone.dailyLimit
+                              ? ` / ${clone.dailyLimit} (${usagePct(clone.todayUsed, clone.dailyLimit)})`
+                              : ''}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
                   </td>
-                  <td className="px-4 py-3 text-xs text-muted-foreground">
-                    {fmtRelative(a.lastUsedAt)}
+                  <td className="px-4 py-3 align-top text-xs text-muted-foreground">
+                    <div className="space-y-1">
+                      {clones.map(({ clone, tag }) => (
+                        <div key={tag}>
+                          {isPair ? (
+                            <span className="mr-2 text-[10px]">{tag}</span>
+                          ) : null}
+                          {fmtRelative(clone.lastUsedAt)}
+                        </div>
+                      ))}
+                    </div>
                   </td>
-                  <td className="px-4 py-3 text-xs">
-                    {inCooldown ? (
-                      <span className="text-blue-500">{fmtRelative(a.cooldownUntil)}</span>
-                    ) : (
-                      '—'
-                    )}
+                  <td className="px-4 py-3 align-top text-xs">
+                    <div className="space-y-1">
+                      {clones.map(({ clone, tag, inCd }) => (
+                        <div key={tag}>
+                          {isPair ? (
+                            <span className="mr-2 text-[10px] text-muted-foreground">
+                              {tag}
+                            </span>
+                          ) : null}
+                          {inCd ? (
+                            <span className="text-blue-500">
+                              {fmtRelative(clone.cooldownUntil)}
+                            </span>
+                          ) : (
+                            '—'
+                          )}
+                        </div>
+                      ))}
+                    </div>
                   </td>
-                  <td className="px-4 py-3 text-xs">
+                  <td className="px-4 py-3 align-top text-xs">
                     {inWarmup ? (
                       <span className="text-yellow-500">день {wd + 1}/7</span>
                     ) : (
                       <span className="text-muted-foreground">готов</span>
                     )}
                   </td>
-                  <td className="px-4 py-3 text-right text-xs">
+                  <td className="px-4 py-3 align-top text-right text-xs">
                     {unitsToUsd(a.acquisitionCostUnits)}
                   </td>
-                  <td
-                    className="max-w-[200px] truncate px-4 py-3 text-xs text-muted-foreground"
-                    title={a.lastErrorMessage ?? ''}
-                  >
-                    {a.lastErrorCode ?? a.lastErrorMessage ?? '—'}
+                  <td className="max-w-[220px] px-4 py-3 align-top text-xs text-muted-foreground">
+                    <div className="space-y-1">
+                      {clones.map(({ clone, tag }) => (
+                        <div
+                          key={tag}
+                          className="truncate"
+                          title={clone.lastErrorMessage ?? ''}
+                        >
+                          {isPair ? (
+                            <span className="mr-2 text-[10px]">{tag}</span>
+                          ) : null}
+                          {clone.lastErrorCode ??
+                            clone.lastErrorMessage ??
+                            '—'}
+                        </div>
+                      ))}
+                    </div>
                   </td>
-                  <td className="px-4 py-3 text-right">
+                  <td className="px-4 py-3 align-top text-right">
                     <Link
                       href={`/providers/accounts/${a.id}`}
                       className="text-xs text-muted-foreground hover:text-foreground"
