@@ -673,6 +673,14 @@ export const serverApi = {
     apiPost<{ ok: true }>(`/internal/admin/providers/accounts/${id}/enable`, {}),
   adminDisableProviderAccount: (id: string) =>
     apiPost<{ ok: true }>(`/internal/admin/providers/accounts/${id}/disable`, {}),
+  adminCloneProviderAccount: (
+    id: string,
+    body: { providerCode: string; name?: string },
+  ) =>
+    apiPost<ProviderAccountView>(
+      `/internal/admin/providers/accounts/${id}/clone`,
+      body,
+    ),
   adminGetProviderAccountStats: (id: string, filters?: { from?: string; to?: string }) =>
     apiGet<ProviderAccountStats>(
       `/internal/admin/providers/accounts/${id}/stats${qs({ ...filters })}`,

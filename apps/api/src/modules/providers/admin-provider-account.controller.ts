@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   DefaultValuePipe,
@@ -26,6 +27,7 @@ import { Roles } from '../../common/decorators/roles.decorator';
 import { LogAdminAction } from '../../common/decorators/log-admin-action.decorator';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import {
+  CloneProviderAccountDto,
   CreateProviderAccountDto,
   UpdateProviderAccountDto,
 } from './dto/provider-account.dto';
@@ -183,6 +185,70 @@ export class AdminProviderAccountController {
   })
   async remove(@Param('id') id: string): Promise<void> {
     await this.prisma.providerAccount.delete({ where: { id } });
+  }
+
+  // Create an independent copy of an account under a different provider
+  // (same credentials, same proxy, same limits). Used for the "one Google
+  // SA -> two providers (banana + veo)" pattern: one form submission can
+  // spawn a shadow account on the sibling provider.
+  @Post(':id/clone')
+  @HttpCode(HttpStatus.CREATED)
+  @LogAdminAction({
+    action: 'providers.account.clone',
+    targetType: 'provider_account',
+    targetIdFrom: 'params.id',
+  })
+  async clone(
+    @Param('id') id: string,
+    @Body() body: CloneProviderAccountDto,
+  ) {
+    const source = await this.prisma.providerAccount.findUnique({
+      where: { id },
+      include: { provider: true },
+    });
+    if (!source) throw new NotFoundException();
+    const target = await this.prisma.provider.findUnique({
+      where: { code: body.providerCode },
+    });
+    if (!target) {
+      throw new BadRequestException(
+        `provider '${body.providerCode}' not found`,
+      );
+    }
+    if (target.id === source.providerId) {
+      throw new BadRequestException(
+        `source account is already under provider '${body.providerCode}'`,
+      );
+    }
+    // Avoid duplicate clone: if a sibling under target.id with the same
+    // name suffix and matching credentials hash already exists, return it
+    // instead of creating a duplicate.
+    const desiredName = body.name ?? `${source.name} (${body.providerCode})`;
+    const existing = await this.prisma.providerAccount.findFirst({
+      where: { providerId: target.id, name: desiredName },
+    });
+    if (existing) return this.toView(existing);
+
+    const creds = decryptJson(source.credentials) as Record<string, unknown>;
+    const cloned = await this.prisma.providerAccount.create({
+      data: {
+        providerId: target.id,
+        name: desiredName,
+        description: source.description,
+        credentials: encryptJson(creds),
+        proxyId: source.proxyId,
+        status: ProviderAccountStatus.ACTIVE,
+        rotationEnabled: source.rotationEnabled,
+        dailyLimit: source.dailyLimit,
+        monthlyLimit: source.monthlyLimit,
+        maxConcurrentTasks: source.maxConcurrentTasks,
+        maxRequestsPerMinute: source.maxRequestsPerMinute,
+        maxRequestsPerHour: source.maxRequestsPerHour,
+        maxRequestsPerDay: source.maxRequestsPerDay,
+        acquisitionCostUnits: source.acquisitionCostUnits,
+      },
+    });
+    return this.toView(cloned);
   }
 
   @Post(':id/enable')

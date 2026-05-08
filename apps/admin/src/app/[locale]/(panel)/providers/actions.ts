@@ -63,6 +63,19 @@ export async function deleteProviderAccountAction(
   }
 }
 
+export async function cloneProviderAccountAction(
+  id: string,
+  input: { providerCode: string; name?: string },
+): Promise<MutationResult<ProviderAccountView>> {
+  try {
+    const data = await serverApi.adminCloneProviderAccount(id, input);
+    revalidatePath('/(panel)/providers/accounts', 'page');
+    return { ok: true, data };
+  } catch (err) {
+    return fail(err);
+  }
+}
+
 // ---- Proxy ----
 
 export async function createProxyAction(

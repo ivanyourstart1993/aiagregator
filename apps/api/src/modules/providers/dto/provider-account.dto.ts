@@ -90,6 +90,21 @@ export class CreateProviderAccountDto {
   acquisitionCostUsd?: number;
 }
 
+// Used by POST /providers/accounts/:id/clone — creates an independent
+// copy of the source account under a different provider, sharing the
+// same credentials and proxy. Useful for "one Google SA, two providers
+// (banana + veo)" pattern.
+export class CloneProviderAccountDto {
+  @IsString()
+  @MinLength(1)
+  providerCode!: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(128)
+  name?: string;
+}
+
 export class UpdateProviderAccountDto {
   @IsOptional()
   @IsString()

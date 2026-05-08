@@ -20,6 +20,7 @@ import {
   type ProxyView,
 } from '@/lib/server-api';
 import {
+  cloneProviderAccountAction,
   createProviderAccountAction,
   updateProviderAccountAction,
   deleteProviderAccountAction,
@@ -50,6 +51,16 @@ export function AccountForm({ mode, account, providers, proxies }: Props) {
   const [credentials, setCredentials] = useState('{}');
   const [klingAccessKey, setKlingAccessKey] = useState('');
   const [klingSecretKey, setKlingSecretKey] = useState('');
+  // For "1 SA, 2 Google providers" pattern. Only meaningful at create time
+  // and when the selected provider is google_banana or google_veo. Default
+  // ON because the typical SA is configured for both.
+  const [alsoCloneForVeoBanana, setAlsoCloneForVeoBanana] = useState(true);
+  const siblingProviderCode =
+    providerCode === 'google_banana'
+      ? 'google_veo'
+      : providerCode === 'google_veo'
+        ? 'google_banana'
+        : null;
   const [proxyId, setProxyId] = useState<string>(account?.proxyId ?? '');
   const [dailyLimit, setDailyLimit] = useState(
     account?.dailyLimit?.toString() ?? '',
@@ -143,7 +154,30 @@ export function AccountForm({ mode, account, providers, proxies }: Props) {
               ...(credsTouched ? { credentials: creds } : {}),
             });
       if (res.ok) {
-        toast.success('Сохранено');
+        // After a successful create, optionally clone to the sibling Google
+        // provider so one form submission spawns both banana + veo accounts.
+        if (
+          mode === 'create' &&
+          isGoogle &&
+          alsoCloneForVeoBanana &&
+          siblingProviderCode &&
+          res.data?.id
+        ) {
+          const cl = await cloneProviderAccountAction(res.data.id, {
+            providerCode: siblingProviderCode,
+          });
+          if (cl.ok) {
+            toast.success(
+              `Сохранено + клон под ${siblingProviderCode} создан`,
+            );
+          } else {
+            toast.warning(
+              `Аккаунт сохранён, но клон под ${siblingProviderCode} не создался: ${cl.code ?? 'unknown'}`,
+            );
+          }
+        } else {
+          toast.success('Сохранено');
+        }
         router.push('/providers/accounts');
         router.refresh();
       } else {
@@ -299,6 +333,30 @@ export function AccountForm({ mode, account, providers, proxies }: Props) {
           />
         </div>
       )}
+
+      {mode === 'create' && isGoogle && siblingProviderCode ? (
+        <label className="flex cursor-pointer items-start gap-3 rounded-md border border-border/60 bg-muted/20 p-3">
+          <input
+            type="checkbox"
+            checked={alsoCloneForVeoBanana}
+            onChange={(e) => setAlsoCloneForVeoBanana(e.target.checked)}
+            className="mt-0.5 h-4 w-4 cursor-pointer accent-info"
+          />
+          <span className="space-y-0.5 text-sm">
+            <span className="block font-medium text-foreground">
+              {siblingProviderCode === 'google_veo'
+                ? 'Также использовать для Google Veo (видео)'
+                : 'Также использовать для Google Banana (фото)'}
+            </span>
+            <span className="block text-xs text-muted-foreground">
+              У Google один SA обычно работает и с {providerCode === 'google_banana' ? 'Veo' : 'Banana'}.
+              Будет создан второй аккаунт с тем же ключом и прокси под{' '}
+              <code className="font-mono text-[11px]">{siblingProviderCode}</code>.
+              Можно отключить и подключить отдельно потом.
+            </span>
+          </span>
+        </label>
+      ) : null}
 
       <div className="space-y-2">
         <Label>
