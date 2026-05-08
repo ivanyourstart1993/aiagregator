@@ -181,6 +181,15 @@ const bananaMethods: MethodSeed[] = [
 
 const veoBaseProps = (extra: Record<string, unknown> = {}) => ({
   prompt: promptProp,
+  // `mode` distinguishes text_to_video from image_to_video at the bundle
+  // level so seed prices (different per task type per resolution) line up
+  // with runtime bundleKeys. The frontend mirrors `method` into `params.mode`.
+  mode: {
+    type: 'string',
+    enum: ['text_to_video', 'image_to_video'],
+    'x-bundle-dim': true,
+    description: 'Internal task-type marker (matches the method code).',
+  },
   resolution: {
     type: 'string',
     enum: ['720p', '1080p', '4K'],
@@ -189,8 +198,7 @@ const veoBaseProps = (extra: Record<string, unknown> = {}) => ({
   duration_seconds: {
     type: 'integer',
     enum: [4, 6, 8, 10, 12],
-    'x-bundle-dim': true,
-    description: 'Video duration in seconds.',
+    description: 'Video duration in seconds. Pricing is PER_SECOND, so the duration is NOT part of the bundle key — total cost = perSecondUnits × duration.',
   },
   aspect_ratio: {
     type: 'string',

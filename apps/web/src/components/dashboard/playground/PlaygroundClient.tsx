@@ -461,6 +461,14 @@ export function PlaygroundClient({ balance }: Props) {
       }
     }
 
+    // Veo bundles are keyed by `mode = methodCode` (text_to_video vs
+    // image_to_video) so the seed price for the chosen task type lines up.
+    // For Kling the `mode` slot already carries 'standard' / 'pro' from the
+    // preset above, so we don't override it.
+    if (preset.provider === 'google_veo') {
+      params.mode = methodCode;
+    }
+
     const res = await submitGenerationAction({
       provider: preset.provider,
       model: preset.model,

@@ -165,11 +165,17 @@ interface BananaBundleSpec {
   modelSlug: string;
   methodCode: string;
   resolution: string;
+  aspectRatio: string;
   priceCents: number;
 }
 
-// Prices per TZ §11.1
-const BANANA_PRICES: BananaBundleSpec[] = [
+// Aspect ratios mirror the enum in initial-catalog.ts banana methods.
+const BANANA_ASPECT_RATIOS = ['1:1', '3:4', '4:3', '9:16', '16:9'] as const;
+
+// Base prices per TZ §11.1 (price is independent of aspect ratio; we expand
+// every entry across all ratios because `aspect_ratio` is a bundle dimension
+// and the playground frontend always sends one).
+const BANANA_BASE_PRICES: Array<Omit<BananaBundleSpec, 'aspectRatio'>> = [
   // Nano-2 (gemini-3.1-flash-image-preview) — text_to_image
   { modelSlug: 'gemini-3.1-flash-image-preview', methodCode: 'text_to_image', resolution: '0.5K', priceCents: 10 },
   { modelSlug: 'gemini-3.1-flash-image-preview', methodCode: 'text_to_image', resolution: '1K',   priceCents: 15 },
@@ -203,6 +209,10 @@ const BANANA_PRICES: BananaBundleSpec[] = [
   { modelSlug: 'gemini-3-pro-image-preview', methodCode: 'multi_reference_image', resolution: '4K', priceCents: 100 },
 ];
 
+const BANANA_PRICES: BananaBundleSpec[] = BANANA_BASE_PRICES.flatMap((p) =>
+  BANANA_ASPECT_RATIOS.map((ar) => ({ ...p, aspectRatio: ar })),
+);
+
 function methodCodeToBundleMethod(code: string): BundleMethod {
   if (code === 'text_to_image') return BundleMethod.IMAGE_GENERATION;
   if (
@@ -228,6 +238,9 @@ interface KlingBundleSpec {
   priceCents: number;
 }
 
+// Prices from the playground frontend presets (`PlaygroundClient.tsx`); the
+// 10s tier is derived from the 5s tier with the ratio observed for kling-2.6
+// / kling-v3 in the original ТЗ §11.3 table (~1.8×).
 const KLING_PRICES: KlingBundleSpec[] = [
   { modelSlug: 'kling-2.6', methodCode: 'text_to_video', mode: 'standard', durationSeconds: 5,  resolution: '720p',  priceCents: 100 },
   { modelSlug: 'kling-2.6', methodCode: 'text_to_video', mode: 'standard', durationSeconds: 10, resolution: '720p',  priceCents: 180 },
@@ -238,6 +251,25 @@ const KLING_PRICES: KlingBundleSpec[] = [
   { modelSlug: 'kling-v3',  methodCode: 'text_to_video', mode: 'pro',      durationSeconds: 10, resolution: '1080p', priceCents: 550 },
   { modelSlug: 'kling-o1',  methodCode: 'image_to_video', mode: 'pro',     durationSeconds: 5,  resolution: '1080p', priceCents: 300 },
   { modelSlug: 'kling-o1',  methodCode: 'image_to_video', mode: 'pro',     durationSeconds: 10, resolution: '1080p', priceCents: 550 },
+  // kling-v1-6 (Kling 1.6) — std/pro, 5s and 10s
+  { modelSlug: 'kling-v1-6', methodCode: 'text_to_video',  mode: 'standard', durationSeconds: 5,  resolution: '720p',  priceCents: 14 },
+  { modelSlug: 'kling-v1-6', methodCode: 'text_to_video',  mode: 'standard', durationSeconds: 10, resolution: '720p',  priceCents: 25 },
+  { modelSlug: 'kling-v1-6', methodCode: 'text_to_video',  mode: 'pro',      durationSeconds: 5,  resolution: '1080p', priceCents: 28 },
+  { modelSlug: 'kling-v1-6', methodCode: 'text_to_video',  mode: 'pro',      durationSeconds: 10, resolution: '1080p', priceCents: 50 },
+  { modelSlug: 'kling-v1-6', methodCode: 'image_to_video', mode: 'standard', durationSeconds: 5,  resolution: '720p',  priceCents: 14 },
+  { modelSlug: 'kling-v1-6', methodCode: 'image_to_video', mode: 'standard', durationSeconds: 10, resolution: '720p',  priceCents: 25 },
+  { modelSlug: 'kling-v1-6', methodCode: 'image_to_video', mode: 'pro',      durationSeconds: 5,  resolution: '1080p', priceCents: 28 },
+  { modelSlug: 'kling-v1-6', methodCode: 'image_to_video', mode: 'pro',      durationSeconds: 10, resolution: '1080p', priceCents: 50 },
+  // kling-v2-1-master (Kling 2.1 Master) — pro only
+  { modelSlug: 'kling-v2-1-master', methodCode: 'text_to_video',  mode: 'pro', durationSeconds: 5,  resolution: '1080p', priceCents: 70 },
+  { modelSlug: 'kling-v2-1-master', methodCode: 'text_to_video',  mode: 'pro', durationSeconds: 10, resolution: '1080p', priceCents: 126 },
+  { modelSlug: 'kling-v2-1-master', methodCode: 'image_to_video', mode: 'pro', durationSeconds: 5,  resolution: '1080p', priceCents: 70 },
+  { modelSlug: 'kling-v2-1-master', methodCode: 'image_to_video', mode: 'pro', durationSeconds: 10, resolution: '1080p', priceCents: 126 },
+  // kling-v2-5-turbo (Kling 2.5 Turbo) — pro only
+  { modelSlug: 'kling-v2-5-turbo', methodCode: 'text_to_video',  mode: 'pro', durationSeconds: 5,  resolution: '1080p', priceCents: 50 },
+  { modelSlug: 'kling-v2-5-turbo', methodCode: 'text_to_video',  mode: 'pro', durationSeconds: 10, resolution: '1080p', priceCents: 90 },
+  { modelSlug: 'kling-v2-5-turbo', methodCode: 'image_to_video', mode: 'pro', durationSeconds: 5,  resolution: '1080p', priceCents: 50 },
+  { modelSlug: 'kling-v2-5-turbo', methodCode: 'image_to_video', mode: 'pro', durationSeconds: 10, resolution: '1080p', priceCents: 90 },
 ];
 
 function buildBundleKey(spec: {
@@ -289,7 +321,7 @@ async function seedBananaPrices(tariffId: string): Promise<void> {
       mode: null,
       resolution: spec.resolution,
       durationSeconds: null,
-      aspectRatio: null,
+      aspectRatio: spec.aspectRatio,
     });
     const bundle = await prisma.bundle.upsert({
       where: { bundleKey },
@@ -299,10 +331,11 @@ async function seedBananaPrices(tariffId: string): Promise<void> {
         modelSlug: spec.modelSlug,
         method: bundleMethod,
         resolution: spec.resolution,
+        aspectRatio: spec.aspectRatio,
         unit: BundleUnit.PER_REQUEST,
         isActive: true,
       },
-      update: {},
+      update: { aspectRatio: spec.aspectRatio },
     });
     const priceUnits = BigInt(spec.priceCents) * CENTS_TO_NANO;
     await prisma.tariffBundlePrice.upsert({
