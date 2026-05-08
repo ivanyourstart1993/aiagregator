@@ -1,12 +1,21 @@
-// Worker-side Google Veo adapter. Submits the LRO via predictLongRunning and
-// returns `{ pending: true, providerJobId }` so the worker stores the
-// operation name on the Task and exits the BullMQ job. The API-side
-// PollLroCron then polls and finalises the result.
+// Worker-side Google Veo adapter (Vertex AI flavor).
 //
-// The worker process never polls itself in this design — keeps it simple
-// and avoids duplicate polling between the worker and the API cron.
+// Submits the LRO via `:predictLongRunning` against
+//   https://{REGION}-aiplatform.googleapis.com/v1/projects/{PROJECT}/locations/{REGION}/publishers/google/models/{MODEL}
+// authenticated with a Bearer token derived from the account's Service
+// Account JSON (same auth flow as google_banana). Returns
+// `{ pending: true, providerJobId }` so the worker stores the operation
+// name on the Task and exits the BullMQ job. The API-side `PollLroCron`
+// then polls and finalises the result via the API copy of this adapter.
+//
+// The worker process never polls itself — the API cron owns that path.
 import { HttpsProxyAgent } from 'https-proxy-agent';
-import { safeFetchAsBase64 } from '@aiagg/shared';
+import {
+  extractServiceAccount,
+  getServiceAccountAccessToken,
+  safeFetchAsBase64,
+  type ServiceAccountKey,
+} from '@aiagg/shared';
 import {
   AdapterError,
   type AdapterContext,
@@ -30,6 +39,9 @@ const SUPPORTED_METHODS = new Set([
   'first_last_frame_to_video',
   'video_to_video',
 ]);
+
+const DEFAULT_REGION =
+  process.env.VERTEX_AI_VEO_REGION ?? 'us-central1';
 
 interface VeoOperation {
   name?: string;
@@ -62,10 +74,6 @@ function pickInt(p: Record<string, unknown>, def: number, ...keys: string[]): nu
 async function fetchAsBase64(
   url: string,
 ): Promise<{ data: string; mimeType: string }> {
-  // User-supplied URLs are routed through the SSRF-safe fetcher rather than
-  // node fetch directly: this rejects requests to private/loopback/cloud-
-  // metadata addresses (incl. DNS-rebinding hosts) and caps response size
-  // and total time.
   try {
     return await safeFetchAsBase64(url);
   } catch (err) {
@@ -93,8 +101,6 @@ async function readMaybeBase64(
 export class GoogleVeoAdapter implements ProviderAdapter {
   public readonly providerCode = 'google_veo';
 
-  // storage is unused in the worker (no upload happens here — only LRO submit),
-  // but kept on the constructor for symmetry with other adapters.
   constructor(_storage: WorkerStorage) {}
 
   supports(modelCode: string, methodCode: string): boolean {
@@ -102,13 +108,15 @@ export class GoogleVeoAdapter implements ProviderAdapter {
   }
 
   async execute(ctx: AdapterContext): Promise<AdapterResult> {
-    const apiKey = this.extractApiKey(ctx);
-    if (!apiKey) {
+    const sa = extractServiceAccount(ctx.account.credentials ?? {});
+    if (!sa) {
       throw new AdapterError(
         'invalid_credentials',
-        'google_veo account credentials missing apiKey',
+        'google_veo account credentials missing serviceAccount',
       );
     }
+    const accessToken = await this.getAccessToken(sa);
+
     const { method, model, params } = ctx;
     const agent = this.buildProxyAgent(ctx);
 
@@ -158,10 +166,14 @@ export class GoogleVeoAdapter implements ProviderAdapter {
     };
     if (aspect) parameters.aspectRatio = aspect;
 
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model.code)}:predictLongRunning?key=${encodeURIComponent(apiKey)}`;
+    const url = this.buildVertexUrl(
+      sa.project_id,
+      model.code,
+      'predictLongRunning',
+    );
     const body = { instances: [instance], parameters };
 
-    const op = await this.callApi(url, 'POST', body, agent);
+    const op = await this.callApi(url, 'POST', body, accessToken, agent);
     if (!op.name) {
       throw new AdapterError(
         'unknown',
@@ -180,13 +192,26 @@ export class GoogleVeoAdapter implements ProviderAdapter {
     };
   }
 
-  private extractApiKey(ctx: AdapterContext): string | null {
-    const c = ctx.account.credentials ?? {};
-    const v =
-      (c['apiKey'] as string | undefined) ??
-      (c['api_key'] as string | undefined) ??
-      (c['key'] as string | undefined);
-    return typeof v === 'string' && v.length > 0 ? v : null;
+  private async getAccessToken(sa: ServiceAccountKey): Promise<string> {
+    try {
+      return await getServiceAccountAccessToken(sa);
+    } catch (err) {
+      throw new AdapterError(
+        'invalid_credentials',
+        err instanceof Error ? err.message : String(err),
+      );
+    }
+  }
+
+  private buildVertexUrl(
+    projectId: string,
+    modelCode: string,
+    op: 'predictLongRunning' | 'fetchPredictOperation',
+  ): string {
+    const region = DEFAULT_REGION;
+    return `https://${region}-aiplatform.googleapis.com/v1/projects/${encodeURIComponent(
+      projectId,
+    )}/locations/${region}/publishers/google/models/${encodeURIComponent(modelCode)}:${op}`;
   }
 
   private buildProxyAgent(
@@ -215,13 +240,17 @@ export class GoogleVeoAdapter implements ProviderAdapter {
     url: string,
     httpMethod: 'GET' | 'POST',
     body: unknown,
+    accessToken: string,
     agent: HttpsProxyAgent<string> | undefined,
   ): Promise<VeoOperation> {
     let res: Response;
     try {
       const init: RequestInit & { agent?: unknown } = {
         method: httpMethod,
-        headers: { 'content-type': 'application/json' },
+        headers: {
+          'content-type': 'application/json',
+          authorization: `Bearer ${accessToken}`,
+        },
       };
       if (httpMethod === 'POST') init.body = JSON.stringify(body ?? {});
       if (agent) init.agent = agent;
