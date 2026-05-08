@@ -76,6 +76,46 @@ function usagePct(used?: number | null, limit?: number | null): string {
   return `${Math.round((u / limit) * 100)}%`;
 }
 
+// Re-order accounts so that a Google `banana` row is immediately followed
+// by its sibling `veo` row (matched by name + proxyId — the convention is
+// "Foo" under banana paired with "Foo (google_veo)" under veo). The
+// sibling is marked `pairedChild=true` so the renderer can indent it.
+interface RenderRow {
+  account: ProviderAccountView;
+  pairedChild: boolean;
+}
+
+function arrangePairs(items: ProviderAccountView[]): RenderRow[] {
+  const banana = items.filter((a) => a.providerCode === 'google_banana');
+  const veo = items.filter((a) => a.providerCode === 'google_veo');
+  const others = items.filter(
+    (a) =>
+      a.providerCode !== 'google_banana' && a.providerCode !== 'google_veo',
+  );
+
+  const veoByKey = new Map<string, ProviderAccountView>();
+  for (const v of veo) {
+    const base = v.name.replace(/\s*\(google_veo\)\s*$/, '');
+    veoByKey.set(`${base}|${v.proxyId ?? ''}`, v);
+  }
+
+  const usedVeoIds = new Set<string>();
+  const rows: RenderRow[] = [];
+  for (const b of banana) {
+    rows.push({ account: b, pairedChild: false });
+    const v = veoByKey.get(`${b.name}|${b.proxyId ?? ''}`);
+    if (v) {
+      rows.push({ account: v, pairedChild: true });
+      usedVeoIds.add(v.id);
+    }
+  }
+  for (const v of veo) {
+    if (!usedVeoIds.has(v.id)) rows.push({ account: v, pairedChild: false });
+  }
+  for (const o of others) rows.push({ account: o, pairedChild: false });
+  return rows;
+}
+
 export default async function ProviderAccountsPage({ searchParams }: Props) {
   const sp = await searchParams;
   const page = Math.max(1, Number(sp.page ?? 1) || 1);
@@ -152,20 +192,40 @@ export default async function ProviderAccountsPage({ searchParams }: Props) {
             </tr>
           </thead>
           <tbody className="divide-y divide-border">
-            {items.map((a) => {
+            {arrangePairs(items).map(({ account: a, pairedChild }) => {
               const wd = warmupDay(a.warmupStartedAt, a.createdAt);
               const inWarmup = wd < 7;
               const inCooldown =
                 a.cooldownUntil && new Date(a.cooldownUntil).getTime() > Date.now();
+              const displayName = pairedChild
+                ? a.name.replace(/\s*\(google_veo\)\s*$/, '')
+                : a.name;
               return (
-                <tr key={a.id} className="hover:bg-muted/20">
+                <tr
+                  key={a.id}
+                  className={
+                    pairedChild
+                      ? 'bg-muted/10 hover:bg-muted/20'
+                      : 'hover:bg-muted/20'
+                  }
+                >
                   <td className="px-4 py-3 font-medium">
-                    <Link
-                      href={`/providers/accounts/${a.id}`}
-                      className="hover:underline"
-                    >
-                      {a.name}
-                    </Link>
+                    {pairedChild ? (
+                      <Link
+                        href={`/providers/accounts/${a.id}`}
+                        className="ml-4 inline-flex items-center gap-2 text-muted-foreground hover:text-foreground hover:underline"
+                      >
+                        <span className="font-mono text-xs">└─</span>
+                        <span className="text-sm">видео</span>
+                      </Link>
+                    ) : (
+                      <Link
+                        href={`/providers/accounts/${a.id}`}
+                        className="hover:underline"
+                      >
+                        {displayName}
+                      </Link>
+                    )}
                   </td>
                   <td className="px-4 py-3 font-mono text-xs text-muted-foreground">
                     {a.providerCode ?? a.providerId}
