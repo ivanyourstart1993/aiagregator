@@ -55,20 +55,46 @@ const SUPPORTED_METHODS = new Set([
 const DEFAULT_REGION =
   process.env.VERTEX_AI_VEO_REGION ?? 'us-central1';
 
+// Vertex AI returns the video sample in a few different shapes depending on
+// the model version and whether bytes are inlined or stored in GCS:
+//   - Generative Language API legacy: response.generateVideoResponse.generatedSamples[i].video.{uri,bytesBase64Encoded}
+//   - Vertex Veo 3 (current):         response.videos[i].{uri,gcsUri,bytesBase64Encoded,mimeType}
+//   - Some Vertex builds wrap as:     response.videos[i].video.{...}
+// We accept all three by lifting the fields off `sample` OR `sample.video`.
+interface VideoLike {
+  uri?: string;
+  gcsUri?: string;
+  bytesBase64Encoded?: string;
+  mimeType?: string;
+  video?: VideoLike;
+}
+
 interface VeoOperation {
   name?: string;
   done?: boolean;
   error?: { code?: number; message?: string; status?: string };
   response?: {
     generateVideoResponse?: {
-      generatedSamples?: Array<{
-        video?: { uri?: string; bytesBase64Encoded?: string; gcsUri?: string };
-      }>;
+      generatedSamples?: VideoLike[];
     };
-    videos?: Array<{
-      video?: { uri?: string; bytesBase64Encoded?: string; gcsUri?: string };
-    }>;
+    videos?: VideoLike[];
     raiMediaFilteredCount?: number;
+  };
+}
+
+function extractVideoFields(s: VideoLike): {
+  uri?: string;
+  gcsUri?: string;
+  bytesBase64Encoded?: string;
+  mimeType?: string;
+} {
+  // Prefer nested `s.video` if present, else read directly off `s`.
+  const inner = s.video ?? s;
+  return {
+    uri: inner.uri,
+    gcsUri: inner.gcsUri,
+    bytesBase64Encoded: inner.bytesBase64Encoded,
+    mimeType: inner.mimeType,
   };
 }
 
@@ -287,14 +313,17 @@ export class GoogleVeoAdapter implements ProviderAdapter {
       throw new AdapterError('unknown', message);
     }
 
-    const samples =
+    const samples: VideoLike[] =
       op.response?.generateVideoResponse?.generatedSamples ??
       op.response?.videos ??
       [];
     if (!samples || samples.length === 0) {
+      // Surface the raw response shape so an operator can adjust the parser
+      // if Google ships another variant. Truncated to fit in errorMessage.
+      const rawSnippet = JSON.stringify(op.response ?? {}).slice(0, 500);
       throw new AdapterError(
         'content_rejected',
-        'google_veo: operation done but returned no videos (likely safety-filtered)',
+        `google_veo: operation done but returned no videos (likely safety-filtered or unknown shape). response=${rawSnippet}`,
       );
     }
 
@@ -308,9 +337,9 @@ export class GoogleVeoAdapter implements ProviderAdapter {
     const files: AdapterFile[] = [];
     for (let i = 0; i < samples.length; i++) {
       const s = samples[i]!;
-      const v = s.video ?? {};
+      const v = extractVideoFields(s);
       let bytes: Buffer | null = null;
-      let mimeType = 'video/mp4';
+      let mimeType = v.mimeType ?? 'video/mp4';
       if (v.bytesBase64Encoded) {
         bytes = Buffer.from(v.bytesBase64Encoded, 'base64');
       } else {
@@ -334,14 +363,15 @@ export class GoogleVeoAdapter implements ProviderAdapter {
               `failed to download veo video (${res.status})`,
             );
           }
-          mimeType = res.headers.get('content-type') ?? 'video/mp4';
+          mimeType = res.headers.get('content-type') ?? mimeType;
           bytes = Buffer.from(await res.arrayBuffer());
         }
       }
       if (!bytes) {
+        const sampleSnippet = JSON.stringify(s).slice(0, 400);
         throw new AdapterError(
           'unknown',
-          `google_veo: sample ${i} has neither uri nor bytesBase64Encoded`,
+          `google_veo: sample ${i} has neither uri nor bytesBase64Encoded — sample=${sampleSnippet}`,
         );
       }
       const key = this.storage.buildResultKey({
