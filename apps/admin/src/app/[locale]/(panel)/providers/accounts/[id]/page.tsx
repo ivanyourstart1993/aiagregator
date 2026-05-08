@@ -7,6 +7,7 @@ import {
   type ProviderAccountAttempt,
 } from '@/lib/server-api';
 import { AccountForm } from '@/components/admin/AccountForm';
+import { AccountIssueBanner } from '@/components/admin/AccountIssueBanner';
 
 interface Props {
   params: Promise<{ id: string }>;
@@ -60,6 +61,13 @@ export default async function EditAccountPage({ params }: Props) {
           {account.providerCode ?? account.providerId} · статус: {account.status}
         </p>
       </header>
+      <AccountIssueBanner
+        status={account.status}
+        providerCode={account.providerCode}
+        lastErrorMessage={account.lastErrorMessage}
+        lastErrorAt={account.lastErrorAt}
+        cooldownUntil={account.cooldownUntil}
+      />
       <div className="rounded-lg border border-border bg-card p-6">
         <AccountForm
           mode="edit"
