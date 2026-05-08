@@ -682,8 +682,13 @@ export const serverApi = {
     params: Record<string, unknown>;
   }) =>
     apiPost<{
-      task: { id: string; status: string };
-      reservation?: { amount: string; currency: string };
+      success: boolean;
+      mode: 'sync' | 'async';
+      status: string;
+      task_id: string;
+      reserved_amount?: string | number | bigint;
+      currency?: string;
+      message?: string;
     }>('/internal/playground/generations', body),
 
   // Upload an image to be referenced by a subsequent playground

@@ -18,7 +18,7 @@ export interface SubmitResult {
 export async function submitGenerationAction(input: SubmitInput): Promise<SubmitResult> {
   try {
     const res = await serverApi.playgroundGenerate(input);
-    return { ok: true, taskId: res.task.id };
+    return { ok: true, taskId: res.task_id };
   } catch (err) {
     if (err instanceof ApiError) {
       return {
