@@ -91,9 +91,11 @@ function pickDuration(p: Record<string, unknown>): number {
   return 5;
 }
 
-function pickMode(p: Record<string, unknown>): 'standard' | 'pro' {
+// Kling API accepts mode='std'|'pro' — not 'standard'. We accept either
+// from the caller (catalog uses 'standard') and translate before sending.
+function pickMode(p: Record<string, unknown>): 'std' | 'pro' {
   const v = pickString(p, 'mode');
-  return v === 'pro' ? 'pro' : 'standard';
+  return v === 'pro' ? 'pro' : 'std';
 }
 
 function classifyKlingError(
