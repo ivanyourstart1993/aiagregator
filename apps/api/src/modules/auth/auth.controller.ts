@@ -1,4 +1,5 @@
 import { Body, Controller, HttpCode, HttpStatus, Post, UseGuards, UsePipes } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import { Public } from '../../common/decorators/public.decorator';
 import { InternalServiceGuard } from '../../common/guards/internal-service.guard';
 import { ZodValidationPipe } from './dto/zod-pipe';
@@ -23,7 +24,14 @@ import { AuthService } from './auth.service';
 export class AuthController {
   constructor(private readonly auth: AuthService) {}
 
+  // Stricter rate limit on registration: a real human signs up once,
+  // so 10 attempts / 5 minutes per source IP is more than enough and
+  // shuts down the typical automated signup flood (we observed 5+ /sec
+  // from a single IP via the BFF proxy). Note: under the BFF, the
+  // throttler sees the web-server's IP, not the end-user's — that is
+  // by design here, we want a hard ceiling on total signups too.
   @Public()
+  @Throttle({ default: { limit: 10, ttl: 5 * 60_000 } })
   @Post('register')
   @HttpCode(HttpStatus.CREATED)
   @UsePipes(new ZodValidationPipe(registerSchema))

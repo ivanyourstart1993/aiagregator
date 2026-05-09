@@ -3,8 +3,21 @@
 import { z } from 'zod';
 import { ApiError, serverApi } from '@/lib/server-api';
 
+// Mirror of the API-side blocklist — see apps/api/src/modules/auth/dto/register.dto.ts
+// Keep in sync.
+const URL_LIKE = /(https?:\/\/|www\.|\bbit\.ly\b|\bt\.me\b|\btinyurl\b|\bcutt\.ly\b|\bshorturl\b)/i;
+const TELEGRAM_HANDLE = /@[A-Za-z0-9_]{4,}/;
+const EMOJI_RUN = /(?:[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}\u{1F1E6}-\u{1F1FF}]\s*){3,}/u;
+
 const schema = z.object({
-  name: z.string().min(1),
+  name: z
+    .string()
+    .trim()
+    .min(1)
+    .max(60)
+    .refine((v) => !URL_LIKE.test(v))
+    .refine((v) => !TELEGRAM_HANDLE.test(v))
+    .refine((v) => !EMOJI_RUN.test(v)),
   email: z.string().email(),
   password: z.string().min(8),
   locale: z.string().min(2).max(5),
