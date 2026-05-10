@@ -582,9 +582,22 @@ export function PlaygroundClient({ balance }: Props) {
             {t('whatToGenerate')}
           </Label>
           <div className="grid gap-3 sm:grid-cols-2">
-            {TASK_GROUPS.map((g) => (
+            {TASK_GROUPS.map((g) => {
+              // Show "STD = 720p · PRO = 1080p" legend only on groups that
+              // actually mix std/pro presets (currently — Kling video).
+              const hasModes = g.types.some(
+                (tp) => PRESETS[tp].mode !== undefined,
+              );
+              return (
               <div key={g.labelKey} className="space-y-1.5">
-                <div className="text-xs font-semibold text-muted-foreground">{t(g.labelKey)}</div>
+                <div className="flex flex-wrap items-baseline gap-2">
+                  <div className="text-xs font-semibold text-muted-foreground">{t(g.labelKey)}</div>
+                  {hasModes ? (
+                    <div className="text-[10px] text-muted-foreground/70">
+                      {t('modeLegend')}
+                    </div>
+                  ) : null}
+                </div>
                 <div className="flex flex-wrap gap-1.5">
                   {g.types.map((tp) => {
                     const active = taskType === tp;
@@ -602,7 +615,9 @@ export function PlaygroundClient({ balance }: Props) {
                         key={tp}
                         type="button"
                         onClick={() => setTaskType(tp)}
-                        className={`inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs transition-colors ${
+                        title={t(`tooltip_${tp}`)}
+                        aria-label={`${t(`type_${tp}`)} — ${t(`tooltip_${tp}`)}`}
+                        className={`inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-info/50 ${
                           active
                             ? 'border-info bg-info/15 text-info'
                             : 'border-border/60 bg-background hover:border-border'
@@ -620,7 +635,8 @@ export function PlaygroundClient({ balance }: Props) {
                   })}
                 </div>
               </div>
-            ))}
+              );
+            })}
           </div>
         </div>
 
@@ -866,8 +882,9 @@ export function PlaygroundClient({ balance }: Props) {
         })()}
       </div>
 
-      {/* Right: result */}
-      <div className="space-y-4 lg:col-span-5">
+      {/* Right: result. Sticky on desktop so the user can edit a long
+          prompt without losing sight of the result panel. */}
+      <div className="space-y-4 lg:col-span-5 lg:sticky lg:top-6 lg:self-start">
         <div className="flex min-h-[400px] items-center justify-center rounded-lg border bg-card/40 p-5">
           {phase === 'idle' ? (
             <p className="text-sm text-muted-foreground">{t('resultEmpty')}</p>
