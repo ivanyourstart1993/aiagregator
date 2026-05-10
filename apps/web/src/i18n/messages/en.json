@@ -612,7 +612,9 @@
   },
   "playground": {
     "title": "Generate",
-    "subtitle": "Type a prompt and get a result right in the browser. Charged from your balance.",
+    "subtitle": "Type a prompt and get a result right in the browser. Charged from your balance. All prices in USD.",
+    "insufficientBalance": "Not enough balance: need {need}, have {have}.",
+    "topUpCta": "Top up",
     "whatToGenerate": "What to generate",
     "groupImageGen": "Text → image",
     "groupImageEdit": "Edit image",

@@ -14,7 +14,21 @@ import {
   uploadImageAction,
 } from '@/app/[locale]/(dashboard)/playground/actions';
 import type { BalanceView } from '@/lib/server-api';
-import { formatNanoUSDWithSign } from '@/lib/money';
+import { formatNanoUSDWithSign, nanoToCents } from '@/lib/money';
+import { Link } from '@/i18n/navigation';
+
+// Unified price formatter for the playground. Replaces inconsistent
+// .toFixed(4) all over the place so the user sees comparable formats:
+//   $0.00      → "Бесплатно"
+//   < $0.01    → "< $0.01"
+//   < $1       → "$0.025" (3 decimals — image tier)
+//   >= $1      → "$1.12"  (2 decimals — video tier)
+function formatPrice(usd: number): string {
+  if (usd === 0) return 'Бесплатно';
+  if (usd < 0.01) return '< $0.01';
+  if (usd < 1) return `$${usd.toFixed(3)}`;
+  return `$${usd.toFixed(2)}`;
+}
 
 interface Props {
   balance: BalanceView | null;
@@ -393,12 +407,12 @@ export function PlaygroundClient({ balance }: Props) {
   const imageCap = preset.needsImage ? MAX_INPUT_IMAGES : 1;
 
   // Reset duration when switching presets so we never carry "10s" into
-  // a model that doesn't support it. Preset.durationOptions[0] is the
-  // canonical default.
+  // a model that doesn't support it. `durationOptions[0]` is the canonical
+  // default — for Kling that's 5s (cheaper), for Veo that's 4s.
   useEffect(() => {
     const opts = preset.durationOptions;
     if (opts && opts.length > 0 && !opts.includes(duration)) {
-      setDuration(opts[opts.length - 1]!); // prefer 8s default
+      setDuration(opts[0]!);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [taskType]);
@@ -600,7 +614,7 @@ export function PlaygroundClient({ balance }: Props) {
                             {p.mode === 'pro' ? 'PRO' : 'STD'}
                           </span>
                         ) : null}
-                        <span className="text-muted-foreground">${p.approxUsd.toFixed(4)}</span>
+                        <span className="text-muted-foreground">{formatPrice(p.approxUsd)}</span>
                       </button>
                     );
                   })}
@@ -778,39 +792,78 @@ export function PlaygroundClient({ balance }: Props) {
           </div>
         ) : null}
 
-        <div className="flex items-center justify-between rounded-lg border bg-card/40 p-5">
-          <div className="text-sm">
-            <div className="text-muted-foreground">{t('costEstimate')}</div>
-            <div className="font-mono text-base font-semibold text-foreground">
-              ≈ $
-              {(preset.needsVideo
-                ? preset.approxUsd * (duration / (preset.durationBase ?? 8))
-                : preset.approxUsd
-              ).toFixed(4)}
-            </div>
-          </div>
-          {balance ? (
-            <div className="text-right text-sm">
-              <div className="text-muted-foreground">{t('balance')}</div>
-              <div className="font-mono text-base font-semibold text-foreground">
-                {formatNanoUSDWithSign(balance.available)}
+        {(() => {
+          const cost = preset.needsVideo
+            ? preset.approxUsd * (duration / (preset.durationBase ?? 8))
+            : preset.approxUsd;
+          // Balance.available is a nano-USD string; convert to dollars.
+          const availableUsd =
+            balance != null ? nanoToCents(balance.available) / 100 : null;
+          // Add a small tolerance so a $0.560001 cost vs $0.56 balance
+          // doesn't flag insufficient. Real reservation rounds half-up.
+          const insufficient =
+            availableUsd != null && availableUsd + 0.001 < cost;
+          const submitDisabled = isBusy || uploading || insufficient;
+
+          return (
+            <div className="rounded-lg border bg-card/40 p-5">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="text-sm">
+                  <div className="text-muted-foreground">{t('costEstimate')}</div>
+                  <div
+                    className={`font-mono text-base font-semibold ${insufficient ? 'text-destructive' : 'text-foreground'}`}
+                  >
+                    ≈ {formatPrice(cost)}
+                  </div>
+                </div>
+                {balance ? (
+                  <div className="text-sm sm:text-right">
+                    <div className="text-muted-foreground">{t('balance')}</div>
+                    <div
+                      className={`font-mono text-base font-semibold ${insufficient ? 'text-destructive' : 'text-foreground'}`}
+                    >
+                      {formatNanoUSDWithSign(balance.available)}
+                    </div>
+                  </div>
+                ) : null}
+                <Button
+                  onClick={handleSubmit}
+                  disabled={submitDisabled}
+                  size="lg"
+                  className="w-full gap-2 sm:w-auto"
+                >
+                  {isBusy ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      {phase === 'submitting' ? t('submitting') : t('processing')}
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles className="h-4 w-4" />
+                      {t('generate')}
+                    </>
+                  )}
+                </Button>
               </div>
+              {insufficient ? (
+                <div className="mt-3 flex flex-wrap items-center gap-2 rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2 text-sm text-destructive">
+                  <span>
+                    {t('insufficientBalance', {
+                      need: formatPrice(cost),
+                      have: formatPrice(availableUsd ?? 0),
+                    })}
+                  </span>
+                  <Link
+                    href="/top-up/new"
+                    className="ml-auto rounded-md bg-destructive px-3 py-1 text-xs font-medium text-destructive-foreground hover:bg-destructive/90"
+                  >
+                    {t('topUpCta')}
+                  </Link>
+                </div>
+              ) : null}
             </div>
-          ) : null}
-          <Button onClick={handleSubmit} disabled={isBusy || uploading} size="lg" className="gap-2">
-            {isBusy ? (
-              <>
-                <Loader2 className="h-4 w-4 animate-spin" />
-                {phase === 'submitting' ? t('submitting') : t('processing')}
-              </>
-            ) : (
-              <>
-                <Sparkles className="h-4 w-4" />
-                {t('generate')}
-              </>
-            )}
-          </Button>
-        </div>
+          );
+        })()}
       </div>
 
       {/* Right: result */}
