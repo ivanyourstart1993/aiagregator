@@ -286,7 +286,21 @@ interface InputImage {
   error?: string;
 }
 
+interface RecentTask {
+  taskId: string;
+  preset: TaskType;
+  files: ResultFile[];
+  finishedAt: number;
+}
+
 const MAX_INPUT_IMAGES = 6;
+const MAX_RECENT_TASKS = 6;
+// Polling tuning: keep frequent polls on the first ~minute (fast wins),
+// then back off so a stuck Kling job doesn't spam 150+ requests over 5
+// minutes. Hard timeout at 15 min — surface as a "took too long" error.
+const POLL_INITIAL_MS = 2000;
+const POLL_MAX_MS = 10_000;
+const POLL_TIMEOUT_MS = 15 * 60_000;
 
 export function PlaygroundClient({ balance }: Props) {
   const t = useTranslations('playground');
@@ -298,8 +312,15 @@ export function PlaygroundClient({ balance }: Props) {
   const [phase, setPhase] = useState<Phase>('idle');
   const [taskId, setTaskId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [errorCode, setErrorCode] = useState<string | null>(null);
   const [files, setFiles] = useState<ResultFile[]>([]);
   const pollRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pollStartRef = useRef<number>(0);
+  const pollCountRef = useRef<number>(0);
+  // Recent generations strip — kept client-side only. Persists across
+  // submits in the same session so the user can flip back to a previous
+  // result they liked.
+  const [recentTasks, setRecentTasks] = useState<RecentTask[]>([]);
 
   // Up to MAX_INPUT_IMAGES source images for image_edit. Each can be a
   // file upload (preview is a blob: URL, remoteUrl filled after upload)
@@ -467,8 +488,11 @@ export function PlaygroundClient({ balance }: Props) {
 
     setPhase('submitting');
     setError(null);
+    setErrorCode(null);
     setFiles([]);
     setTaskId(null);
+    pollCountRef.current = 0;
+    pollStartRef.current = Date.now();
 
     const params: Record<string, unknown> = {
       prompt: prompt.trim(),
@@ -511,6 +535,7 @@ export function PlaygroundClient({ balance }: Props) {
     if (!res.ok || !res.taskId) {
       setPhase('failed');
       setError(res.error ?? t('errorGeneric'));
+      setErrorCode((res as { code?: string }).code ?? null);
       return;
     }
     setTaskId(res.taskId);
@@ -519,6 +544,14 @@ export function PlaygroundClient({ balance }: Props) {
   }
 
   async function pollTask(id: string) {
+    // Hard timeout — surface a friendly "took too long" rather than
+    // polling forever.
+    if (Date.now() - pollStartRef.current > POLL_TIMEOUT_MS) {
+      setPhase('failed');
+      setError(t('errorTimeout'));
+      setErrorCode('task_timeout');
+      return;
+    }
     const res = await pollTaskAction(id);
     if (!res.ok) {
       setPhase('failed');
@@ -558,17 +591,67 @@ export function PlaygroundClient({ balance }: Props) {
           }
         }
         setFiles(arr);
+        // Push to recent strip (deduped by taskId, capped at MAX).
+        if (arr.length > 0) {
+          setRecentTasks((prev) => {
+            const without = prev.filter((r) => r.taskId !== id);
+            return [
+              { taskId: id, preset: taskType, files: arr, finishedAt: Date.now() },
+              ...without,
+            ].slice(0, MAX_RECENT_TASKS);
+          });
+        }
         return;
       }
       if (task.status === 'FAILED' || task.status === 'CANCELLED') {
         setPhase('failed');
         setError(task.errorMessage ?? task.errorCode ?? t('errorGeneric'));
+        setErrorCode(task.errorCode ?? null);
         return;
       }
-      // still PENDING / PROCESSING
+      // Still PENDING / PROCESSING — schedule next poll with backoff.
+      // First ~10 attempts every 2s (Veo/image typical case), then ramp
+      // up to 10s (Kling video typical case) so we don't spam 150 polls
+      // over the 5-min Kling generation window.
       setPhase(task.status === 'PROCESSING' ? 'processing' : 'queued');
-      pollRef.current = setTimeout(() => pollTask(id), 2000);
+      pollCountRef.current += 1;
+      const delay = Math.min(
+        POLL_INITIAL_MS + pollCountRef.current * 500,
+        POLL_MAX_MS,
+      );
+      pollRef.current = setTimeout(() => pollTask(id), delay);
     }
+  }
+
+  // User-friendly error code → human text. Falls back to the raw error
+  // message if the code is unknown.
+  function friendlyError(code: string | null, raw: string | null): string {
+    if (!code) return raw ?? t('errorGeneric');
+    const key = `error_${code}`;
+    const translated = t(key);
+    // next-intl returns the key itself when missing
+    return translated && translated !== `playground.${key}` && translated !== key
+      ? translated
+      : raw ?? t('errorGeneric');
+  }
+
+  async function copyTaskId() {
+    if (!taskId) return;
+    try {
+      await navigator.clipboard.writeText(taskId);
+      toast.success(t('taskIdCopied'));
+    } catch {
+      toast.error(t('errorGeneric'));
+    }
+  }
+
+  function showRecent(r: RecentTask) {
+    setTaskType(r.preset);
+    setTaskId(r.taskId);
+    setFiles(r.files);
+    setPhase('succeeded');
+    setError(null);
+    setErrorCode(null);
   }
 
   const isBusy = phase === 'submitting' || phase === 'queued' || phase === 'processing';
@@ -911,15 +994,60 @@ export function PlaygroundClient({ balance }: Props) {
                     : t('etaImage')}
               </span>
               {taskId ? (
-                <code className="text-xs text-muted-foreground/60">{taskId.slice(0, 12)}</code>
+                <button
+                  type="button"
+                  onClick={copyTaskId}
+                  title={t('taskIdCopyHint')}
+                  className="text-xs text-muted-foreground/60 hover:text-foreground"
+                >
+                  <code>{taskId.slice(0, 12)}</code>
+                </button>
               ) : null}
             </div>
           ) : null}
 
           {phase === 'failed' ? (
-            <div className="space-y-2 text-center">
+            <div className="w-full space-y-3 text-center">
               <p className="text-sm font-semibold text-destructive">{t('failedTitle')}</p>
-              <p className="text-xs text-muted-foreground">{error}</p>
+              <p className="text-xs text-muted-foreground">
+                {friendlyError(errorCode, error)}
+              </p>
+              {errorCode ? (
+                <p className="font-mono text-[10px] text-muted-foreground/60">
+                  code: {errorCode}
+                </p>
+              ) : null}
+              <div className="flex flex-wrap items-center justify-center gap-2 pt-1">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={handleSubmit}
+                  disabled={isBusy || uploading}
+                  className="gap-1.5"
+                >
+                  <Sparkles className="h-3.5 w-3.5" />
+                  {t('retry')}
+                </Button>
+                {errorCode === 'insufficient_balance' ||
+                errorCode === 'wallet_insufficient' ? (
+                  <Link
+                    href="/top-up/new"
+                    className="rounded-md bg-destructive px-3 py-1.5 text-xs font-medium text-destructive-foreground hover:bg-destructive/90"
+                  >
+                    {t('topUpCta')}
+                  </Link>
+                ) : null}
+                {taskId ? (
+                  <button
+                    type="button"
+                    onClick={copyTaskId}
+                    className="rounded-md border border-border/60 bg-background px-3 py-1.5 text-xs text-muted-foreground hover:border-border hover:text-foreground"
+                  >
+                    {t('copyTaskId')}
+                  </button>
+                ) : null}
+              </div>
             </div>
           ) : null}
 
@@ -931,6 +1059,60 @@ export function PlaygroundClient({ balance }: Props) {
             </div>
           ) : null}
         </div>
+
+        {/* Recent generations strip — shown when we have at least one
+            cached result and the current phase is idle / succeeded /
+            failed (i.e. user is between submits). */}
+        {recentTasks.length > 0 && !isBusy ? (
+          <div className="space-y-2">
+            <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              {t('recentTitle')}
+            </div>
+            <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
+              {recentTasks.map((r) => {
+                const first = r.files[0];
+                const isVideo =
+                  first?.type === 'video' ||
+                  first?.mime_type?.startsWith('video/');
+                return (
+                  <button
+                    key={r.taskId}
+                    type="button"
+                    onClick={() => showRecent(r)}
+                    title={t(`type_${r.preset}`)}
+                    className={`group relative aspect-square overflow-hidden rounded-md border transition-colors ${
+                      taskId === r.taskId
+                        ? 'border-info'
+                        : 'border-border/60 hover:border-border'
+                    }`}
+                  >
+                    {first ? (
+                      isVideo ? (
+                        // eslint-disable-next-line jsx-a11y/media-has-caption
+                        <video
+                          src={first.url}
+                          className="h-full w-full object-cover"
+                          muted
+                          playsInline
+                        />
+                      ) : (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={first.url}
+                          alt={t(`type_${r.preset}`)}
+                          className="h-full w-full object-cover"
+                        />
+                      )
+                    ) : null}
+                    <span className="absolute bottom-1 left-1 rounded bg-background/80 px-1 py-0.5 text-[9px] font-mono text-muted-foreground">
+                      {r.taskId.slice(-6)}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        ) : null}
       </div>
     </div>
   );
