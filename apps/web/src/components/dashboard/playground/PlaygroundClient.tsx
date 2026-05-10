@@ -63,27 +63,31 @@ interface PresetSpec {
   approxUsd: number;
 }
 
+// approxUsd values reflect current Default Tariff pricing in the DB.
+// Source: TariffBundlePrice rows for each (provider, model, method, mode,
+// resolution) combination. Kept in sync manually for now; future: switch
+// to a server-fetched price preview per preset.
 const PRESETS: Record<TaskType, PresetSpec> = {
   text_to_image_flash_1k: {
     provider: 'google_banana',
     model: 'gemini-3.1-flash-image-preview',
     method: 'text_to_image',
     resolution: '1K',
-    approxUsd: 0.019,
+    approxUsd: 0.015,
   },
   text_to_image_flash_2k: {
     provider: 'google_banana',
     model: 'gemini-3.1-flash-image-preview',
     method: 'text_to_image',
     resolution: '2K',
-    approxUsd: 0.0238,
+    approxUsd: 0.025,
   },
   text_to_image_pro_2k: {
     provider: 'google_banana',
     model: 'gemini-3-pro-image-preview',
     method: 'text_to_image',
     resolution: '2K',
-    approxUsd: 0.047,
+    approxUsd: 0.035,
   },
   image_edit_flash_1k: {
     provider: 'google_banana',
@@ -91,7 +95,7 @@ const PRESETS: Record<TaskType, PresetSpec> = {
     method: 'image_edit',
     resolution: '1K',
     needsImage: true,
-    approxUsd: 0.019,
+    approxUsd: 0.025,
   },
   image_edit_pro_2k: {
     provider: 'google_banana',
@@ -99,7 +103,7 @@ const PRESETS: Record<TaskType, PresetSpec> = {
     method: 'image_edit',
     resolution: '2K',
     needsImage: true,
-    approxUsd: 0.047,
+    approxUsd: 0.055,
   },
   text_to_video_fast_1080p: {
     provider: 'google_veo',
@@ -108,8 +112,9 @@ const PRESETS: Record<TaskType, PresetSpec> = {
     imageMethod: 'image_to_video',
     resolution: '1080p',
     durationOptions: [4, 6, 8],
+    durationBase: 8,
     needsVideo: true,
-    approxUsd: 1.08,
+    approxUsd: 0.24, // $0.030/s × 8s
   },
   text_to_video_quality_1080p: {
     provider: 'google_veo',
@@ -118,8 +123,9 @@ const PRESETS: Record<TaskType, PresetSpec> = {
     imageMethod: 'image_to_video',
     resolution: '1080p',
     durationOptions: [4, 6, 8],
+    durationBase: 8,
     needsVideo: true,
-    approxUsd: 2.7,
+    approxUsd: 0.64, // $0.080/s × 8s
   },
   // Kling: resolution is part of the bundle key (per the seed table) and
   // is implied by the mode — standard=720p, pro=1080p. We send it explicitly
@@ -134,7 +140,7 @@ const PRESETS: Record<TaskType, PresetSpec> = {
     durationBase: 5,
     mode: 'standard',
     needsVideo: true,
-    approxUsd: 0.2,
+    approxUsd: 0.56,
   },
   text_to_video_kling_pro: {
     provider: 'kling_ai',
@@ -146,7 +152,7 @@ const PRESETS: Record<TaskType, PresetSpec> = {
     durationBase: 5,
     mode: 'pro',
     needsVideo: true,
-    approxUsd: 0.4,
+    approxUsd: 1.12,
   },
   text_to_video_kling16_std: {
     provider: 'kling_ai',
@@ -170,7 +176,7 @@ const PRESETS: Record<TaskType, PresetSpec> = {
     durationBase: 5,
     mode: 'pro',
     needsVideo: true,
-    approxUsd: 0.28,
+    approxUsd: 0.49,
   },
   text_to_video_kling21m_pro: {
     provider: 'kling_ai',
@@ -194,7 +200,7 @@ const PRESETS: Record<TaskType, PresetSpec> = {
     durationBase: 5,
     mode: 'pro',
     needsVideo: true,
-    approxUsd: 0.5,
+    approxUsd: 0.45,
   },
   text_to_video_klingv3_std: {
     provider: 'kling_ai',
@@ -206,7 +212,7 @@ const PRESETS: Record<TaskType, PresetSpec> = {
     durationBase: 5,
     mode: 'standard',
     needsVideo: true,
-    approxUsd: 0.5,
+    approxUsd: 0.42,
   },
   text_to_video_klingv3_pro: {
     provider: 'kling_ai',
@@ -218,7 +224,7 @@ const PRESETS: Record<TaskType, PresetSpec> = {
     durationBase: 5,
     mode: 'pro',
     needsVideo: true,
-    approxUsd: 0.9,
+    approxUsd: 0.56,
   },
 };
 
@@ -232,18 +238,20 @@ const TASK_GROUPS: Array<{ labelKey: string; types: TaskType[] }> = [
     types: ['image_edit_flash_1k', 'image_edit_pro_2k'],
   },
   {
-    labelKey: 'groupVideo',
+    labelKey: 'groupVideoVeo',
+    types: ['text_to_video_fast_1080p', 'text_to_video_quality_1080p'],
+  },
+  {
+    labelKey: 'groupVideoKling',
     types: [
-      'text_to_video_fast_1080p',
-      'text_to_video_quality_1080p',
       'text_to_video_kling16_std',
       'text_to_video_kling16_pro',
-      'text_to_video_kling21m_pro',
-      'text_to_video_kling25_pro',
       'text_to_video_kling_std',
       'text_to_video_kling_pro',
       'text_to_video_klingv3_std',
       'text_to_video_klingv3_pro',
+      'text_to_video_kling21m_pro',
+      'text_to_video_kling25_pro',
     ],
   },
 ];
@@ -567,18 +575,31 @@ export function PlaygroundClient({ balance }: Props) {
                   {g.types.map((tp) => {
                     const active = taskType === tp;
                     const p = PRESETS[tp];
+                    // Mode chip: 'pro' is the quality tier — highlight it
+                    // (purple) so users can pick at a glance; std stays muted.
+                    const modeChip =
+                      p.mode === 'pro'
+                        ? 'bg-purple-500/20 text-purple-300'
+                        : p.mode === 'standard'
+                          ? 'bg-muted text-muted-foreground'
+                          : '';
                     return (
                       <button
                         key={tp}
                         type="button"
                         onClick={() => setTaskType(tp)}
-                        className={`rounded-md border px-2.5 py-1 text-xs transition-colors ${
+                        className={`inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs transition-colors ${
                           active
                             ? 'border-info bg-info/15 text-info'
                             : 'border-border/60 bg-background hover:border-border'
                         }`}
                       >
-                        {t(`type_${tp}`)}{' '}
+                        <span>{t(`type_${tp}`)}</span>
+                        {p.mode ? (
+                          <span className={`rounded px-1 py-0.5 text-[9px] font-semibold uppercase tracking-wider ${modeChip}`}>
+                            {p.mode === 'pro' ? 'PRO' : 'STD'}
+                          </span>
+                        ) : null}
                         <span className="text-muted-foreground">${p.approxUsd.toFixed(4)}</span>
                       </button>
                     );
@@ -808,6 +829,16 @@ export function PlaygroundClient({ balance }: Props) {
                   : phase === 'queued'
                     ? t('phaseQueued')
                     : t('phaseProcessing')}
+              </span>
+              {/* Per-provider ETA hint — Kling video is the slowest (2–5 min),
+                  Veo ~1 min, images near-instant. Sets expectations so users
+                  don't refresh the page or cancel mid-task. */}
+              <span className="text-xs text-muted-foreground/70">
+                {preset.provider === 'kling_ai'
+                  ? t('etaVideoKling')
+                  : preset.provider === 'google_veo'
+                    ? t('etaVideoVeo')
+                    : t('etaImage')}
               </span>
               {taskId ? (
                 <code className="text-xs text-muted-foreground/60">{taskId.slice(0, 12)}</code>
