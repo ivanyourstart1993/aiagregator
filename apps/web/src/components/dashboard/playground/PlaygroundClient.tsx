@@ -139,7 +139,7 @@ const PRESETS: Record<TaskType, PresetSpec> = {
     durationOptions: [4, 6, 8],
     durationBase: 8,
     needsVideo: true,
-    approxUsd: 6.0, // $0.75/s × 8s — Quality is unchanged pending decision
+    approxUsd: 0.6, // $0.075/s × 8s — matched competitor
   },
   // Kling: resolution is part of the bundle key (per the seed table) and
   // is implied by the mode — standard=720p, pro=1080p. We send it explicitly
