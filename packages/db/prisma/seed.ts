@@ -176,37 +176,39 @@ const BANANA_ASPECT_RATIOS = ['1:1', '3:4', '4:3', '9:16', '16:9'] as const;
 // every entry across all ratios because `aspect_ratio` is a bundle dimension
 // and the playground frontend always sends one).
 const BANANA_BASE_PRICES: Array<Omit<BananaBundleSpec, 'aspectRatio'>> = [
+  // Nano Standard (V1, gemini-2.5-flash-image) — text_to_image only
+  { modelSlug: 'gemini-2.5-flash-image',         methodCode: 'text_to_image', resolution: '1K', priceCents: 1.65 },
   // Nano-2 (gemini-3.1-flash-image-preview) — text_to_image
-  { modelSlug: 'gemini-3.1-flash-image-preview', methodCode: 'text_to_image', resolution: '0.5K', priceCents: 10 },
-  { modelSlug: 'gemini-3.1-flash-image-preview', methodCode: 'text_to_image', resolution: '1K',   priceCents: 15 },
-  { modelSlug: 'gemini-3.1-flash-image-preview', methodCode: 'text_to_image', resolution: '2K',   priceCents: 25 },
-  { modelSlug: 'gemini-3.1-flash-image-preview', methodCode: 'text_to_image', resolution: '4K',   priceCents: 40 },
-  // Nano-2 — image_edit / image_to_image (same prices)
-  { modelSlug: 'gemini-3.1-flash-image-preview', methodCode: 'image_edit',     resolution: '0.5K', priceCents: 12 },
-  { modelSlug: 'gemini-3.1-flash-image-preview', methodCode: 'image_edit',     resolution: '1K',   priceCents: 18 },
-  { modelSlug: 'gemini-3.1-flash-image-preview', methodCode: 'image_edit',     resolution: '2K',   priceCents: 30 },
-  { modelSlug: 'gemini-3.1-flash-image-preview', methodCode: 'image_edit',     resolution: '4K',   priceCents: 50 },
-  { modelSlug: 'gemini-3.1-flash-image-preview', methodCode: 'image_to_image', resolution: '0.5K', priceCents: 12 },
-  { modelSlug: 'gemini-3.1-flash-image-preview', methodCode: 'image_to_image', resolution: '1K',   priceCents: 18 },
-  { modelSlug: 'gemini-3.1-flash-image-preview', methodCode: 'image_to_image', resolution: '2K',   priceCents: 30 },
-  { modelSlug: 'gemini-3.1-flash-image-preview', methodCode: 'image_to_image', resolution: '4K',   priceCents: 50 },
-  // Nano-2 — multi_reference_image
-  { modelSlug: 'gemini-3.1-flash-image-preview', methodCode: 'multi_reference_image', resolution: '1K', priceCents: 25 },
-  { modelSlug: 'gemini-3.1-flash-image-preview', methodCode: 'multi_reference_image', resolution: '2K', priceCents: 40 },
-  { modelSlug: 'gemini-3.1-flash-image-preview', methodCode: 'multi_reference_image', resolution: '4K', priceCents: 65 },
+  { modelSlug: 'gemini-3.1-flash-image-preview', methodCode: 'text_to_image', resolution: '0.5K', priceCents: 1.5 },
+  { modelSlug: 'gemini-3.1-flash-image-preview', methodCode: 'text_to_image', resolution: '1K',   priceCents: 2 },
+  { modelSlug: 'gemini-3.1-flash-image-preview', methodCode: 'text_to_image', resolution: '2K',   priceCents: 2.5 },
+  { modelSlug: 'gemini-3.1-flash-image-preview', methodCode: 'text_to_image', resolution: '4K',   priceCents: 4 },
+  // Nano-2 — image_edit / image_to_image (t2i × 1.20)
+  { modelSlug: 'gemini-3.1-flash-image-preview', methodCode: 'image_edit',     resolution: '0.5K', priceCents: 1.8 },
+  { modelSlug: 'gemini-3.1-flash-image-preview', methodCode: 'image_edit',     resolution: '1K',   priceCents: 2.4 },
+  { modelSlug: 'gemini-3.1-flash-image-preview', methodCode: 'image_edit',     resolution: '2K',   priceCents: 3 },
+  { modelSlug: 'gemini-3.1-flash-image-preview', methodCode: 'image_edit',     resolution: '4K',   priceCents: 4.8 },
+  { modelSlug: 'gemini-3.1-flash-image-preview', methodCode: 'image_to_image', resolution: '0.5K', priceCents: 1.8 },
+  { modelSlug: 'gemini-3.1-flash-image-preview', methodCode: 'image_to_image', resolution: '1K',   priceCents: 2.4 },
+  { modelSlug: 'gemini-3.1-flash-image-preview', methodCode: 'image_to_image', resolution: '2K',   priceCents: 3 },
+  { modelSlug: 'gemini-3.1-flash-image-preview', methodCode: 'image_to_image', resolution: '4K',   priceCents: 4.8 },
+  // Nano-2 — multi_reference_image (t2i × 1.60)
+  { modelSlug: 'gemini-3.1-flash-image-preview', methodCode: 'multi_reference_image', resolution: '1K', priceCents: 3.2 },
+  { modelSlug: 'gemini-3.1-flash-image-preview', methodCode: 'multi_reference_image', resolution: '2K', priceCents: 4 },
+  { modelSlug: 'gemini-3.1-flash-image-preview', methodCode: 'multi_reference_image', resolution: '4K', priceCents: 6.4 },
   // Pro (gemini-3-pro-image-preview)
-  { modelSlug: 'gemini-3-pro-image-preview', methodCode: 'text_to_image', resolution: '1K', priceCents: 35 },
-  { modelSlug: 'gemini-3-pro-image-preview', methodCode: 'text_to_image', resolution: '2K', priceCents: 35 },
-  { modelSlug: 'gemini-3-pro-image-preview', methodCode: 'text_to_image', resolution: '4K', priceCents: 65 },
-  { modelSlug: 'gemini-3-pro-image-preview', methodCode: 'image_edit',     resolution: '1K', priceCents: 45 },
-  { modelSlug: 'gemini-3-pro-image-preview', methodCode: 'image_edit',     resolution: '2K', priceCents: 45 },
-  { modelSlug: 'gemini-3-pro-image-preview', methodCode: 'image_edit',     resolution: '4K', priceCents: 80 },
-  { modelSlug: 'gemini-3-pro-image-preview', methodCode: 'image_to_image', resolution: '1K', priceCents: 45 },
-  { modelSlug: 'gemini-3-pro-image-preview', methodCode: 'image_to_image', resolution: '2K', priceCents: 45 },
-  { modelSlug: 'gemini-3-pro-image-preview', methodCode: 'image_to_image', resolution: '4K', priceCents: 80 },
-  { modelSlug: 'gemini-3-pro-image-preview', methodCode: 'multi_reference_image', resolution: '1K', priceCents: 55 },
-  { modelSlug: 'gemini-3-pro-image-preview', methodCode: 'multi_reference_image', resolution: '2K', priceCents: 55 },
-  { modelSlug: 'gemini-3-pro-image-preview', methodCode: 'multi_reference_image', resolution: '4K', priceCents: 100 },
+  { modelSlug: 'gemini-3-pro-image-preview', methodCode: 'text_to_image', resolution: '1K', priceCents: 3.95 },
+  { modelSlug: 'gemini-3-pro-image-preview', methodCode: 'text_to_image', resolution: '2K', priceCents: 4.95 },
+  { modelSlug: 'gemini-3-pro-image-preview', methodCode: 'text_to_image', resolution: '4K', priceCents: 7.95 },
+  { modelSlug: 'gemini-3-pro-image-preview', methodCode: 'image_edit',     resolution: '1K', priceCents: 4.75 },
+  { modelSlug: 'gemini-3-pro-image-preview', methodCode: 'image_edit',     resolution: '2K', priceCents: 5.95 },
+  { modelSlug: 'gemini-3-pro-image-preview', methodCode: 'image_edit',     resolution: '4K', priceCents: 9.55 },
+  { modelSlug: 'gemini-3-pro-image-preview', methodCode: 'image_to_image', resolution: '1K', priceCents: 4.75 },
+  { modelSlug: 'gemini-3-pro-image-preview', methodCode: 'image_to_image', resolution: '2K', priceCents: 5.95 },
+  { modelSlug: 'gemini-3-pro-image-preview', methodCode: 'image_to_image', resolution: '4K', priceCents: 9.55 },
+  { modelSlug: 'gemini-3-pro-image-preview', methodCode: 'multi_reference_image', resolution: '1K', priceCents: 6.3 },
+  { modelSlug: 'gemini-3-pro-image-preview', methodCode: 'multi_reference_image', resolution: '2K', priceCents: 7.95 },
+  { modelSlug: 'gemini-3-pro-image-preview', methodCode: 'multi_reference_image', resolution: '4K', priceCents: 12.75 },
 ];
 
 const BANANA_PRICES: BananaBundleSpec[] = BANANA_BASE_PRICES.flatMap((p) =>
@@ -337,7 +339,7 @@ async function seedBananaPrices(tariffId: string): Promise<void> {
       },
       update: { aspectRatio: spec.aspectRatio },
     });
-    const priceUnits = BigInt(spec.priceCents) * CENTS_TO_NANO;
+    const priceUnits = BigInt(Math.round(spec.priceCents * Number(CENTS_TO_NANO)));
     await prisma.tariffBundlePrice.upsert({
       where: {
         tariffId_bundleId: { tariffId, bundleId: bundle.id },
@@ -423,7 +425,7 @@ async function seedKlingPrices(tariffId: string): Promise<void> {
       },
       update: {},
     });
-    const priceUnits = BigInt(spec.priceCents) * CENTS_TO_NANO;
+    const priceUnits = BigInt(Math.round(spec.priceCents * Number(CENTS_TO_NANO)));
     await prisma.tariffBundlePrice.upsert({
       where: { tariffId_bundleId: { tariffId, bundleId: bundle.id } },
       create: {
@@ -490,8 +492,7 @@ async function seedKlingProviderAccount(): Promise<void> {
 // ---------------------------------------------------------------------------
 
 function dollarsPerSecondToUnits(usd: number): bigint {
-  const cents = Math.round(usd * 100);
-  return BigInt(cents) * 1_000_000n; // cents * 1e6 == USD * 1e8
+  return BigInt(Math.round(usd * 1e8));
 }
 
 interface VeoBundleSpec {
@@ -503,30 +504,30 @@ interface VeoBundleSpec {
 
 const VEO_PRICES: VeoBundleSpec[] = [
   // text_to_video
-  { modelSlug: 'veo-3.0-generate-001',          methodCode: 'text_to_video', resolution: '720p',  pricePerSecondUsd: 0.75 },
+  { modelSlug: 'veo-3.0-generate-001',          methodCode: 'text_to_video', resolution: '720p',  pricePerSecondUsd: 0.0625 },
   { modelSlug: 'veo-3.0-generate-001',          methodCode: 'text_to_video', resolution: '1080p', pricePerSecondUsd: 0.75 },
-  { modelSlug: 'veo-3.0-fast-generate-001',     methodCode: 'text_to_video', resolution: '720p',  pricePerSecondUsd: 0.20 },
-  { modelSlug: 'veo-3.0-fast-generate-001',     methodCode: 'text_to_video', resolution: '1080p', pricePerSecondUsd: 0.25 },
+  { modelSlug: 'veo-3.0-fast-generate-001',     methodCode: 'text_to_video', resolution: '720p',  pricePerSecondUsd: 0.03125 },
+  { modelSlug: 'veo-3.0-fast-generate-001',     methodCode: 'text_to_video', resolution: '1080p', pricePerSecondUsd: 0.04375 },
   { modelSlug: 'veo-3.0-fast-generate-001',     methodCode: 'text_to_video', resolution: '4K',    pricePerSecondUsd: 0.55 },
-  { modelSlug: 'veo-3.1-generate-preview',      methodCode: 'text_to_video', resolution: '720p',  pricePerSecondUsd: 0.75 },
+  { modelSlug: 'veo-3.1-generate-preview',      methodCode: 'text_to_video', resolution: '720p',  pricePerSecondUsd: 0.0625 },
   { modelSlug: 'veo-3.1-generate-preview',      methodCode: 'text_to_video', resolution: '1080p', pricePerSecondUsd: 0.75 },
   { modelSlug: 'veo-3.1-generate-preview',      methodCode: 'text_to_video', resolution: '4K',    pricePerSecondUsd: 1.10 },
-  { modelSlug: 'veo-3.1-fast-generate-preview', methodCode: 'text_to_video', resolution: '720p',  pricePerSecondUsd: 0.20 },
-  { modelSlug: 'veo-3.1-fast-generate-preview', methodCode: 'text_to_video', resolution: '1080p', pricePerSecondUsd: 0.25 },
+  { modelSlug: 'veo-3.1-fast-generate-preview', methodCode: 'text_to_video', resolution: '720p',  pricePerSecondUsd: 0.03125 },
+  { modelSlug: 'veo-3.1-fast-generate-preview', methodCode: 'text_to_video', resolution: '1080p', pricePerSecondUsd: 0.04375 },
   { modelSlug: 'veo-3.1-fast-generate-preview', methodCode: 'text_to_video', resolution: '4K',    pricePerSecondUsd: 0.55 },
   { modelSlug: 'veo-3.1-lite-generate-preview', methodCode: 'text_to_video', resolution: '720p',  pricePerSecondUsd: 0.10 },
   { modelSlug: 'veo-3.1-lite-generate-preview', methodCode: 'text_to_video', resolution: '1080p', pricePerSecondUsd: 0.15 },
   // image_to_video (+~$0.05/s vs text_to_video)
-  { modelSlug: 'veo-3.0-generate-001',          methodCode: 'image_to_video', resolution: '720p',  pricePerSecondUsd: 0.80 },
+  { modelSlug: 'veo-3.0-generate-001',          methodCode: 'image_to_video', resolution: '720p',  pricePerSecondUsd: 0.0625 },
   { modelSlug: 'veo-3.0-generate-001',          methodCode: 'image_to_video', resolution: '1080p', pricePerSecondUsd: 0.80 },
-  { modelSlug: 'veo-3.0-fast-generate-001',     methodCode: 'image_to_video', resolution: '720p',  pricePerSecondUsd: 0.25 },
-  { modelSlug: 'veo-3.0-fast-generate-001',     methodCode: 'image_to_video', resolution: '1080p', pricePerSecondUsd: 0.30 },
+  { modelSlug: 'veo-3.0-fast-generate-001',     methodCode: 'image_to_video', resolution: '720p',  pricePerSecondUsd: 0.03125 },
+  { modelSlug: 'veo-3.0-fast-generate-001',     methodCode: 'image_to_video', resolution: '1080p', pricePerSecondUsd: 0.04375 },
   { modelSlug: 'veo-3.0-fast-generate-001',     methodCode: 'image_to_video', resolution: '4K',    pricePerSecondUsd: 0.65 },
-  { modelSlug: 'veo-3.1-generate-preview',      methodCode: 'image_to_video', resolution: '720p',  pricePerSecondUsd: 0.80 },
+  { modelSlug: 'veo-3.1-generate-preview',      methodCode: 'image_to_video', resolution: '720p',  pricePerSecondUsd: 0.0625 },
   { modelSlug: 'veo-3.1-generate-preview',      methodCode: 'image_to_video', resolution: '1080p', pricePerSecondUsd: 0.80 },
   { modelSlug: 'veo-3.1-generate-preview',      methodCode: 'image_to_video', resolution: '4K',    pricePerSecondUsd: 1.20 },
-  { modelSlug: 'veo-3.1-fast-generate-preview', methodCode: 'image_to_video', resolution: '720p',  pricePerSecondUsd: 0.25 },
-  { modelSlug: 'veo-3.1-fast-generate-preview', methodCode: 'image_to_video', resolution: '1080p', pricePerSecondUsd: 0.30 },
+  { modelSlug: 'veo-3.1-fast-generate-preview', methodCode: 'image_to_video', resolution: '720p',  pricePerSecondUsd: 0.03125 },
+  { modelSlug: 'veo-3.1-fast-generate-preview', methodCode: 'image_to_video', resolution: '1080p', pricePerSecondUsd: 0.04375 },
   { modelSlug: 'veo-3.1-fast-generate-preview', methodCode: 'image_to_video', resolution: '4K',    pricePerSecondUsd: 0.65 },
 ];
 

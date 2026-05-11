@@ -87,7 +87,7 @@ const PRESETS: Record<TaskType, PresetSpec> = {
     model: 'gemini-3.1-flash-image-preview',
     method: 'text_to_image',
     resolution: '1K',
-    approxUsd: 0.015,
+    approxUsd: 0.02,
   },
   text_to_image_flash_2k: {
     provider: 'google_banana',
@@ -101,7 +101,7 @@ const PRESETS: Record<TaskType, PresetSpec> = {
     model: 'gemini-3-pro-image-preview',
     method: 'text_to_image',
     resolution: '2K',
-    approxUsd: 0.035,
+    approxUsd: 0.0495,
   },
   image_edit_flash_1k: {
     provider: 'google_banana',
@@ -109,7 +109,7 @@ const PRESETS: Record<TaskType, PresetSpec> = {
     method: 'image_edit',
     resolution: '1K',
     needsImage: true,
-    approxUsd: 0.025,
+    approxUsd: 0.024,
   },
   image_edit_pro_2k: {
     provider: 'google_banana',
@@ -117,7 +117,7 @@ const PRESETS: Record<TaskType, PresetSpec> = {
     method: 'image_edit',
     resolution: '2K',
     needsImage: true,
-    approxUsd: 0.055,
+    approxUsd: 0.0594,
   },
   text_to_video_fast_1080p: {
     provider: 'google_veo',
@@ -128,7 +128,7 @@ const PRESETS: Record<TaskType, PresetSpec> = {
     durationOptions: [4, 6, 8],
     durationBase: 8,
     needsVideo: true,
-    approxUsd: 0.24, // $0.030/s × 8s
+    approxUsd: 0.35, // $0.04375/s × 8s
   },
   text_to_video_quality_1080p: {
     provider: 'google_veo',
@@ -139,7 +139,7 @@ const PRESETS: Record<TaskType, PresetSpec> = {
     durationOptions: [4, 6, 8],
     durationBase: 8,
     needsVideo: true,
-    approxUsd: 0.64, // $0.080/s × 8s
+    approxUsd: 6.0, // $0.75/s × 8s — Quality is unchanged pending decision
   },
   // Kling: resolution is part of the bundle key (per the seed table) and
   // is implied by the mode — standard=720p, pro=1080p. We send it explicitly

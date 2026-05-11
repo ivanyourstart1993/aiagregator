@@ -497,6 +497,18 @@ export const initialCatalog: ProviderSeed[] = [
     sortOrder: 10,
     models: [
       {
+        code: 'gemini-2.5-flash-image',
+        publicName: 'Nano Banana Standard',
+        description: 'Original Nano Banana (V1) — budget tier, text-to-image only.',
+        sortOrder: 5,
+        methods: [
+          {
+            ...bananaMethods[0]!, // text_to_image
+            sortOrder: 10,
+          },
+        ],
+      },
+      {
         code: 'gemini-3.1-flash-image-preview',
         publicName: 'Nano Banana 2',
         description: 'Fast, high-quality general-purpose image generation.',

@@ -11,6 +11,7 @@ import {
 } from './provider-adapter.interface';
 
 const SUPPORTED_MODELS = new Set([
+  'gemini-2.5-flash-image',
   'gemini-3.1-flash-image-preview',
   'gemini-3-pro-image-preview',
   // Imagen on Vertex (Service Account only). text_to_image only — Imagen

@@ -96,6 +96,7 @@ const VERTEX_LOCATION = 'us-central1';
 const SUPPORTED_MODELS = new Set([
   // Gemini family (Nano Banana). text_to_image and image_edit go through
   // Vertex `generateContent` on Vertex SA path or AI Studio on key path.
+  'gemini-2.5-flash-image',
   'gemini-3.1-flash-image-preview',
   'gemini-3-pro-image-preview',
   // Imagen family (Vertex SA only). text_to_image via Vertex `:predict`.
