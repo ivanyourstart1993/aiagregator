@@ -278,6 +278,33 @@ interface ResultFile {
   mime_type?: string;
 }
 
+// Producers (`apps/api/.../poll-lro.cron.ts` and `apps/worker/.../generation.processor.ts`)
+// emit `{ url, fileType, mimeType }` (camelCase). Older code paths or hand-rolled
+// payloads may use `{ type, mime_type }` (snake_case). Accept both so the video
+// player can detect a Kling/Veo result regardless of the producer.
+function toResultFile(raw: unknown): ResultFile | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const r = raw as Record<string, unknown>;
+  if (typeof r.url !== 'string') return null;
+  const fileType =
+    typeof r.fileType === 'string'
+      ? r.fileType
+      : typeof r.type === 'string'
+        ? r.type
+        : 'image';
+  const mimeType =
+    typeof r.mimeType === 'string'
+      ? r.mimeType
+      : typeof r.mime_type === 'string'
+        ? r.mime_type
+        : undefined;
+  return { url: r.url, type: fileType, mime_type: mimeType };
+}
+
+function isVideoFile(f: ResultFile): boolean {
+  return f.type === 'video' || f.mime_type?.startsWith('video/') === true;
+}
+
 interface InputImage {
   id: string;
   previewUrl: string; // either blob: URL (uploaded file) or remote URL
@@ -566,28 +593,19 @@ export function PlaygroundClient({ balance }: Props) {
         const arr: ResultFile[] = [];
         if (Array.isArray(result)) {
           for (const f of result) {
-            if (f && typeof f === 'object' && typeof (f as { url?: string }).url === 'string') {
-              arr.push({
-                url: (f as { url: string }).url,
-                type: (f as { type?: string }).type ?? 'image',
-                mime_type: (f as { mime_type?: string }).mime_type,
-              });
-            }
+            const parsed = toResultFile(f);
+            if (parsed) arr.push(parsed);
           }
         } else if (result && typeof result === 'object') {
-          const r = result as { url?: string; type?: string; mime_type?: string; files?: unknown };
-          if (Array.isArray(r.files)) {
-            for (const f of r.files) {
-              if (f && typeof f === 'object' && typeof (f as { url?: string }).url === 'string') {
-                arr.push({
-                  url: (f as { url: string }).url,
-                  type: (f as { type?: string }).type ?? 'image',
-                  mime_type: (f as { mime_type?: string }).mime_type,
-                });
-              }
+          const nested = (result as { files?: unknown }).files;
+          if (Array.isArray(nested)) {
+            for (const f of nested) {
+              const parsed = toResultFile(f);
+              if (parsed) arr.push(parsed);
             }
-          } else if (typeof r.url === 'string') {
-            arr.push({ url: r.url, type: r.type ?? 'image', mime_type: r.mime_type });
+          } else {
+            const parsed = toResultFile(result);
+            if (parsed) arr.push(parsed);
           }
         }
         setFiles(arr);
@@ -657,6 +675,7 @@ export function PlaygroundClient({ balance }: Props) {
   const isBusy = phase === 'submitting' || phase === 'queued' || phase === 'processing';
 
   return (
+    <div className="space-y-6">
     <div className="grid gap-6 lg:grid-cols-12">
       {/* Left: form */}
       <div className="space-y-5 lg:col-span-7">
@@ -1059,73 +1078,86 @@ export function PlaygroundClient({ balance }: Props) {
             </div>
           ) : null}
         </div>
-
-        {/* Recent generations strip — shown when we have at least one
-            cached result and the current phase is idle / succeeded /
-            failed (i.e. user is between submits). */}
-        {recentTasks.length > 0 && !isBusy ? (
-          <div className="space-y-2">
-            <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-              {t('recentTitle')}
-            </div>
-            <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
-              {recentTasks.map((r) => {
-                const first = r.files[0];
-                const isVideo =
-                  first?.type === 'video' ||
-                  first?.mime_type?.startsWith('video/');
-                return (
-                  <button
-                    key={r.taskId}
-                    type="button"
-                    onClick={() => showRecent(r)}
-                    title={t(`type_${r.preset}`)}
-                    className={`group relative aspect-square overflow-hidden rounded-md border transition-colors ${
-                      taskId === r.taskId
-                        ? 'border-info'
-                        : 'border-border/60 hover:border-border'
-                    }`}
-                  >
-                    {first ? (
-                      isVideo ? (
-                        // eslint-disable-next-line jsx-a11y/media-has-caption
-                        <video
-                          src={first.url}
-                          className="h-full w-full object-cover"
-                          muted
-                          playsInline
-                        />
-                      ) : (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img
-                          src={first.url}
-                          alt={t(`type_${r.preset}`)}
-                          className="h-full w-full object-cover"
-                        />
-                      )
-                    ) : null}
-                    <span className="absolute bottom-1 left-1 rounded bg-background/80 px-1 py-0.5 text-[9px] font-mono text-muted-foreground">
-                      {r.taskId.slice(-6)}
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        ) : null}
       </div>
+    </div>
+
+      {/* Recent generations strip — full-width row below the form so
+          thumbnails get real horizontal space instead of being crammed
+          into the narrow right column. Shown when we have at least one
+          cached result and the current phase is idle / succeeded /
+          failed (i.e. user is between submits). */}
+      {recentTasks.length > 0 && !isBusy ? (
+        <div className="space-y-2">
+          <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+            {t('recentTitle')}
+          </div>
+          <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 xl:grid-cols-10">
+            {recentTasks.map((r) => {
+              const first = r.files[0];
+              const isVideo = first ? isVideoFile(first) : false;
+              return (
+                <button
+                  key={r.taskId}
+                  type="button"
+                  onClick={() => showRecent(r)}
+                  title={t(`type_${r.preset}`)}
+                  className={`group relative aspect-square overflow-hidden rounded-md border transition-colors ${
+                    taskId === r.taskId
+                      ? 'border-info'
+                      : 'border-border/60 hover:border-border'
+                  }`}
+                >
+                  {first ? (
+                    isVideo ? (
+                      // eslint-disable-next-line jsx-a11y/media-has-caption
+                      <video
+                        src={first.url}
+                        className="h-full w-full object-cover"
+                        muted
+                        playsInline
+                        preload="metadata"
+                      />
+                    ) : (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={first.url}
+                        alt={t(`type_${r.preset}`)}
+                        className="h-full w-full object-cover"
+                      />
+                    )
+                  ) : null}
+                  <span className="absolute bottom-1 left-1 rounded bg-background/80 px-1 py-0.5 text-[9px] font-mono text-muted-foreground">
+                    {r.taskId.slice(-6)}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
 
 function ResultPreview({ file }: { file: ResultFile }) {
   const t = useTranslations('playground');
-  const isVideo = file.type === 'video' || file.mime_type?.startsWith('video/');
+  const isVideo = isVideoFile(file);
   return (
     <div className="space-y-2">
       {isVideo ? (
-        <video src={file.url} controls className="w-full rounded-md" />
+        // eslint-disable-next-line jsx-a11y/media-has-caption
+        <video
+          src={file.url}
+          controls
+          autoPlay
+          loop
+          muted
+          playsInline
+          preload="metadata"
+          className="w-full rounded-md bg-black"
+        />
       ) : (
+        // eslint-disable-next-line @next/next/no-img-element
         <img src={file.url} alt="" className="w-full rounded-md" />
       )}
       <Button asChild size="sm" variant="outline" className="gap-2">
