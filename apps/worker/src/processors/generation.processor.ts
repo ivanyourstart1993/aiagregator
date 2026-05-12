@@ -71,9 +71,14 @@ function classifyError(err: unknown): {
       err.kind === 'billing' ||
       err.kind === 'quota' ||
       err.kind === 'invalid_credentials';
+    // Kept as a raw kind so sanitizeTaskError() (called when serving the
+    // task to public API consumers) can bucket 'validation' → 'provider_rejected'.
+    // Reporting 'invalid_parameter' here would mislead the caller into thinking
+    // their input was malformed when really our adapter sent an unsupported
+    // model_name/mode/etc. to the upstream provider.
     const publicCode =
       err.kind === 'validation'
-        ? 'invalid_parameter'
+        ? 'validation'
         : err.kind === 'content_rejected'
           ? 'content_rejected'
           : err.kind === 'rate_limit'

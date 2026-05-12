@@ -20,18 +20,15 @@ const SUPPORTED_MODELS = new Set([
   'kling-v2-1-master',
   'kling-v2-5-turbo',
   'kling-v2-6',
-  'kling-v3-0',
+  'kling-v3-master',
 ]);
 const SUPPORTED_METHODS = new Set(['text_to_video', 'image_to_video']);
 
 const KLING_BASE = 'https://api-singapore.klingai.com';
 
-// Map our internal catalog model.code values onto the strings Kling's
-// API actually expects in `model_name`. Newer catalog entries already use
-// the API-canonical codes and pass through unchanged.
 const MODEL_CODE_TO_API_NAME: Record<string, string> = {
   'kling-2.6': 'kling-v2-6',
-  'kling-v3': 'kling-v3-0',
+  'kling-v3': 'kling-v3-master',
 };
 
 function realModelName(code: string): string {
@@ -95,9 +92,11 @@ function pickDuration(p: Record<string, unknown>): number {
   return 5;
 }
 
-function pickMode(p: Record<string, unknown>): 'standard' | 'pro' {
+// Kling API accepts mode='std'|'pro' — not 'standard'. We accept either
+// from the caller (catalog uses 'standard') and translate before sending.
+function pickMode(p: Record<string, unknown>): 'std' | 'pro' {
   const v = pickString(p, 'mode');
-  return v === 'pro' ? 'pro' : 'standard';
+  return v === 'pro' ? 'pro' : 'std';
 }
 
 function classifyKlingError(
@@ -118,7 +117,16 @@ function classifyKlingError(
   }
   if (/quota/i.test(msg)) return new AdapterError('quota', msg);
   if (/credit|balance|billing/i.test(msg)) return new AdapterError('billing', msg);
-  if (/invalid|violation|safety|prohibit/i.test(msg)) {
+  // Param-level rejections from Kling have the shape:
+  //   "model_name value 'kling-v3-0' is invalid"
+  //   "mode value 'standard' is invalid"
+  // These are NOT content-moderation failures — they mean our request body
+  // disagrees with the API contract. Surface as 'validation' so the public
+  // layer sanitises to `provider_rejected`.
+  if (/value\s+'[^']*'\s+is\s+invalid/i.test(msg)) {
+    return new AdapterError('validation', msg);
+  }
+  if (/violation|safety|prohibit/i.test(msg)) {
     return new AdapterError('content_rejected', msg);
   }
   return new AdapterError('unknown', msg);
@@ -241,7 +249,10 @@ export class KlingAiAdapter implements ProviderAdapter {
         throw new AdapterError('billing', msg);
       }
       if (/quota/i.test(msg)) throw new AdapterError('quota', msg);
-      if (/invalid|violation|safety|prohibit|reject/i.test(msg)) {
+      if (/value\s+'[^']*'\s+is\s+invalid/i.test(msg)) {
+        throw new AdapterError('validation', msg);
+      }
+      if (/violation|safety|prohibit|reject/i.test(msg)) {
         throw new AdapterError('content_rejected', msg);
       }
       throw new AdapterError('unknown', msg);
