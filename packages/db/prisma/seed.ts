@@ -609,6 +609,111 @@ async function seedVeoProviderAccount(): Promise<void> {
   console.log(`[seed] veo env-account created: ${acc.id}`);
 }
 
+// ---------------------------------------------------------------------------
+// Seedance — PER_SECOND prices, mirrors Veo structure.
+// Upstream estimates (Volcano Engine ARK, CNY → USD) with ×1.15 retail markup.
+// Verify against current Volcano price sheet before going GA.
+// ---------------------------------------------------------------------------
+
+interface SeedanceBundleSpec {
+  modelSlug: string;
+  methodCode: 'text_to_video' | 'image_to_video';
+  resolution: string;
+  pricePerSecondUsd: number;
+}
+
+const SEEDANCE_PRICES: SeedanceBundleSpec[] = [
+  // Pro — both t2v and i2v, 480p / 720p / 1080p
+  { modelSlug: 'doubao-seedance-1-0-pro-250528', methodCode: 'text_to_video',  resolution: '480p',  pricePerSecondUsd: 0.00575 },
+  { modelSlug: 'doubao-seedance-1-0-pro-250528', methodCode: 'text_to_video',  resolution: '720p',  pricePerSecondUsd: 0.0138 },
+  { modelSlug: 'doubao-seedance-1-0-pro-250528', methodCode: 'text_to_video',  resolution: '1080p', pricePerSecondUsd: 0.02875 },
+  { modelSlug: 'doubao-seedance-1-0-pro-250528', methodCode: 'image_to_video', resolution: '480p',  pricePerSecondUsd: 0.00575 },
+  { modelSlug: 'doubao-seedance-1-0-pro-250528', methodCode: 'image_to_video', resolution: '720p',  pricePerSecondUsd: 0.0138 },
+  { modelSlug: 'doubao-seedance-1-0-pro-250528', methodCode: 'image_to_video', resolution: '1080p', pricePerSecondUsd: 0.02875 },
+  // Lite t2v
+  { modelSlug: 'doubao-seedance-1-0-lite-t2v-250428', methodCode: 'text_to_video', resolution: '480p', pricePerSecondUsd: 0.00575 },
+  { modelSlug: 'doubao-seedance-1-0-lite-t2v-250428', methodCode: 'text_to_video', resolution: '720p', pricePerSecondUsd: 0.0138 },
+  // Lite i2v
+  { modelSlug: 'doubao-seedance-1-0-lite-i2v-250428', methodCode: 'image_to_video', resolution: '480p', pricePerSecondUsd: 0.00575 },
+  { modelSlug: 'doubao-seedance-1-0-lite-i2v-250428', methodCode: 'image_to_video', resolution: '720p', pricePerSecondUsd: 0.0138 },
+];
+
+async function seedSeedancePrices(tariffId: string): Promise<void> {
+  let count = 0;
+  for (const spec of SEEDANCE_PRICES) {
+    const bundleKey = buildBundleKey({
+      providerSlug: 'seedance',
+      modelSlug: spec.modelSlug,
+      method: BundleMethod.VIDEO_GENERATION,
+      mode: spec.methodCode, // discriminates t2v vs i2v
+      resolution: spec.resolution,
+      durationSeconds: null,
+      aspectRatio: null,
+    });
+    const bundle = await prisma.bundle.upsert({
+      where: { bundleKey },
+      create: {
+        bundleKey,
+        providerSlug: 'seedance',
+        modelSlug: spec.modelSlug,
+        method: BundleMethod.VIDEO_GENERATION,
+        mode: spec.methodCode,
+        resolution: spec.resolution,
+        unit: BundleUnit.PER_SECOND,
+        isActive: true,
+      },
+      update: { unit: BundleUnit.PER_SECOND },
+    });
+    const perSecondUnits = dollarsPerSecondToUnits(spec.pricePerSecondUsd);
+    await prisma.tariffBundlePrice.upsert({
+      where: { tariffId_bundleId: { tariffId, bundleId: bundle.id } },
+      create: { tariffId, bundleId: bundle.id, perSecondUnits },
+      update: { perSecondUnits, basePriceUnits: null },
+    });
+    count++;
+  }
+  console.log(`[seed] seedance tariff prices upserted: ${count}`);
+}
+
+async function seedSeedanceProviderAccount(): Promise<void> {
+  const apiKey = process.env.SEEDANCE_API_KEY;
+  if (!apiKey) {
+    console.log('[seed] SEEDANCE_API_KEY not set — skipping Seedance ProviderAccount');
+    return;
+  }
+  const provider = await prisma.provider.findUnique({ where: { code: 'seedance' } });
+  if (!provider) {
+    console.warn('[seed] provider seedance not found — skipping account');
+    return;
+  }
+  const existing = await prisma.providerAccount.findFirst({
+    where: { providerId: provider.id, name: 'env-account' },
+  });
+  if (existing) {
+    await prisma.providerAccount.update({
+      where: { id: existing.id },
+      data: {
+        credentials: { apiKey } as Prisma.InputJsonValue,
+        status: ProviderAccountStatus.ACTIVE,
+      },
+    });
+    console.log(`[seed] seedance env-account refreshed: ${existing.id}`);
+    return;
+  }
+  const acc = await prisma.providerAccount.create({
+    data: {
+      providerId: provider.id,
+      name: 'env-account',
+      description: 'Auto-seeded from SEEDANCE_API_KEY env var',
+      credentials: { apiKey } as Prisma.InputJsonValue,
+      status: ProviderAccountStatus.ACTIVE,
+      rotationEnabled: true,
+      maxConcurrentTasks: 3,
+    },
+  });
+  console.log(`[seed] seedance env-account created: ${acc.id}`);
+}
+
 async function main(): Promise<void> {
   await seedSuperAdmin();
   await seedCatalog();
@@ -619,6 +724,8 @@ async function main(): Promise<void> {
   await seedVeoProviderAccount();
   await seedKlingPrices(tariffId);
   await seedKlingProviderAccount();
+  await seedSeedancePrices(tariffId);
+  await seedSeedanceProviderAccount();
 }
 
 main()

@@ -30,6 +30,29 @@ function formatPrice(usd: number): string {
   return `$${usd.toFixed(2)}`;
 }
 
+// Maps a preset's mode value (Kling std/pro, OpenAI low/medium/high/std/hd) to
+// a chip label + colour class. Returns null when the value isn't displayed —
+// e.g. text_to_video / image_to_video markers used for Veo/Seedance bundling.
+function modeChipFor(mode: string | undefined): { label: string; bg: string } | null {
+  if (!mode) return null;
+  switch (mode) {
+    case 'pro':
+      return { label: 'PRO', bg: 'bg-purple-500/20 text-purple-300' };
+    case 'standard':
+      return { label: 'STD', bg: 'bg-muted text-muted-foreground' };
+    case 'low':
+      return { label: 'LOW', bg: 'bg-muted text-muted-foreground' };
+    case 'medium':
+      return { label: 'MED', bg: 'bg-info/20 text-info' };
+    case 'high':
+      return { label: 'HIGH', bg: 'bg-purple-500/20 text-purple-300' };
+    case 'hd':
+      return { label: 'HD', bg: 'bg-purple-500/20 text-purple-300' };
+    default:
+      return null;
+  }
+}
+
 interface Props {
   balance: BalanceView | null;
 }
@@ -54,7 +77,10 @@ type TaskType =
   | 'text_to_video_kling21m_pro'
   | 'text_to_video_kling25_pro'
   | 'text_to_video_klingv3_std'
-  | 'text_to_video_klingv3_pro';
+  | 'text_to_video_klingv3_pro'
+  | 'text_to_video_seedance_lite_720p'
+  | 'text_to_video_seedance_pro_720p'
+  | 'text_to_video_seedance_pro_1080p';
 
 interface PresetSpec {
   provider: string;
@@ -68,8 +94,12 @@ interface PresetSpec {
   // Base duration the `approxUsd` price refers to. Cost shown to the user
   // is `approxUsd * (duration / durationBase)`. Veo: 8s, Kling: 5s.
   durationBase?: number;
-  // Provider-specific quality/mode tier. Kling: 'standard' | 'pro'.
-  mode?: 'standard' | 'pro';
+  // Provider-specific quality/mode tier. Forwarded verbatim into params.mode
+  // so the bundle key hash matches the seeded prices. Examples:
+  //   Kling: 'standard' | 'pro'
+  //   OpenAI gpt-image-1: 'low' | 'medium' | 'high'
+  //   OpenAI dall-e-3: 'standard' | 'hd'
+  mode?: string;
   needsImage?: boolean;
   needsVideo?: true;
   // Display price — UX-only estimate, the real cost is decided
@@ -240,6 +270,40 @@ const PRESETS: Record<TaskType, PresetSpec> = {
     needsVideo: true,
     approxUsd: 0.56,
   },
+  // Seedance. params.mode is overridden to the methodCode at submit time
+  // (same convention as Veo) so the bundle key distinguishes t2v from i2v.
+  text_to_video_seedance_lite_720p: {
+    provider: 'seedance',
+    model: 'doubao-seedance-1-0-lite-t2v-250428',
+    method: 'text_to_video',
+    resolution: '720p',
+    durationOptions: [5, 10],
+    durationBase: 5,
+    needsVideo: true,
+    approxUsd: 0.069, // $0.0138/s × 5s
+  },
+  text_to_video_seedance_pro_720p: {
+    provider: 'seedance',
+    model: 'doubao-seedance-1-0-pro-250528',
+    method: 'text_to_video',
+    imageMethod: 'image_to_video',
+    resolution: '720p',
+    durationOptions: [5, 10],
+    durationBase: 5,
+    needsVideo: true,
+    approxUsd: 0.069,
+  },
+  text_to_video_seedance_pro_1080p: {
+    provider: 'seedance',
+    model: 'doubao-seedance-1-0-pro-250528',
+    method: 'text_to_video',
+    imageMethod: 'image_to_video',
+    resolution: '1080p',
+    durationOptions: [5, 10],
+    durationBase: 5,
+    needsVideo: true,
+    approxUsd: 0.1438, // $0.02875/s × 5s
+  },
 };
 
 const TASK_GROUPS: Array<{ labelKey: string; types: TaskType[] }> = [
@@ -266,6 +330,14 @@ const TASK_GROUPS: Array<{ labelKey: string; types: TaskType[] }> = [
       'text_to_video_klingv3_pro',
       'text_to_video_kling21m_pro',
       'text_to_video_kling25_pro',
+    ],
+  },
+  {
+    labelKey: 'groupVideoSeedance',
+    types: [
+      'text_to_video_seedance_lite_720p',
+      'text_to_video_seedance_pro_720p',
+      'text_to_video_seedance_pro_1080p',
     ],
   },
 ];
@@ -545,11 +617,11 @@ export function PlaygroundClient({ balance }: Props) {
       }
     }
 
-    // Veo bundles are keyed by `mode = methodCode` (text_to_video vs
-    // image_to_video) so the seed price for the chosen task type lines up.
+    // Veo and Seedance bundles are keyed by `mode = methodCode` (text_to_video
+    // vs image_to_video) so the seed price for the chosen task type lines up.
     // For Kling the `mode` slot already carries 'standard' / 'pro' from the
-    // preset above, so we don't override it.
-    if (preset.provider === 'google_veo') {
+    // preset above. OpenAI Image keeps the quality tier set above.
+    if (preset.provider === 'google_veo' || preset.provider === 'seedance') {
       params.mode = methodCode;
     }
 
@@ -687,14 +759,15 @@ export function PlaygroundClient({ balance }: Props) {
             {TASK_GROUPS.map((g) => {
               // Show "STD = 720p · PRO = 1080p" legend only on groups that
               // actually mix std/pro presets (currently — Kling video).
-              const hasModes = g.types.some(
-                (tp) => PRESETS[tp].mode !== undefined,
+              const hasStdProModes = g.types.some(
+                (tp) =>
+                  PRESETS[tp].mode === 'standard' || PRESETS[tp].mode === 'pro',
               );
               return (
               <div key={g.labelKey} className="space-y-1.5">
                 <div className="flex flex-wrap items-baseline gap-2">
                   <div className="text-xs font-semibold text-muted-foreground">{t(g.labelKey)}</div>
-                  {hasModes ? (
+                  {hasStdProModes ? (
                     <div className="text-[10px] text-muted-foreground/70">
                       {t('modeLegend')}
                     </div>
@@ -704,14 +777,9 @@ export function PlaygroundClient({ balance }: Props) {
                   {g.types.map((tp) => {
                     const active = taskType === tp;
                     const p = PRESETS[tp];
-                    // Mode chip: 'pro' is the quality tier — highlight it
-                    // (purple) so users can pick at a glance; std stays muted.
-                    const modeChip =
-                      p.mode === 'pro'
-                        ? 'bg-purple-500/20 text-purple-300'
-                        : p.mode === 'standard'
-                          ? 'bg-muted text-muted-foreground'
-                          : '';
+                    // Quality/mode chip. Highlights premium tiers (pro/hd/high)
+                    // in purple, mid (medium) in info-blue, cheap (std/low) muted.
+                    const chip = modeChipFor(p.mode);
                     return (
                       <button
                         key={tp}
@@ -726,9 +794,9 @@ export function PlaygroundClient({ balance }: Props) {
                         }`}
                       >
                         <span>{t(`type_${tp}`)}</span>
-                        {p.mode ? (
-                          <span className={`rounded px-1 py-0.5 text-[9px] font-semibold uppercase tracking-wider ${modeChip}`}>
-                            {p.mode === 'pro' ? 'PRO' : 'STD'}
+                        {chip ? (
+                          <span className={`rounded px-1 py-0.5 text-[9px] font-semibold uppercase tracking-wider ${chip.bg}`}>
+                            {chip.label}
                           </span>
                         ) : null}
                         <span className="text-muted-foreground">{formatPrice(p.approxUsd)}</span>
@@ -1010,7 +1078,9 @@ export function PlaygroundClient({ balance }: Props) {
                   ? t('etaVideoKling')
                   : preset.provider === 'google_veo'
                     ? t('etaVideoVeo')
-                    : t('etaImage')}
+                    : preset.provider === 'seedance'
+                      ? t('etaVideoSeedance')
+                      : t('etaImage')}
               </span>
               {taskId ? (
                 <button

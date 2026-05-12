@@ -3,6 +3,7 @@ import type { ProviderAdapter } from './provider-adapter.interface';
 import { GoogleBananaAdapter } from './google-banana.adapter';
 import { GoogleVeoAdapter } from './google-veo.adapter';
 import { KlingAiAdapter } from './kling-ai.adapter';
+import { SeedanceAdapter } from './seedance.adapter';
 
 @Injectable()
 export class AdapterRegistry {
@@ -12,8 +13,9 @@ export class AdapterRegistry {
     googleBanana: GoogleBananaAdapter,
     googleVeo: GoogleVeoAdapter,
     klingAi: KlingAiAdapter,
+    seedance: SeedanceAdapter,
   ) {
-    this.adapters = [googleBanana, googleVeo, klingAi];
+    this.adapters = [googleBanana, googleVeo, klingAi, seedance];
   }
 
   find(

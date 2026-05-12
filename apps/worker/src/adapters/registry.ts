@@ -2,6 +2,7 @@ import type { ProviderAdapter } from './types';
 import { GoogleBananaAdapter } from './google-banana';
 import { GoogleVeoAdapter } from './google-veo';
 import { KlingAiAdapter } from './kling-ai';
+import { SeedanceAdapter } from './seedance';
 import type { WorkerStorage } from '../storage/storage';
 
 export class WorkerAdapterRegistry {
@@ -12,6 +13,7 @@ export class WorkerAdapterRegistry {
       new GoogleBananaAdapter(storage),
       new GoogleVeoAdapter(storage),
       new KlingAiAdapter(storage),
+      new SeedanceAdapter(storage),
     ];
   }
 

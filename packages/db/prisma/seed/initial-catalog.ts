@@ -485,6 +485,83 @@ const klingMethods: MethodSeed[] = [
 ];
 
 // --------------------------------------------------------------------------
+// Seedance (Bytedance Volcano Engine) methods
+// --------------------------------------------------------------------------
+
+const seedanceVideoBaseProps = (extra: Record<string, unknown> = {}) => ({
+  prompt: promptProp,
+  // Mirrors the Veo convention: `mode` carries the task-type so the bundle
+  // key for text_to_video and image_to_video stays distinct even though
+  // both methods map to the same BundleMethod (VIDEO_GENERATION).
+  mode: {
+    type: 'string',
+    enum: ['text_to_video', 'image_to_video'],
+    'x-bundle-dim': true,
+    description: 'Internal task-type marker (matches the method code).',
+  },
+  resolution: {
+    type: 'string',
+    enum: ['480p', '720p', '1080p'],
+    'x-bundle-dim': true,
+    description: 'Output resolution tier. Lite SKUs cap at 720p; Pro supports 1080p.',
+  },
+  duration_seconds: {
+    type: 'integer',
+    enum: [5, 10],
+    description: 'Video duration in seconds. PER_SECOND pricing — duration is not part of the bundle key.',
+  },
+  aspect_ratio: {
+    type: 'string',
+    enum: ['16:9', '9:16', '1:1', '4:3', '3:4', '21:9', '9:21'],
+    description: 'Output aspect ratio (passed inline to Seedance as a --ratio switch).',
+  },
+  callback_url: callbackUrlProp,
+  ...extra,
+});
+
+const seedanceMethods: MethodSeed[] = [
+  {
+    code: 'text_to_video',
+    publicName: 'Text to video',
+    description: 'Generate a short video from a text prompt (Seedance Doubao).',
+    supportsAsync: true,
+    parametersSchema: {
+      $schema: 'http://json-schema.org/draft-07/schema#',
+      type: 'object',
+      'x-bundle-unit': 'PER_SECOND',
+      properties: seedanceVideoBaseProps(),
+      required: ['prompt'],
+      additionalProperties: false,
+    },
+    exampleRequest: {
+      prompt: 'A neon-lit Tokyo street at night, light rain reflections',
+      resolution: '1080p',
+      duration_seconds: 5,
+      aspect_ratio: '16:9',
+    },
+  },
+  {
+    code: 'image_to_video',
+    publicName: 'Image to video',
+    description: 'Animate a static image into a short video (Seedance Doubao).',
+    supportsAsync: true,
+    parametersSchema: {
+      $schema: 'http://json-schema.org/draft-07/schema#',
+      type: 'object',
+      'x-bundle-unit': 'PER_SECOND',
+      properties: seedanceVideoBaseProps({
+        image: {
+          type: 'string',
+          description: 'Source image URL (https://) or data: URI.',
+        },
+      }),
+      required: ['image'],
+      additionalProperties: false,
+    },
+  },
+];
+
+// --------------------------------------------------------------------------
 // Providers
 // --------------------------------------------------------------------------
 
@@ -615,6 +692,36 @@ export const initialCatalog: ProviderSeed[] = [
         publicName: 'Kling O1',
         sortOrder: 30,
         methods: klingMethods.map((m, i) => ({ ...m, sortOrder: (i + 1) * 10 })),
+      },
+    ],
+  },
+  {
+    code: 'seedance',
+    publicName: 'Bytedance Seedance',
+    description:
+      'Bytedance Seedance (Doubao) video generation — Pro for top quality up to 1080p, Lite for budget t2v/i2v at 720p.',
+    sortOrder: 40,
+    models: [
+      {
+        code: 'doubao-seedance-1-0-pro-250528',
+        publicName: 'Seedance 1.0 Pro',
+        description: 'Top Seedance tier — supports both text-to-video and image-to-video up to 1080p.',
+        sortOrder: 10,
+        methods: seedanceMethods.map((m, i) => ({ ...m, sortOrder: (i + 1) * 10 })),
+      },
+      {
+        code: 'doubao-seedance-1-0-lite-t2v-250428',
+        publicName: 'Seedance 1.0 Lite (T2V)',
+        description: 'Budget text-to-video, 720p cap.',
+        sortOrder: 20,
+        methods: [{ ...seedanceMethods[0]!, sortOrder: 10 }],
+      },
+      {
+        code: 'doubao-seedance-1-0-lite-i2v-250428',
+        publicName: 'Seedance 1.0 Lite (I2V)',
+        description: 'Budget image-to-video, 720p cap.',
+        sortOrder: 30,
+        methods: [{ ...seedanceMethods[1]!, sortOrder: 10 }],
       },
     ],
   },

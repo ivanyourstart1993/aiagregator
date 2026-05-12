@@ -3,6 +3,7 @@ import { RateCardsModule } from '../rate-cards/rate-cards.module';
 import { GoogleBananaAdapter } from './adapters/google-banana.adapter';
 import { GoogleVeoAdapter } from './adapters/google-veo.adapter';
 import { KlingAiAdapter } from './adapters/kling-ai.adapter';
+import { SeedanceAdapter } from './adapters/seedance.adapter';
 import { AdapterRegistry } from './adapters/adapter-registry';
 import { AccountSelectorService } from './account-selector.service';
 import { AccountRepository } from './account.repository';
@@ -20,6 +21,7 @@ import { CountersResetCron } from './counters-reset.cron';
     GoogleBananaAdapter,
     GoogleVeoAdapter,
     KlingAiAdapter,
+    SeedanceAdapter,
     AdapterRegistry,
     AccountSelectorService,
     AccountRepository,
@@ -35,6 +37,7 @@ import { CountersResetCron } from './counters-reset.cron';
     GoogleBananaAdapter,
     GoogleVeoAdapter,
     KlingAiAdapter,
+    SeedanceAdapter,
   ],
 })
 export class ProvidersModule {}
