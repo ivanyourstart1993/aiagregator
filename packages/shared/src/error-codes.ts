@@ -8,16 +8,11 @@ export const ErrorCode = {
   INSUFFICIENT_BALANCE: 'insufficient_balance',
   PRICE_NOT_CONFIGURED: 'price_not_configured',
   PROVIDER_RATE_CARD_NOT_CONFIGURED: 'provider_rate_card_not_configured',
-  PROVIDER_COST_UNKNOWN: 'provider_cost_unknown',
 
   // Catalog
   UNSUPPORTED_PROVIDER: 'unsupported_provider',
   UNSUPPORTED_MODEL: 'unsupported_model',
   UNSUPPORTED_METHOD: 'unsupported_method',
-  UNSUPPORTED_RESOLUTION: 'unsupported_resolution',
-  UNSUPPORTED_DURATION: 'unsupported_duration',
-  UNSUPPORTED_ASPECT_RATIO: 'unsupported_aspect_ratio',
-  UNSUPPORTED_MODE: 'unsupported_mode',
   PROVIDER_UNAVAILABLE: 'provider_unavailable',
   MODEL_UNAVAILABLE: 'model_unavailable',
   METHOD_UNAVAILABLE: 'method_unavailable',
@@ -30,7 +25,6 @@ export const ErrorCode = {
   TASK_FAILED: 'task_failed',
   TASK_TIMED_OUT: 'task_timed_out',
   EXTERNAL_TASK_TIMEOUT: 'external_task_timeout',
-  PROVIDER_RESULT_DOWNLOAD_FAILED: 'provider_result_download_failed',
   PROVIDER_NOT_IMPLEMENTED: 'provider_not_implemented',
 
   // Request
@@ -47,9 +41,6 @@ export const ErrorCode = {
   COUPON_INVALID: 'coupon_invalid',
   COUPON_EXPIRED: 'coupon_expired',
   COUPON_ALREADY_USED: 'coupon_already_used',
-
-  // Callback
-  CALLBACK_DELIVERY_FAILED: 'callback_delivery_failed',
 
   // Provider account (internal — public layer never exposes account names)
   PROVIDER_ACCOUNT_UNAVAILABLE: 'provider_account_unavailable',
