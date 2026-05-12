@@ -1539,7 +1539,7 @@
     "taskLifecycleFailureRetryable": "Коды provider_outage и service_unavailable — транзиентные, повторяйте через 30–60 сек с экспоненциальной задержкой.",
     "taskLifecycleFailureNonRetryable": "Коды provider_rejected, content_rejected, invalid_parameters — повторять без изменений нет смысла, корректируйте параметры.",
     "taskLifecycleCancelSection": "Отмена",
-    "taskLifecycleCancelBody": "Отменить задачу можно через DELETE /v1/tasks/{id}, пока она в PENDING или PROCESSING. После SUCCEEDED отмена не делается, средства возвращаются автоматически только для FAILED/CANCELLED.",
+    "taskLifecycleCancelBody": "Ручная отмена задачи через API сейчас не предусмотрена. Система сама помечает зависшие задачи как CANCELLED по таймауту (см. task_timed_out в /docs/errors). Резерв снимается и средства возвращаются автоматически для FAILED и CANCELLED.",
     "errorsGroupRequest": "Запрос",
     "errorsGroupCoupons": "Купоны",
     "errorsGroupGeneric": "Общие",

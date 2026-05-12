@@ -1539,7 +1539,7 @@
     "taskLifecycleFailureRetryable": "provider_outage and service_unavailable are transient — retry after 30–60s with exponential backoff.",
     "taskLifecycleFailureNonRetryable": "provider_rejected, content_rejected, and invalid_parameters won't recover on a blind retry — fix parameters.",
     "taskLifecycleCancelSection": "Cancellation",
-    "taskLifecycleCancelBody": "Cancel via DELETE /v1/tasks/{id} while the task is PENDING or PROCESSING. After SUCCEEDED cancellation is not possible. Refunds happen automatically for FAILED/CANCELLED.",
+    "taskLifecycleCancelBody": "Manual cancellation via the API is not currently exposed. The system marks long-running tasks as CANCELLED on timeout (see task_timed_out in /docs/errors). The reservation is released and refunds happen automatically for FAILED and CANCELLED tasks.",
     "errorsGroupRequest": "Request",
     "errorsGroupCoupons": "Coupons",
     "errorsGroupGeneric": "Generic",
