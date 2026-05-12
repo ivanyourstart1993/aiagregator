@@ -19,14 +19,12 @@ const SUPPORTED_MODELS = new Set([
   'kling-v2-1-master',
   'kling-v2-5-turbo',
   'kling-v2-6',
-  'kling-v3-master',
 ]);
 const SUPPORTED_METHODS = new Set(['text_to_video', 'image_to_video']);
 const KLING_BASE = 'https://api-singapore.klingai.com';
 
 const MODEL_CODE_TO_API_NAME: Record<string, string> = {
   'kling-2.6': 'kling-v2-6',
-  'kling-v3': 'kling-v3-master',
 };
 
 function realModelName(code: string): string {
