@@ -338,7 +338,7 @@ const PRESETS: Record<TaskType, PresetSpec> = {
     durationOptions: [5, 10],
     durationBase: 5,
     needsVideo: true,
-    approxUsd: 0.069, // $0.0138/s × 5s
+    approxUsd: 0.125, // $0.025/s × 5s
   },
   text_to_video_seedance_pro_720p: {
     provider: 'seedance',
@@ -349,7 +349,7 @@ const PRESETS: Record<TaskType, PresetSpec> = {
     durationOptions: [5, 10],
     durationBase: 5,
     needsVideo: true,
-    approxUsd: 0.069,
+    approxUsd: 0.26, // $0.052/s × 5s
   },
   text_to_video_seedance_pro_1080p: {
     provider: 'seedance',
@@ -360,7 +360,7 @@ const PRESETS: Record<TaskType, PresetSpec> = {
     durationOptions: [5, 10],
     durationBase: 5,
     needsVideo: true,
-    approxUsd: 0.1438, // $0.02875/s × 5s
+    approxUsd: 0.585, // $0.117/s × 5s
   },
 };
 

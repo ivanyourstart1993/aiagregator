@@ -610,9 +610,18 @@ async function seedVeoProviderAccount(): Promise<void> {
 }
 
 // ---------------------------------------------------------------------------
-// Seedance — PER_SECOND prices, mirrors Veo structure.
-// Upstream estimates (Volcano Engine ARK, CNY → USD) with ×1.15 retail markup.
-// Verify against current Volcano price sheet before going GA.
+// Seedance — PER_SECOND prices with ×1.15 retail markup.
+// Upstream derived from Volcano Engine's official token rate: 0.015 ¥ per
+// 1k tokens, where tokens = (W × H × fps × duration) / 1024. The published
+// 5s/1080p reference price (3.67 ¥ ≈ $0.51) reproduces exactly when applied
+// at 1920×1080 × 24fps. CNY converted at 7.2 ¥/USD.
+//   Pro    480p ≈ $0.020/s upstream → $0.023/s retail
+//   Pro    720p ≈ $0.045/s upstream → $0.052/s retail
+//   Pro   1080p ≈ $0.102/s upstream → $0.117/s retail
+//   Lite   480p ≈ $0.010/s upstream → $0.012/s retail (~50% of Pro)
+//   Lite   720p ≈ $0.022/s upstream → $0.025/s retail
+// Sources: aibase.com/news/18826 (Volcengine Seedance 1.0 Pro launch),
+// technode 2026-03-05 (Seedance 2.0 ≈ $0.14/s benchmark).
 // ---------------------------------------------------------------------------
 
 interface SeedanceBundleSpec {
@@ -624,18 +633,18 @@ interface SeedanceBundleSpec {
 
 const SEEDANCE_PRICES: SeedanceBundleSpec[] = [
   // Pro — both t2v and i2v, 480p / 720p / 1080p
-  { modelSlug: 'doubao-seedance-1-0-pro-250528', methodCode: 'text_to_video',  resolution: '480p',  pricePerSecondUsd: 0.00575 },
-  { modelSlug: 'doubao-seedance-1-0-pro-250528', methodCode: 'text_to_video',  resolution: '720p',  pricePerSecondUsd: 0.0138 },
-  { modelSlug: 'doubao-seedance-1-0-pro-250528', methodCode: 'text_to_video',  resolution: '1080p', pricePerSecondUsd: 0.02875 },
-  { modelSlug: 'doubao-seedance-1-0-pro-250528', methodCode: 'image_to_video', resolution: '480p',  pricePerSecondUsd: 0.00575 },
-  { modelSlug: 'doubao-seedance-1-0-pro-250528', methodCode: 'image_to_video', resolution: '720p',  pricePerSecondUsd: 0.0138 },
-  { modelSlug: 'doubao-seedance-1-0-pro-250528', methodCode: 'image_to_video', resolution: '1080p', pricePerSecondUsd: 0.02875 },
+  { modelSlug: 'doubao-seedance-1-0-pro-250528', methodCode: 'text_to_video',  resolution: '480p',  pricePerSecondUsd: 0.023 },
+  { modelSlug: 'doubao-seedance-1-0-pro-250528', methodCode: 'text_to_video',  resolution: '720p',  pricePerSecondUsd: 0.052 },
+  { modelSlug: 'doubao-seedance-1-0-pro-250528', methodCode: 'text_to_video',  resolution: '1080p', pricePerSecondUsd: 0.117 },
+  { modelSlug: 'doubao-seedance-1-0-pro-250528', methodCode: 'image_to_video', resolution: '480p',  pricePerSecondUsd: 0.023 },
+  { modelSlug: 'doubao-seedance-1-0-pro-250528', methodCode: 'image_to_video', resolution: '720p',  pricePerSecondUsd: 0.052 },
+  { modelSlug: 'doubao-seedance-1-0-pro-250528', methodCode: 'image_to_video', resolution: '1080p', pricePerSecondUsd: 0.117 },
   // Lite t2v
-  { modelSlug: 'doubao-seedance-1-0-lite-t2v-250428', methodCode: 'text_to_video', resolution: '480p', pricePerSecondUsd: 0.00575 },
-  { modelSlug: 'doubao-seedance-1-0-lite-t2v-250428', methodCode: 'text_to_video', resolution: '720p', pricePerSecondUsd: 0.0138 },
+  { modelSlug: 'doubao-seedance-1-0-lite-t2v-250428', methodCode: 'text_to_video', resolution: '480p', pricePerSecondUsd: 0.012 },
+  { modelSlug: 'doubao-seedance-1-0-lite-t2v-250428', methodCode: 'text_to_video', resolution: '720p', pricePerSecondUsd: 0.025 },
   // Lite i2v
-  { modelSlug: 'doubao-seedance-1-0-lite-i2v-250428', methodCode: 'image_to_video', resolution: '480p', pricePerSecondUsd: 0.00575 },
-  { modelSlug: 'doubao-seedance-1-0-lite-i2v-250428', methodCode: 'image_to_video', resolution: '720p', pricePerSecondUsd: 0.0138 },
+  { modelSlug: 'doubao-seedance-1-0-lite-i2v-250428', methodCode: 'image_to_video', resolution: '480p', pricePerSecondUsd: 0.012 },
+  { modelSlug: 'doubao-seedance-1-0-lite-i2v-250428', methodCode: 'image_to_video', resolution: '720p', pricePerSecondUsd: 0.025 },
 ];
 
 async function seedSeedancePrices(tariffId: string): Promise<void> {
