@@ -38,8 +38,32 @@ export default async function GettingStartedPage() {
     "provider": "google_banana",
     "model": "gemini-3.1-flash-image-preview",
     "method": "text_to_image",
-    "params": { "prompt": "a cat" }
+    "params": { "prompt": "a cat" },
+    "coupon": "WELCOME10",
+    "callback_url": "https://your-host.example.com/webhooks/aigenway"
   }'`}</code>
+      </pre>
+      <p className="text-sm text-muted-foreground">{t('gsGenerationsOptionalsBody')}</p>
+
+      <h2 className="mt-8 text-xl font-semibold">{t('gsMethodsListTitle')}</h2>
+      <p className="text-sm text-muted-foreground">{t('gsMethodsListBody')}</p>
+      <pre className="overflow-x-auto rounded-md border bg-muted p-4 text-xs">
+        <code>{`curl https://api.aigenway.com/v1/methods?provider=google_banana \\
+  -H "Authorization: Bearer sk_live_..."`}</code>
+      </pre>
+
+      <h2 className="mt-8 text-xl font-semibold">{t('gsBalanceTitle')}</h2>
+      <p className="text-sm text-muted-foreground">{t('gsBalanceBody')}</p>
+      <pre className="overflow-x-auto rounded-md border bg-muted p-4 text-xs">
+        <code>{`curl https://api.aigenway.com/v1/balance \\
+  -H "Authorization: Bearer sk_live_..."`}</code>
+      </pre>
+
+      <h2 className="mt-8 text-xl font-semibold">{t('gsPricesTitle')}</h2>
+      <p className="text-sm text-muted-foreground">{t('gsPricesBody')}</p>
+      <pre className="overflow-x-auto rounded-md border bg-muted p-4 text-xs">
+        <code>{`curl "https://api.aigenway.com/v1/prices?provider=google_banana&pageSize=50" \\
+  -H "Authorization: Bearer sk_live_..."`}</code>
       </pre>
     </article>
   );

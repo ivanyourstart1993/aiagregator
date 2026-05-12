@@ -87,6 +87,13 @@ Authorization: Bearer sk_live_...`}</code>
         <li>{t('taskLifecycleSuccessExpiryNote')}</li>
       </ul>
 
+      <h2 className="mt-8 text-xl font-semibold">{t('taskLifecycleResultSection')}</h2>
+      <p className="text-sm">{t('taskLifecycleResultBody')}</p>
+      <pre className="overflow-x-auto rounded-md border bg-muted p-4 text-xs">
+        <code>{`GET https://api.aigenway.com/v1/tasks/<task_id>/result
+Authorization: Bearer sk_live_...`}</code>
+      </pre>
+
       <h2 className="mt-8 text-xl font-semibold">{t('taskLifecycleFailureSection')}</h2>
       <pre className="overflow-x-auto rounded-md border bg-muted p-4 text-xs">
         <code>{FAILURE_RESPONSE}</code>
