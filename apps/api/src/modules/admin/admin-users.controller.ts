@@ -124,7 +124,7 @@ export class AdminUsersController {
     if (statusRaw && (Object.values(UserStatus) as string[]).includes(statusRaw)) {
       where.status = statusRaw as UserStatus;
     }
-    const [items, total] = await Promise.all([
+    const [rows, total] = await Promise.all([
       this.prisma.user.findMany({
         where,
         skip,
@@ -139,10 +139,32 @@ export class AdminUsersController {
           emailVerified: true,
           createdAt: true,
           lastLoginAt: true,
+          wallets: {
+            where: { currency: 'USD' },
+            select: { kind: true, availableUnits: true },
+          },
+          _count: { select: { tasks: true } },
         },
       }),
       this.prisma.user.count({ where }),
     ]);
+    const items = rows.map((u) => {
+      const main = u.wallets.find((w) => w.kind === 'MAIN');
+      const bonus = u.wallets.find((w) => w.kind === 'BONUS');
+      return {
+        id: u.id,
+        email: u.email,
+        name: u.name,
+        role: u.role,
+        status: u.status,
+        emailVerified: u.emailVerified,
+        createdAt: u.createdAt,
+        lastLoginAt: u.lastLoginAt,
+        availableUnits: (main?.availableUnits ?? 0n).toString(),
+        bonusUnits: (bonus?.availableUnits ?? 0n).toString(),
+        taskCount: u._count.tasks,
+      };
+    });
     return { items, total, page, pageSize };
   }
 

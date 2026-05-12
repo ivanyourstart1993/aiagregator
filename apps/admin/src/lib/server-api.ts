@@ -159,6 +159,12 @@ export interface AdminUserSummary {
   emailVerified: string | null;
   createdAt: string;
   lastLoginAt?: string | null;
+  // Money fields are nano-USD (1 USD = 100_000_000 units), serialised as strings
+  // because BigInt can exceed Number.MAX_SAFE_INTEGER for large balances.
+  // Optional so older API responses (without these fields) still parse.
+  availableUnits?: string;
+  bonusUnits?: string;
+  taskCount?: number;
 }
 
 function buildQuery(filters: TransactionFiltersInput | undefined): string {

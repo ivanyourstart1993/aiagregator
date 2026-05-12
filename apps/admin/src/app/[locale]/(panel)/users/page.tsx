@@ -26,6 +26,14 @@ function fmt(d: string | null | undefined): string {
   return new Date(d).toLocaleDateString();
 }
 
+// nano-USD (1 USD = 1e8 units) → "$0.50"
+function unitsToUsd(s: string | null | undefined): string {
+  if (!s) return '$0.00';
+  const n = Number(s);
+  if (!Number.isFinite(n)) return '—';
+  return `$${(n / 100_000_000).toFixed(2)}`;
+}
+
 function roleClass(r: string): string {
   if (r === 'SUPER_ADMIN')
     return 'rounded bg-primary/15 px-2 py-0.5 text-xs text-primary';
@@ -94,31 +102,52 @@ export default async function UsersPage({ searchParams }: Props) {
                 <th className="px-4 py-3 text-left">Имя</th>
                 <th className="px-4 py-3 text-left">Роль</th>
                 <th className="px-4 py-3 text-left">Статус</th>
+                <th className="px-4 py-3 text-right">Баланс</th>
+                <th className="px-4 py-3 text-right">Купон</th>
+                <th className="px-4 py-3 text-right">Генерации</th>
                 <th className="px-4 py-3 text-left">Создан</th>
                 <th className="px-4 py-3 text-left">Last login</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
-              {items.map((u) => (
-                <tr key={u.id} className="hover:bg-muted/20">
-                  <td className="px-4 py-3 font-mono text-xs">{u.email}</td>
-                  <td className="px-4 py-3">{u.name ?? '—'}</td>
-                  <td className="px-4 py-3">
-                    <span className={roleClass(u.role)}>{u.role}</span>
-                  </td>
-                  <td className="px-4 py-3 text-xs">{u.status}</td>
-                  <td className="px-4 py-3 text-xs text-muted-foreground">
-                    {fmt(u.createdAt)}
-                  </td>
-                  <td className="px-4 py-3 text-xs text-muted-foreground">
-                    {fmt(u.lastLoginAt)}
-                  </td>
-                </tr>
-              ))}
+              {items.map((u) => {
+                const tasks = u.taskCount ?? 0;
+                return (
+                  <tr key={u.id} className="hover:bg-muted/20">
+                    <td className="px-4 py-3 font-mono text-xs">{u.email}</td>
+                    <td className="px-4 py-3">{u.name ?? '—'}</td>
+                    <td className="px-4 py-3">
+                      <span className={roleClass(u.role)}>{u.role}</span>
+                    </td>
+                    <td className="px-4 py-3 text-xs">{u.status}</td>
+                    <td className="px-4 py-3 text-right font-mono text-xs tabular-nums">
+                      {unitsToUsd(u.availableUnits)}
+                    </td>
+                    <td className="px-4 py-3 text-right font-mono text-xs tabular-nums text-muted-foreground">
+                      {unitsToUsd(u.bonusUnits)}
+                    </td>
+                    <td className="px-4 py-3 text-right text-xs tabular-nums">
+                      {tasks > 0 ? (
+                        <span className="rounded bg-emerald-500/15 px-2 py-0.5 text-emerald-500">
+                          {tasks}
+                        </span>
+                      ) : (
+                        <span className="text-muted-foreground">—</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3 text-xs text-muted-foreground">
+                      {fmt(u.createdAt)}
+                    </td>
+                    <td className="px-4 py-3 text-xs text-muted-foreground">
+                      {fmt(u.lastLoginAt)}
+                    </td>
+                  </tr>
+                );
+              })}
               {items.length === 0 ? (
                 <tr>
                   <td
-                    colSpan={6}
+                    colSpan={9}
                     className="px-4 py-12 text-center text-sm text-muted-foreground"
                   >
                     Ничего не найдено
