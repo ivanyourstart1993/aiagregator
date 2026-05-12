@@ -4,6 +4,7 @@ import { GoogleBananaAdapter } from './adapters/google-banana.adapter';
 import { GoogleVeoAdapter } from './adapters/google-veo.adapter';
 import { KlingAiAdapter } from './adapters/kling-ai.adapter';
 import { SeedanceAdapter } from './adapters/seedance.adapter';
+import { OpenAiImageAdapter } from './adapters/openai-image.adapter';
 import { AdapterRegistry } from './adapters/adapter-registry';
 import { AccountSelectorService } from './account-selector.service';
 import { AccountRepository } from './account.repository';
@@ -22,6 +23,7 @@ import { CountersResetCron } from './counters-reset.cron';
     GoogleVeoAdapter,
     KlingAiAdapter,
     SeedanceAdapter,
+    OpenAiImageAdapter,
     AdapterRegistry,
     AccountSelectorService,
     AccountRepository,
@@ -38,6 +40,7 @@ import { CountersResetCron } from './counters-reset.cron';
     GoogleVeoAdapter,
     KlingAiAdapter,
     SeedanceAdapter,
+    OpenAiImageAdapter,
   ],
 })
 export class ProvidersModule {}

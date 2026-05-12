@@ -4,6 +4,7 @@ import { GoogleBananaAdapter } from './google-banana.adapter';
 import { GoogleVeoAdapter } from './google-veo.adapter';
 import { KlingAiAdapter } from './kling-ai.adapter';
 import { SeedanceAdapter } from './seedance.adapter';
+import { OpenAiImageAdapter } from './openai-image.adapter';
 
 @Injectable()
 export class AdapterRegistry {
@@ -14,8 +15,9 @@ export class AdapterRegistry {
     googleVeo: GoogleVeoAdapter,
     klingAi: KlingAiAdapter,
     seedance: SeedanceAdapter,
+    openaiImage: OpenAiImageAdapter,
   ) {
-    this.adapters = [googleBanana, googleVeo, klingAi, seedance];
+    this.adapters = [googleBanana, googleVeo, klingAi, seedance, openaiImage];
   }
 
   find(

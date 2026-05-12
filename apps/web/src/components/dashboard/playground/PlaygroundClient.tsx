@@ -68,6 +68,12 @@ type TaskType =
   | 'text_to_image_pro_2k'
   | 'image_edit_flash_1k'
   | 'image_edit_pro_2k'
+  | 'text_to_image_gptimage_low_1k'
+  | 'text_to_image_gptimage_med_1k'
+  | 'text_to_image_gptimage_high_1k'
+  | 'text_to_image_dalle3_std'
+  | 'text_to_image_dalle3_hd'
+  | 'image_edit_gptimage_med_1k'
   | 'text_to_video_fast_1080p'
   | 'text_to_video_quality_1080p'
   | 'text_to_video_kling_std'
@@ -148,6 +154,58 @@ const PRESETS: Record<TaskType, PresetSpec> = {
     resolution: '2K',
     needsImage: true,
     approxUsd: 0.0594,
+  },
+  // OpenAI Images. `mode` carries quality (gpt-image-1: low/medium/high;
+  // dall-e-3: standard/hd) — sent as params.mode so the bundle key matches
+  // the seeded TariffBundlePrice rows.
+  text_to_image_gptimage_low_1k: {
+    provider: 'openai_image',
+    model: 'gpt-image-1',
+    method: 'text_to_image',
+    resolution: '1024x1024',
+    mode: 'low',
+    approxUsd: 0.013,
+  },
+  text_to_image_gptimage_med_1k: {
+    provider: 'openai_image',
+    model: 'gpt-image-1',
+    method: 'text_to_image',
+    resolution: '1024x1024',
+    mode: 'medium',
+    approxUsd: 0.0483,
+  },
+  text_to_image_gptimage_high_1k: {
+    provider: 'openai_image',
+    model: 'gpt-image-1',
+    method: 'text_to_image',
+    resolution: '1024x1024',
+    mode: 'high',
+    approxUsd: 0.1921,
+  },
+  text_to_image_dalle3_std: {
+    provider: 'openai_image',
+    model: 'dall-e-3',
+    method: 'text_to_image',
+    resolution: '1024x1024',
+    mode: 'standard',
+    approxUsd: 0.046,
+  },
+  text_to_image_dalle3_hd: {
+    provider: 'openai_image',
+    model: 'dall-e-3',
+    method: 'text_to_image',
+    resolution: '1024x1024',
+    mode: 'hd',
+    approxUsd: 0.092,
+  },
+  image_edit_gptimage_med_1k: {
+    provider: 'openai_image',
+    model: 'gpt-image-1',
+    method: 'image_edit',
+    resolution: '1024x1024',
+    mode: 'medium',
+    needsImage: true,
+    approxUsd: 0.0483,
   },
   text_to_video_fast_1080p: {
     provider: 'google_veo',
@@ -312,8 +370,18 @@ const TASK_GROUPS: Array<{ labelKey: string; types: TaskType[] }> = [
     types: ['text_to_image_flash_1k', 'text_to_image_flash_2k', 'text_to_image_pro_2k'],
   },
   {
+    labelKey: 'groupImageOpenAI',
+    types: [
+      'text_to_image_gptimage_low_1k',
+      'text_to_image_gptimage_med_1k',
+      'text_to_image_gptimage_high_1k',
+      'text_to_image_dalle3_std',
+      'text_to_image_dalle3_hd',
+    ],
+  },
+  {
     labelKey: 'groupImageEdit',
-    types: ['image_edit_flash_1k', 'image_edit_pro_2k'],
+    types: ['image_edit_flash_1k', 'image_edit_pro_2k', 'image_edit_gptimage_med_1k'],
   },
   {
     labelKey: 'groupVideoVeo',

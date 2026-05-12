@@ -714,6 +714,145 @@ async function seedSeedanceProviderAccount(): Promise<void> {
   console.log(`[seed] seedance env-account created: ${acc.id}`);
 }
 
+// ---------------------------------------------------------------------------
+// OpenAI Images — PER_REQUEST prices (× 1.15 retail markup).
+// gpt-image-1: quality (low/medium/high) × size matrix; same for t2i and edit.
+// dall-e-3: standard/hd × 3 sizes, t2i only.
+// dall-e-2: size only (no quality dim), t2i + edit at same price.
+// ---------------------------------------------------------------------------
+
+interface OpenAIImageBundleSpec {
+  modelSlug: string;
+  methodCode: 'text_to_image' | 'image_edit';
+  mode: string | null;
+  resolution: string;
+  priceCents: number;
+}
+
+const OPENAI_IMAGE_PRICES: OpenAIImageBundleSpec[] = [
+  // gpt-image-1 t2i — quality × size
+  { modelSlug: 'gpt-image-1', methodCode: 'text_to_image', mode: 'low',    resolution: '1024x1024', priceCents: 1.27 },
+  { modelSlug: 'gpt-image-1', methodCode: 'text_to_image', mode: 'low',    resolution: '1024x1536', priceCents: 1.84 },
+  { modelSlug: 'gpt-image-1', methodCode: 'text_to_image', mode: 'low',    resolution: '1536x1024', priceCents: 1.84 },
+  { modelSlug: 'gpt-image-1', methodCode: 'text_to_image', mode: 'medium', resolution: '1024x1024', priceCents: 4.83 },
+  { modelSlug: 'gpt-image-1', methodCode: 'text_to_image', mode: 'medium', resolution: '1024x1536', priceCents: 7.25 },
+  { modelSlug: 'gpt-image-1', methodCode: 'text_to_image', mode: 'medium', resolution: '1536x1024', priceCents: 7.25 },
+  { modelSlug: 'gpt-image-1', methodCode: 'text_to_image', mode: 'high',   resolution: '1024x1024', priceCents: 19.21 },
+  { modelSlug: 'gpt-image-1', methodCode: 'text_to_image', mode: 'high',   resolution: '1024x1536', priceCents: 28.75 },
+  { modelSlug: 'gpt-image-1', methodCode: 'text_to_image', mode: 'high',   resolution: '1536x1024', priceCents: 28.75 },
+  // auto → defaults to medium-tier billing
+  { modelSlug: 'gpt-image-1', methodCode: 'text_to_image', mode: 'auto',   resolution: '1024x1024', priceCents: 4.83 },
+  { modelSlug: 'gpt-image-1', methodCode: 'text_to_image', mode: 'auto',   resolution: '1024x1536', priceCents: 7.25 },
+  { modelSlug: 'gpt-image-1', methodCode: 'text_to_image', mode: 'auto',   resolution: '1536x1024', priceCents: 7.25 },
+
+  // gpt-image-1 image_edit — same matrix
+  { modelSlug: 'gpt-image-1', methodCode: 'image_edit', mode: 'low',    resolution: '1024x1024', priceCents: 1.27 },
+  { modelSlug: 'gpt-image-1', methodCode: 'image_edit', mode: 'low',    resolution: '1024x1536', priceCents: 1.84 },
+  { modelSlug: 'gpt-image-1', methodCode: 'image_edit', mode: 'low',    resolution: '1536x1024', priceCents: 1.84 },
+  { modelSlug: 'gpt-image-1', methodCode: 'image_edit', mode: 'medium', resolution: '1024x1024', priceCents: 4.83 },
+  { modelSlug: 'gpt-image-1', methodCode: 'image_edit', mode: 'medium', resolution: '1024x1536', priceCents: 7.25 },
+  { modelSlug: 'gpt-image-1', methodCode: 'image_edit', mode: 'medium', resolution: '1536x1024', priceCents: 7.25 },
+  { modelSlug: 'gpt-image-1', methodCode: 'image_edit', mode: 'high',   resolution: '1024x1024', priceCents: 19.21 },
+  { modelSlug: 'gpt-image-1', methodCode: 'image_edit', mode: 'high',   resolution: '1024x1536', priceCents: 28.75 },
+  { modelSlug: 'gpt-image-1', methodCode: 'image_edit', mode: 'high',   resolution: '1536x1024', priceCents: 28.75 },
+  { modelSlug: 'gpt-image-1', methodCode: 'image_edit', mode: 'auto',   resolution: '1024x1024', priceCents: 4.83 },
+  { modelSlug: 'gpt-image-1', methodCode: 'image_edit', mode: 'auto',   resolution: '1024x1536', priceCents: 7.25 },
+  { modelSlug: 'gpt-image-1', methodCode: 'image_edit', mode: 'auto',   resolution: '1536x1024', priceCents: 7.25 },
+
+  // dall-e-3 t2i — standard/hd × 3 sizes
+  { modelSlug: 'dall-e-3', methodCode: 'text_to_image', mode: 'standard', resolution: '1024x1024', priceCents: 4.6 },
+  { modelSlug: 'dall-e-3', methodCode: 'text_to_image', mode: 'standard', resolution: '1024x1792', priceCents: 9.2 },
+  { modelSlug: 'dall-e-3', methodCode: 'text_to_image', mode: 'standard', resolution: '1792x1024', priceCents: 9.2 },
+  { modelSlug: 'dall-e-3', methodCode: 'text_to_image', mode: 'hd',       resolution: '1024x1024', priceCents: 9.2 },
+  { modelSlug: 'dall-e-3', methodCode: 'text_to_image', mode: 'hd',       resolution: '1024x1792', priceCents: 13.8 },
+  { modelSlug: 'dall-e-3', methodCode: 'text_to_image', mode: 'hd',       resolution: '1792x1024', priceCents: 13.8 },
+
+  // dall-e-2 — no quality dim (mode=null)
+  { modelSlug: 'dall-e-2', methodCode: 'text_to_image', mode: null, resolution: '256x256',   priceCents: 1.84 },
+  { modelSlug: 'dall-e-2', methodCode: 'text_to_image', mode: null, resolution: '512x512',   priceCents: 2.07 },
+  { modelSlug: 'dall-e-2', methodCode: 'text_to_image', mode: null, resolution: '1024x1024', priceCents: 2.30 },
+  { modelSlug: 'dall-e-2', methodCode: 'image_edit',     mode: null, resolution: '256x256',   priceCents: 1.84 },
+  { modelSlug: 'dall-e-2', methodCode: 'image_edit',     mode: null, resolution: '512x512',   priceCents: 2.07 },
+  { modelSlug: 'dall-e-2', methodCode: 'image_edit',     mode: null, resolution: '1024x1024', priceCents: 2.30 },
+];
+
+async function seedOpenAIImagePrices(tariffId: string): Promise<void> {
+  let count = 0;
+  for (const spec of OPENAI_IMAGE_PRICES) {
+    const bundleMethod = methodCodeToBundleMethod(spec.methodCode);
+    const bundleKey = buildBundleKey({
+      providerSlug: 'openai_image',
+      modelSlug: spec.modelSlug,
+      method: bundleMethod,
+      mode: spec.mode,
+      resolution: spec.resolution,
+      durationSeconds: null,
+      aspectRatio: null,
+    });
+    const bundle = await prisma.bundle.upsert({
+      where: { bundleKey },
+      create: {
+        bundleKey,
+        providerSlug: 'openai_image',
+        modelSlug: spec.modelSlug,
+        method: bundleMethod,
+        mode: spec.mode,
+        resolution: spec.resolution,
+        unit: BundleUnit.PER_REQUEST,
+        isActive: true,
+      },
+      update: {},
+    });
+    const priceUnits = BigInt(Math.round(spec.priceCents * Number(CENTS_TO_NANO)));
+    await prisma.tariffBundlePrice.upsert({
+      where: { tariffId_bundleId: { tariffId, bundleId: bundle.id } },
+      create: { tariffId, bundleId: bundle.id, basePriceUnits: priceUnits },
+      update: { basePriceUnits: priceUnits },
+    });
+    count++;
+  }
+  console.log(`[seed] openai-image tariff prices upserted: ${count}`);
+}
+
+async function seedOpenAIImageProviderAccount(): Promise<void> {
+  const apiKey = process.env.OPENAI_API_KEY;
+  if (!apiKey) {
+    console.log('[seed] OPENAI_API_KEY not set — skipping OpenAI Image ProviderAccount');
+    return;
+  }
+  const provider = await prisma.provider.findUnique({ where: { code: 'openai_image' } });
+  if (!provider) {
+    console.warn('[seed] provider openai_image not found — skipping account');
+    return;
+  }
+  const existing = await prisma.providerAccount.findFirst({
+    where: { providerId: provider.id, name: 'env-account' },
+  });
+  if (existing) {
+    await prisma.providerAccount.update({
+      where: { id: existing.id },
+      data: {
+        credentials: { apiKey } as Prisma.InputJsonValue,
+        status: ProviderAccountStatus.ACTIVE,
+      },
+    });
+    console.log(`[seed] openai-image env-account refreshed: ${existing.id}`);
+    return;
+  }
+  const acc = await prisma.providerAccount.create({
+    data: {
+      providerId: provider.id,
+      name: 'env-account',
+      description: 'Auto-seeded from OPENAI_API_KEY env var',
+      credentials: { apiKey } as Prisma.InputJsonValue,
+      status: ProviderAccountStatus.ACTIVE,
+      rotationEnabled: true,
+      maxConcurrentTasks: 5,
+    },
+  });
+  console.log(`[seed] openai-image env-account created: ${acc.id}`);
+}
+
 async function main(): Promise<void> {
   await seedSuperAdmin();
   await seedCatalog();
@@ -726,6 +865,8 @@ async function main(): Promise<void> {
   await seedKlingProviderAccount();
   await seedSeedancePrices(tariffId);
   await seedSeedanceProviderAccount();
+  await seedOpenAIImagePrices(tariffId);
+  await seedOpenAIImageProviderAccount();
 }
 
 main()

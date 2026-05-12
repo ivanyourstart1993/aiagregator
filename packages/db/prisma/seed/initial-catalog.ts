@@ -562,6 +562,119 @@ const seedanceMethods: MethodSeed[] = [
 ];
 
 // --------------------------------------------------------------------------
+// OpenAI Images methods
+// --------------------------------------------------------------------------
+
+const openaiImageBaseProps = (extra: Record<string, unknown> = {}) => ({
+  prompt: promptProp,
+  // Quality tier — naming differs per model (gpt-image-1: low/medium/high/auto;
+  // dall-e-3: standard/hd; dall-e-2 ignores). Exposed under `mode` so it gets
+  // hashed into the bundle key.
+  mode: {
+    type: 'string',
+    enum: ['auto', 'low', 'medium', 'high', 'standard', 'hd'],
+    'x-bundle-dim': true,
+    description:
+      'Quality tier. gpt-image-1: low | medium | high | auto. dall-e-3: standard | hd. dall-e-2: ignored.',
+  },
+  resolution: {
+    type: 'string',
+    enum: [
+      'auto',
+      '256x256',
+      '512x512',
+      '1024x1024',
+      '1024x1536',
+      '1536x1024',
+      '1024x1792',
+      '1792x1024',
+    ],
+    'x-bundle-dim': true,
+    description:
+      'Output size. gpt-image-1: 1024x1024 | 1024x1536 | 1536x1024 | auto. dall-e-3: 1024x1024 | 1024x1792 | 1792x1024. dall-e-2: 256x256 | 512x512 | 1024x1024.',
+  },
+  images_count: {
+    type: 'integer',
+    minimum: 1,
+    maximum: 10,
+    default: 1,
+    description: 'Number of images to generate. dall-e-3 must be 1.',
+  },
+  // Not a bundle dim — OpenAI's image API expresses aspect ratio via `size`,
+  // not a free-form ratio. Accepted to keep parity with the playground's
+  // shared aspect-ratio picker, but ignored by the adapter.
+  aspect_ratio: {
+    type: 'string',
+    enum: ['1:1', '3:4', '4:3', '9:16', '16:9'],
+    description: 'Cosmetic; OpenAI selects rendering size from `resolution`.',
+  },
+  callback_url: callbackUrlProp,
+  ...extra,
+});
+
+const openaiImageMethods: MethodSeed[] = [
+  {
+    code: 'text_to_image',
+    publicName: 'Text to image',
+    description: 'Generate an image from a text prompt (OpenAI Images API).',
+    supportsAsync: true,
+    parametersSchema: {
+      $schema: 'http://json-schema.org/draft-07/schema#',
+      type: 'object',
+      properties: openaiImageBaseProps({
+        // dall-e-3 only
+        style: {
+          type: 'string',
+          enum: ['vivid', 'natural'],
+          description: 'dall-e-3 only: rendering style.',
+        },
+        // gpt-image-1 only
+        background: {
+          type: 'string',
+          enum: ['auto', 'transparent', 'opaque'],
+          description: 'gpt-image-1 only: background handling.',
+        },
+      }),
+      required: ['prompt'],
+      additionalProperties: false,
+    },
+    exampleRequest: {
+      prompt: 'A studio-photo close-up of a glass of cold espresso, dramatic side lighting',
+      resolution: '1024x1024',
+      mode: 'medium',
+      images_count: 1,
+    },
+  },
+  {
+    code: 'image_edit',
+    publicName: 'Image edit',
+    description: 'Edit an existing image guided by a prompt (gpt-image-1 and dall-e-2).',
+    supportsAsync: true,
+    parametersSchema: {
+      $schema: 'http://json-schema.org/draft-07/schema#',
+      type: 'object',
+      properties: openaiImageBaseProps({
+        input_images: {
+          type: 'array',
+          minItems: 1,
+          maxItems: 4,
+          items: { type: 'string', format: 'uri' },
+          description:
+            'Source images. dall-e-2 accepts exactly one PNG; gpt-image-1 supports composite edits across multiple inputs.',
+        },
+        mask: {
+          type: 'string',
+          format: 'uri',
+          description: 'Optional PNG mask URL. Transparent pixels mark the edit region.',
+        },
+      }),
+      required: ['prompt', 'input_images'],
+      additionalProperties: false,
+    },
+  },
+];
+
+// --------------------------------------------------------------------------
 // Providers
 // --------------------------------------------------------------------------
 
@@ -722,6 +835,36 @@ export const initialCatalog: ProviderSeed[] = [
         description: 'Budget image-to-video, 720p cap.',
         sortOrder: 30,
         methods: [{ ...seedanceMethods[1]!, sortOrder: 10 }],
+      },
+    ],
+  },
+  {
+    code: 'openai_image',
+    publicName: 'OpenAI Images',
+    description:
+      'OpenAI image generation — gpt-image-1 (native multimodal), dall-e-3 (legacy), dall-e-2 (legacy).',
+    sortOrder: 50,
+    models: [
+      {
+        code: 'gpt-image-1',
+        publicName: 'GPT Image 1',
+        description: 'Native GPT-4o image model — t2i + image edit, low/medium/high quality.',
+        sortOrder: 10,
+        methods: openaiImageMethods.map((m, i) => ({ ...m, sortOrder: (i + 1) * 10 })),
+      },
+      {
+        code: 'dall-e-3',
+        publicName: 'DALL·E 3',
+        description: 'Legacy DALL·E 3 — text-to-image only, standard or HD.',
+        sortOrder: 20,
+        methods: [{ ...openaiImageMethods[0]!, sortOrder: 10 }],
+      },
+      {
+        code: 'dall-e-2',
+        publicName: 'DALL·E 2',
+        description: 'Legacy DALL·E 2 — t2i + edit at 256/512/1024 squares.',
+        sortOrder: 30,
+        methods: openaiImageMethods.map((m, i) => ({ ...m, sortOrder: (i + 1) * 10 })),
       },
     ],
   },
