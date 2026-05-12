@@ -17,7 +17,19 @@ const T2V_ONLY = new Set(['doubao-seedance-1-0-lite-t2v-250428']);
 const I2V_ONLY = new Set(['doubao-seedance-1-0-lite-i2v-250428']);
 const SUPPORTED_METHODS = new Set(['text_to_video', 'image_to_video']);
 
-const SEEDANCE_BASE = 'https://ark.cn-beijing.volces.com/api/v3';
+// BytePlus ModelArk (Singapore) is the international entrypoint and the
+// default — accessible from EU/US without proxy. Volcano Engine CN can be
+// supplied per-account via `credentials.baseUrl`.
+const SEEDANCE_DEFAULT_BASE = 'https://ark.ap-southeast.bytepluses.com/api/v3';
+
+function resolveBaseUrl(c: Record<string, unknown> | undefined): string {
+  if (!c) return SEEDANCE_DEFAULT_BASE;
+  const v =
+    (c['baseUrl'] as string | undefined) ??
+    (c['base_url'] as string | undefined);
+  if (typeof v === 'string' && v.length > 0) return v.replace(/\/+$/, '');
+  return SEEDANCE_DEFAULT_BASE;
+}
 
 interface SeedanceTaskResponse {
   id?: string;
@@ -142,9 +154,10 @@ export class SeedanceAdapter implements ProviderAdapter {
     content.push({ type: 'text', text: textWithSwitches });
 
     const body = { model: model.code, content };
+    const baseUrl = resolveBaseUrl(ctx.account.credentials);
     const parsed = await this.callApi(
       'POST',
-      `${SEEDANCE_BASE}/contents/generations/tasks`,
+      `${baseUrl}/contents/generations/tasks`,
       apiKey,
       body,
       agent,
@@ -165,7 +178,8 @@ export class SeedanceAdapter implements ProviderAdapter {
   ): Promise<AdapterResult> {
     const apiKey = this.extractApiKey(ctx);
     const agent = this.buildProxyAgent(ctx);
-    const url = `${SEEDANCE_BASE}/contents/generations/tasks/${encodeURIComponent(providerJobId)}`;
+    const baseUrl = resolveBaseUrl(ctx.account.credentials);
+    const url = `${baseUrl}/contents/generations/tasks/${encodeURIComponent(providerJobId)}`;
     const parsed = await this.callApi('GET', url, apiKey, undefined, agent);
 
     const status = parsed.status;
