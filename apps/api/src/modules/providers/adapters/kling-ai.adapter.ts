@@ -196,11 +196,26 @@ export class KlingAiAdapter implements ProviderAdapter {
     if (negative) body.negative_prompt = negative;
 
     if (method.code === 'image_to_video') {
-      const image = pickString(params, 'image', 'source_image', 'input_image');
+      // Public schema requires `input_images: [url]` (array, 1-2 URLs);
+      // older callers may send `image` / `source_image` / `input_image`
+      // (single string). Accept both, prefer `input_images`.
+      let image: string | undefined;
+      const arr = params['input_images'];
+      if (Array.isArray(arr)) {
+        for (const v of arr) {
+          if (typeof v === 'string' && v.length > 0) {
+            image = v;
+            break;
+          }
+        }
+      }
+      if (!image) {
+        image = pickString(params, 'image', 'source_image', 'input_image');
+      }
       if (!image) {
         throw new AdapterError(
           'validation',
-          'image_to_video requires "image" parameter (URL or base64)',
+          'image_to_video requires "input_images" (array of URLs) or "image" (single URL/base64)',
         );
       }
       body.image = image.startsWith('data:')

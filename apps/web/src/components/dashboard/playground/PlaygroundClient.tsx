@@ -679,9 +679,20 @@ export function PlaygroundClient({ balance }: Props) {
       if (preset.mode) params.mode = preset.mode;
       if (readyImageUrls.length > 0 && preset.imageMethod) {
         methodCode = preset.imageMethod;
-        params.input_image_url = readyImageUrls[0];
-        // Kling adapter expects the source image under `image`.
-        params.image = readyImageUrls[0];
+        // Each provider's `image_to_video` schema declares its own field
+        // name. Schemas use `additionalProperties: false`, so we must
+        // send exactly the right key — wrong one fails catalog validation
+        // with "Request parameters failed validation".
+        //   Veo:      input_image_url: string
+        //   Kling:    input_images: string[]  (1-2 URLs)
+        //   Seedance: image: string
+        if (preset.provider === 'kling_ai') {
+          params.input_images = readyImageUrls.slice(0, 2);
+        } else if (preset.provider === 'seedance') {
+          params.image = readyImageUrls[0];
+        } else {
+          params.input_image_url = readyImageUrls[0];
+        }
       }
     }
 
