@@ -151,11 +151,13 @@ const PROXY_REQUIRED = (process.env.BALANCER_PROXY_REQUIRED ?? 'true') === 'true
 
 // PROXY_OPTIONAL_PROVIDERS — comma-separated provider codes that ignore
 // PROXY_REQUIRED (i.e. accounts without a proxy are still eligible). Used
-// for providers where IP fingerprinting is a non-issue (e.g. Kling AI signs
-// every request with HMAC over access/secret pair, so the source IP isn't
-// part of the abuse signal).
+// for providers where IP fingerprinting is a non-issue:
+//   - Kling AI: signs every request with HMAC over access/secret pair, the
+//     source IP isn't part of the abuse signal.
+//   - Seedance (BytePlus ModelArk, Singapore): authenticates via Bearer API
+//     key, no geographic / IP-based fingerprinting on the public endpoint.
 const PROXY_OPTIONAL_PROVIDERS = new Set(
-  (process.env.BALANCER_PROXY_OPTIONAL_PROVIDERS ?? 'kling_ai')
+  (process.env.BALANCER_PROXY_OPTIONAL_PROVIDERS ?? 'kling_ai,seedance')
     .split(',')
     .map((s) => s.trim())
     .filter(Boolean),
