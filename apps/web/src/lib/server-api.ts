@@ -669,7 +669,21 @@ export const serverApi = {
   },
   listTasks: (filters?: { status?: TaskStatus; page?: number; pageSize?: number }) =>
     apiGet<TasksPage>(`/internal/tasks${qs({ ...filters })}`),
-  getTask: (id: string) => apiGet<TaskView>(`/internal/tasks/${id}`),
+  getTask: async (id: string): Promise<TaskView> => {
+    // The Nest endpoint emits snake_case for `error_code` / `error_message`,
+    // but TaskView consumers (PlaygroundClient) read the camelCase variants.
+    // Normalise here so the UI sees a consistent shape regardless of source.
+    const raw = await apiGet<Record<string, unknown>>(`/internal/tasks/${id}`);
+    const pick = (k1: string, k2: string): string | null => {
+      const v = (raw[k1] ?? raw[k2]) as unknown;
+      return typeof v === 'string' ? v : null;
+    };
+    return {
+      ...(raw as unknown as TaskView),
+      errorCode: pick('errorCode', 'error_code'),
+      errorMessage: pick('errorMessage', 'error_message'),
+    };
+  },
 
   // Playground submission — same admit logic as /v1/generations but
   // authenticated via session cookie. Called from server actions in
