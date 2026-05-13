@@ -774,7 +774,10 @@ export function PlaygroundClient({ balance }: Props) {
       }
       if (task.status === 'FAILED' || task.status === 'CANCELLED') {
         setPhase('failed');
-        setError(task.errorMessage ?? task.errorCode ?? t('errorGeneric'));
+        // Leave raw null when the API has no message — friendlyError() will
+        // then prefer code-based i18n or the "contact support with task ID"
+        // template instead of falling back to the generic string here.
+        setError(task.errorMessage ?? null);
         setErrorCode(task.errorCode ?? null);
         return;
       }
