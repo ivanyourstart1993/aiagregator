@@ -793,15 +793,26 @@ export function PlaygroundClient({ balance }: Props) {
   }
 
   // User-friendly error code → human text. Falls back to the raw error
-  // message if the code is unknown.
+  // message if the code is unknown, and finally to a "contact support with
+  // task ID" template when even the raw message is empty (which happens
+  // after sanitizeTaskError wipes internal codes for codes like `temporary`
+  // that don't map cleanly to a public bucket — see sanitize-task-error.ts).
   function friendlyError(code: string | null, raw: string | null): string {
-    if (!code) return raw ?? t('errorGeneric');
-    const key = `error_${code}`;
-    const translated = t(key);
-    // next-intl returns the key itself when missing
-    return translated && translated !== `playground.${key}` && translated !== key
-      ? translated
-      : raw ?? t('errorGeneric');
+    if (code) {
+      const key = `error_${code}`;
+      const translated = t(key);
+      // next-intl returns the key itself when missing
+      if (
+        translated &&
+        translated !== `playground.${key}` &&
+        translated !== key
+      ) {
+        return translated;
+      }
+    }
+    if (raw && raw.length > 0) return raw;
+    if (taskId) return t('errorUnknownWithTaskId', { taskId });
+    return t('errorGeneric');
   }
 
   async function copyTaskId() {
