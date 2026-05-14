@@ -22,6 +22,20 @@ const T2V_ONLY = new Set(['doubao-seedance-1-0-lite-t2v-250428']);
 const I2V_ONLY = new Set(['doubao-seedance-1-0-lite-i2v-250428']);
 const SUPPORTED_METHODS = new Set(['text_to_video', 'image_to_video']);
 
+// Catalog slugs carry the `doubao-` prefix (consistent with Volcano Engine
+// CN's full model IDs), but the BytePlus ModelArk Singapore endpoint —
+// which is the default we hit — registers them without it. Map at the
+// adapter boundary so the catalog can keep canonical names and we still
+// pass the right `model` field to the public API.
+const MODEL_CODE_TO_API_NAME: Record<string, string> = {
+  'doubao-seedance-1-0-pro-250528': 'seedance-1-0-pro-250528',
+  'doubao-seedance-1-0-lite-t2v-250428': 'seedance-1-0-lite-t2v-250428',
+  'doubao-seedance-1-0-lite-i2v-250428': 'seedance-1-0-lite-i2v-250428',
+};
+function realModelName(code: string): string {
+  return MODEL_CODE_TO_API_NAME[code] ?? code;
+}
+
 // BytePlus ModelArk (Singapore) is the international entrypoint and the
 // default — accessible from EU/US without proxy and with an email-only
 // signup. Operators on a Volcano Engine CN account can override per-account
@@ -195,7 +209,7 @@ export class SeedanceAdapter implements ProviderAdapter {
     }
     content.push({ type: 'text', text: textWithSwitches });
 
-    const body = { model: model.code, content };
+    const body = { model: realModelName(model.code), content };
     const baseUrl = resolveBaseUrl(ctx.account.credentials);
     const parsed = await this.callApi(
       'POST',
