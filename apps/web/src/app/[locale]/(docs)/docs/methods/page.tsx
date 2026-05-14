@@ -2,6 +2,7 @@ import { getTranslations } from 'next-intl/server';
 import { Link } from '@/i18n/navigation';
 import { ApiError, serverApi, type MethodView, type ProviderView } from '@/lib/server-api';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { isPublicProvider } from '@/lib/internal-providers';
 
 async function loadData(): Promise<{ providers: ProviderView[]; methods: MethodView[] }> {
   try {
@@ -9,7 +10,10 @@ async function loadData(): Promise<{ providers: ProviderView[]; methods: MethodV
       serverApi.catalogListProviders(),
       serverApi.catalogListMethods().catch(() => [] as MethodView[]),
     ]);
-    return { providers, methods };
+    return {
+      providers: providers.filter((p) => isPublicProvider(p.code)),
+      methods: methods.filter((m) => isPublicProvider(m.providerCode)),
+    };
   } catch (err) {
     if (err instanceof ApiError) return { providers: [], methods: [] };
     return { providers: [], methods: [] };

@@ -3,6 +3,7 @@ import { getTranslations } from 'next-intl/server';
 import { Link } from '@/i18n/navigation';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { ApiError, serverApi, type MethodView, type ProviderView } from '@/lib/server-api';
+import { isPublicProvider } from '@/lib/internal-providers';
 
 interface Params { provider: string }
 
@@ -23,6 +24,10 @@ async function loadProvider(code: string): Promise<{ provider: ProviderView; met
 
 export default async function ProviderPage({ params }: { params: Params }) {
   const t = await getTranslations('docs');
+  // Hide internal-only routing providers (e.g. `openrouter`) from public docs
+  // even if the URL is hit directly. They still exist in the catalog and back
+  // playground presets internally.
+  if (!isPublicProvider(params.provider)) notFound();
   const data = await loadProvider(params.provider);
   if (!data) notFound();
   const { provider, methods } = data;

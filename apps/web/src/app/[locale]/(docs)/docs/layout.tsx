@@ -3,6 +3,7 @@ import { Link } from '@/i18n/navigation';
 import { getTranslations } from 'next-intl/server';
 import { ApiError, serverApi, type MethodView, type ProviderView } from '@/lib/server-api';
 import { DocsSidebar } from '@/components/docs/DocsSidebar';
+import { isPublicProvider } from '@/lib/internal-providers';
 
 async function loadProviders(): Promise<ProviderView[]> {
   try {
@@ -13,17 +14,19 @@ async function loadProviders(): Promise<ProviderView[]> {
     } catch {
       allMethods = [];
     }
-    return providers.map((p) => ({
-      ...p,
-      models: (p.models ?? []).map((m) => ({
-        ...m,
-        methods:
-          m.methods ??
-          allMethods.filter(
-            (mt) => mt.providerCode === p.code && mt.modelCode === m.code,
-          ),
-      })),
-    }));
+    return providers
+      .filter((p) => isPublicProvider(p.code))
+      .map((p) => ({
+        ...p,
+        models: (p.models ?? []).map((m) => ({
+          ...m,
+          methods:
+            m.methods ??
+            allMethods.filter(
+              (mt) => mt.providerCode === p.code && mt.modelCode === m.code,
+            ),
+        })),
+      }));
   } catch (err) {
     if (err instanceof ApiError) return [];
     return [];

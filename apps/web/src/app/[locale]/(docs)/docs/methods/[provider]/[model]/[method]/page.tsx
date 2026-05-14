@@ -1,6 +1,7 @@
 import { notFound } from 'next/navigation';
 import { ApiError, serverApi } from '@/lib/server-api';
 import { MethodPage } from '@/components/docs/MethodPage';
+import { isPublicProvider } from '@/lib/internal-providers';
 
 interface Params {
   provider: string;
@@ -9,6 +10,10 @@ interface Params {
 }
 
 export default async function MethodDocsPage({ params }: { params: Params }) {
+  // Hide internal-only routing providers (e.g. `openrouter`) from public docs
+  // even on direct URL hits. They back playground presets internally but
+  // aren't part of the public catalog surface.
+  if (!isPublicProvider(params.provider)) notFound();
   let method;
   try {
     method = await serverApi.catalogGetMethod(params.provider, params.model, params.method);
