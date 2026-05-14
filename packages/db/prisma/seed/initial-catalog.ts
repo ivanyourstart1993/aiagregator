@@ -675,6 +675,86 @@ const openaiImageMethods: MethodSeed[] = [
 ];
 
 // --------------------------------------------------------------------------
+// OpenRouter video methods (Seedance 2.0 / 2.0-fast / 1.5-pro)
+// --------------------------------------------------------------------------
+
+const openrouterVideoBaseProps = (extra: Record<string, unknown> = {}) => ({
+  prompt: promptProp,
+  // Bundle-dim marker mirroring the Seedance pattern — both video methods
+  // map onto the same BundleMethod (VIDEO_GENERATION) so the mode keeps
+  // text-to-video and image-to-video bundle keys distinct.
+  mode: {
+    type: 'string',
+    enum: ['text_to_video', 'image_to_video'],
+    'x-bundle-dim': true,
+    description: 'Internal task-type marker (matches the method code).',
+  },
+  resolution: {
+    type: 'string',
+    enum: ['480p', '720p', '1080p'],
+    'x-bundle-dim': true,
+    description:
+      'Output resolution. Seedance 2.0 Fast caps at 720p; 2.0 and 1.5 Pro support 1080p.',
+  },
+  duration_seconds: {
+    type: 'integer',
+    minimum: 4,
+    maximum: 15,
+    description:
+      'Video duration in seconds. PER_SECOND pricing — duration is not part of the bundle key. Seedance 1.5 Pro accepts 4–12; 2.0 family accepts 4–15.',
+  },
+  aspect_ratio: {
+    type: 'string',
+    enum: ['16:9', '9:16', '1:1', '4:3', '3:4', '21:9', '9:21'],
+    description: 'Output aspect ratio.',
+  },
+  callback_url: callbackUrlProp,
+  ...extra,
+});
+
+const openrouterVideoMethods: MethodSeed[] = [
+  {
+    code: 'text_to_video',
+    publicName: 'Text to video',
+    description: 'Generate a short video from a text prompt (OpenRouter-routed Seedance).',
+    supportsAsync: true,
+    parametersSchema: {
+      $schema: 'http://json-schema.org/draft-07/schema#',
+      type: 'object',
+      'x-bundle-unit': 'PER_SECOND',
+      properties: openrouterVideoBaseProps(),
+      required: ['prompt'],
+      additionalProperties: false,
+    },
+    exampleRequest: {
+      prompt: 'Cinematic shot of a falcon diving through neon clouds at sunset',
+      resolution: '1080p',
+      duration_seconds: 5,
+      aspect_ratio: '16:9',
+    },
+  },
+  {
+    code: 'image_to_video',
+    publicName: 'Image to video',
+    description: 'Animate a static image into a short video (OpenRouter-routed Seedance).',
+    supportsAsync: true,
+    parametersSchema: {
+      $schema: 'http://json-schema.org/draft-07/schema#',
+      type: 'object',
+      'x-bundle-unit': 'PER_SECOND',
+      properties: openrouterVideoBaseProps({
+        image: {
+          type: 'string',
+          description: 'Source image URL (https://) or data: URI — used as the first frame.',
+        },
+      }),
+      required: ['image'],
+      additionalProperties: false,
+    },
+  },
+];
+
+// --------------------------------------------------------------------------
 // Providers
 // --------------------------------------------------------------------------
 
@@ -865,6 +945,39 @@ export const initialCatalog: ProviderSeed[] = [
         description: 'Legacy DALL·E 2 — t2i + edit at 256/512/1024 squares.',
         sortOrder: 30,
         methods: openaiImageMethods.map((m, i) => ({ ...m, sortOrder: (i + 1) * 10 })),
+      },
+    ],
+  },
+  {
+    code: 'openrouter',
+    publicName: 'OpenRouter',
+    description:
+      'OpenRouter unified video gateway — routes Seedance 2.0 family and 1.5 Pro through a single token-priced async endpoint.',
+    sortOrder: 60,
+    models: [
+      {
+        code: 'openrouter-seedance-2-0',
+        publicName: 'Seedance 2.0',
+        description:
+          'ByteDance Seedance 2.0 via OpenRouter — text-to-video and image-to-video up to 1080p with native audio.',
+        sortOrder: 10,
+        methods: openrouterVideoMethods.map((m, i) => ({ ...m, sortOrder: (i + 1) * 10 })),
+      },
+      {
+        code: 'openrouter-seedance-2-0-fast',
+        publicName: 'Seedance 2.0 Fast',
+        description:
+          'Faster, cheaper Seedance 2.0 tier — 720p cap, otherwise identical t2v/i2v capabilities.',
+        sortOrder: 20,
+        methods: openrouterVideoMethods.map((m, i) => ({ ...m, sortOrder: (i + 1) * 10 })),
+      },
+      {
+        code: 'openrouter-seedance-1-5-pro',
+        publicName: 'Seedance 1.5 Pro',
+        description:
+          'Seedance 1.5 Pro via OpenRouter — 4.5B-param Dual-Branch DiT generating synced video+audio in a single pass, up to 1080p.',
+        sortOrder: 30,
+        methods: openrouterVideoMethods.map((m, i) => ({ ...m, sortOrder: (i + 1) * 10 })),
       },
     ],
   },

@@ -5,6 +5,7 @@ import { GoogleVeoAdapter } from './google-veo.adapter';
 import { KlingAiAdapter } from './kling-ai.adapter';
 import { SeedanceAdapter } from './seedance.adapter';
 import { OpenAiImageAdapter } from './openai-image.adapter';
+import { OpenRouterVideoAdapter } from './openrouter-video.adapter';
 
 @Injectable()
 export class AdapterRegistry {
@@ -16,8 +17,16 @@ export class AdapterRegistry {
     klingAi: KlingAiAdapter,
     seedance: SeedanceAdapter,
     openaiImage: OpenAiImageAdapter,
+    openrouterVideo: OpenRouterVideoAdapter,
   ) {
-    this.adapters = [googleBanana, googleVeo, klingAi, seedance, openaiImage];
+    this.adapters = [
+      googleBanana,
+      googleVeo,
+      klingAi,
+      seedance,
+      openaiImage,
+      openrouterVideo,
+    ];
   }
 
   find(
