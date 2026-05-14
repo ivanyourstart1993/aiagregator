@@ -916,6 +916,34 @@ export const initialCatalog: ProviderSeed[] = [
         sortOrder: 30,
         methods: [{ ...seedanceMethods[1]!, sortOrder: 10 }],
       },
+      // Seedance 2.0 family + 1.5 Pro — routed under the hood through
+      // OpenRouter's unified /api/v1/videos endpoint (token-priced async LRO).
+      // Catalog-wise they're regular Seedance models; the worker registry
+      // resolves to OpenRouterVideoAdapter via the model-code allow-list.
+      {
+        code: 'openrouter-seedance-2-0',
+        publicName: 'Seedance 2.0',
+        description:
+          'ByteDance Seedance 2.0 — text-to-video and image-to-video up to 1080p with native audio.',
+        sortOrder: 40,
+        methods: openrouterVideoMethods.map((m, i) => ({ ...m, sortOrder: (i + 1) * 10 })),
+      },
+      {
+        code: 'openrouter-seedance-2-0-fast',
+        publicName: 'Seedance 2.0 Fast',
+        description:
+          'Faster, cheaper Seedance 2.0 tier — 720p cap, otherwise identical t2v/i2v capabilities.',
+        sortOrder: 50,
+        methods: openrouterVideoMethods.map((m, i) => ({ ...m, sortOrder: (i + 1) * 10 })),
+      },
+      {
+        code: 'openrouter-seedance-1-5-pro',
+        publicName: 'Seedance 1.5 Pro',
+        description:
+          'Seedance 1.5 Pro — 4.5B-param Dual-Branch DiT generating synced video+audio in a single pass, up to 1080p.',
+        sortOrder: 60,
+        methods: openrouterVideoMethods.map((m, i) => ({ ...m, sortOrder: (i + 1) * 10 })),
+      },
     ],
   },
   {
@@ -945,39 +973,6 @@ export const initialCatalog: ProviderSeed[] = [
         description: 'Legacy DALL·E 2 — t2i + edit at 256/512/1024 squares.',
         sortOrder: 30,
         methods: openaiImageMethods.map((m, i) => ({ ...m, sortOrder: (i + 1) * 10 })),
-      },
-    ],
-  },
-  {
-    code: 'openrouter',
-    publicName: 'OpenRouter',
-    description:
-      'OpenRouter unified video gateway — routes Seedance 2.0 family and 1.5 Pro through a single token-priced async endpoint.',
-    sortOrder: 60,
-    models: [
-      {
-        code: 'openrouter-seedance-2-0',
-        publicName: 'Seedance 2.0',
-        description:
-          'ByteDance Seedance 2.0 via OpenRouter — text-to-video and image-to-video up to 1080p with native audio.',
-        sortOrder: 10,
-        methods: openrouterVideoMethods.map((m, i) => ({ ...m, sortOrder: (i + 1) * 10 })),
-      },
-      {
-        code: 'openrouter-seedance-2-0-fast',
-        publicName: 'Seedance 2.0 Fast',
-        description:
-          'Faster, cheaper Seedance 2.0 tier — 720p cap, otherwise identical t2v/i2v capabilities.',
-        sortOrder: 20,
-        methods: openrouterVideoMethods.map((m, i) => ({ ...m, sortOrder: (i + 1) * 10 })),
-      },
-      {
-        code: 'openrouter-seedance-1-5-pro',
-        publicName: 'Seedance 1.5 Pro',
-        description:
-          'Seedance 1.5 Pro via OpenRouter — 4.5B-param Dual-Branch DiT generating synced video+audio in a single pass, up to 1080p.',
-        sortOrder: 30,
-        methods: openrouterVideoMethods.map((m, i) => ({ ...m, sortOrder: (i + 1) * 10 })),
       },
     ],
   },

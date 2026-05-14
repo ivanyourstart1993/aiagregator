@@ -120,7 +120,12 @@ function classifyOpenRouterError(
 }
 
 export class OpenRouterVideoAdapter implements ProviderAdapter {
-  public readonly providerCode = 'openrouter';
+  // OpenRouter is used as a transparent routing layer for the Seedance 2.0
+  // family; from the public catalog's perspective these models belong to
+  // the `seedance` provider. The registry resolves between this adapter
+  // and the BytePlus-direct SeedanceAdapter via the model-code allow-list
+  // (`SUPPORTED_MODELS` — only the `openrouter-seedance-*` slugs land here).
+  public readonly providerCode = 'seedance';
 
   constructor(private readonly storage: WorkerStorage) {}
 

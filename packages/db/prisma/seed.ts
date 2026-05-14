@@ -727,7 +727,7 @@ async function seedOpenRouterPrices(tariffId: string): Promise<void> {
   let count = 0;
   for (const spec of OPENROUTER_PRICES) {
     const bundleKey = buildBundleKey({
-      providerSlug: 'openrouter',
+      providerSlug: 'seedance',
       modelSlug: spec.modelSlug,
       method: BundleMethod.VIDEO_GENERATION,
       mode: spec.methodCode, // discriminates t2v vs i2v
@@ -739,7 +739,7 @@ async function seedOpenRouterPrices(tariffId: string): Promise<void> {
       where: { bundleKey },
       create: {
         bundleKey,
-        providerSlug: 'openrouter',
+        providerSlug: 'seedance',
         modelSlug: spec.modelSlug,
         method: BundleMethod.VIDEO_GENERATION,
         mode: spec.methodCode,
@@ -757,7 +757,7 @@ async function seedOpenRouterPrices(tariffId: string): Promise<void> {
     });
     count++;
   }
-  console.log(`[seed] openrouter tariff prices upserted: ${count}`);
+  console.log(`[seed] openrouter-routed seedance prices upserted under provider=seedance: ${count}`);
 }
 
 async function seedOpenRouterProviderAccount(): Promise<void> {
@@ -766,13 +766,24 @@ async function seedOpenRouterProviderAccount(): Promise<void> {
     console.log('[seed] OPENROUTER_API_KEY not set — skipping OpenRouter ProviderAccount');
     return;
   }
-  const provider = await prisma.provider.findUnique({ where: { code: 'openrouter' } });
+  // OpenRouter is internally part of the `seedance` provider — same models
+  // exposed publicly, routed under the hood through OpenRouter's video API.
+  // The account is scoped (via supportedModelIds, set below) to only the
+  // openrouter-seedance-* models so BytePlus-direct doubao-* models keep
+  // going through the SEEDANCE_API_KEY env-account.
+  const provider = await prisma.provider.findUnique({ where: { code: 'seedance' } });
   if (!provider) {
-    console.warn('[seed] provider openrouter not found — skipping account');
+    console.warn('[seed] provider seedance not found — skipping openrouter account');
     return;
   }
+  // Restrict the OpenRouter account to the three models it actually handles.
+  const orModels = await prisma.model.findMany({
+    where: { providerId: provider.id, code: { startsWith: 'openrouter-seedance-' } },
+    select: { id: true },
+  });
+  const supportedModelIds = orModels.map((m) => m.id);
   const existing = await prisma.providerAccount.findFirst({
-    where: { providerId: provider.id, name: 'env-account' },
+    where: { providerId: provider.id, name: 'OpenRouter main' },
   });
   if (existing) {
     await prisma.providerAccount.update({
@@ -780,23 +791,25 @@ async function seedOpenRouterProviderAccount(): Promise<void> {
       data: {
         credentials: { apiKey } as Prisma.InputJsonValue,
         status: ProviderAccountStatus.ACTIVE,
+        supportedModelIds,
       },
     });
-    console.log(`[seed] openrouter env-account refreshed: ${existing.id}`);
+    console.log(`[seed] OpenRouter main account refreshed: ${existing.id} (supportedModels=${supportedModelIds.length})`);
     return;
   }
   const acc = await prisma.providerAccount.create({
     data: {
       providerId: provider.id,
-      name: 'env-account',
-      description: 'Auto-seeded from OPENROUTER_API_KEY env var',
+      name: 'OpenRouter main',
+      description: 'Auto-seeded from OPENROUTER_API_KEY env var — routes Seedance 2.0/1.5 Pro under provider=seedance.',
       credentials: { apiKey } as Prisma.InputJsonValue,
       status: ProviderAccountStatus.ACTIVE,
       rotationEnabled: true,
       maxConcurrentTasks: 5,
+      supportedModelIds,
     },
   });
-  console.log(`[seed] openrouter env-account created: ${acc.id}`);
+  console.log(`[seed] OpenRouter main account created: ${acc.id} (supportedModels=${supportedModelIds.length})`);
 }
 
 async function seedSeedanceProviderAccount(): Promise<void> {
@@ -810,6 +823,14 @@ async function seedSeedanceProviderAccount(): Promise<void> {
     console.warn('[seed] provider seedance not found — skipping account');
     return;
   }
+  // Scope to the BytePlus-direct doubao-* models only; the OpenRouter-routed
+  // openrouter-seedance-* models live under the same provider but are served
+  // by the OpenRouter main account (see seedOpenRouterProviderAccount).
+  const directModels = await prisma.model.findMany({
+    where: { providerId: provider.id, code: { startsWith: 'doubao-seedance-' } },
+    select: { id: true },
+  });
+  const supportedModelIds = directModels.map((m) => m.id);
   const existing = await prisma.providerAccount.findFirst({
     where: { providerId: provider.id, name: 'env-account' },
   });
@@ -819,23 +840,25 @@ async function seedSeedanceProviderAccount(): Promise<void> {
       data: {
         credentials: { apiKey } as Prisma.InputJsonValue,
         status: ProviderAccountStatus.ACTIVE,
+        supportedModelIds,
       },
     });
-    console.log(`[seed] seedance env-account refreshed: ${existing.id}`);
+    console.log(`[seed] seedance env-account refreshed: ${existing.id} (supportedModels=${supportedModelIds.length})`);
     return;
   }
   const acc = await prisma.providerAccount.create({
     data: {
       providerId: provider.id,
       name: 'env-account',
-      description: 'Auto-seeded from SEEDANCE_API_KEY env var',
+      description: 'Auto-seeded from SEEDANCE_API_KEY env var — BytePlus-direct doubao-* models.',
       credentials: { apiKey } as Prisma.InputJsonValue,
       status: ProviderAccountStatus.ACTIVE,
       rotationEnabled: true,
       maxConcurrentTasks: 3,
+      supportedModelIds,
     },
   });
-  console.log(`[seed] seedance env-account created: ${acc.id}`);
+  console.log(`[seed] seedance env-account created: ${acc.id} (supportedModels=${supportedModelIds.length})`);
 }
 
 // ---------------------------------------------------------------------------

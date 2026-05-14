@@ -370,7 +370,7 @@ const PRESETS: Record<TaskType, PresetSpec> = {
   // bundle prices seeded in packages/db/prisma/seed.ts (OPENROUTER_PRICES).
   // 2.0 Fast caps at 720p; 2.0 and 1.5 Pro reach 1080p.
   text_to_video_or_seedance2_fast_720p: {
-    provider: 'openrouter',
+    provider: 'seedance',
     model: 'openrouter-seedance-2-0-fast',
     method: 'text_to_video',
     imageMethod: 'image_to_video',
@@ -381,7 +381,7 @@ const PRESETS: Record<TaskType, PresetSpec> = {
     approxUsd: 0.85, // $0.17/s × 5s
   },
   text_to_video_or_seedance2_pro_720p: {
-    provider: 'openrouter',
+    provider: 'seedance',
     model: 'openrouter-seedance-2-0',
     method: 'text_to_video',
     imageMethod: 'image_to_video',
@@ -392,7 +392,7 @@ const PRESETS: Record<TaskType, PresetSpec> = {
     approxUsd: 1.05, // $0.21/s × 5s
   },
   text_to_video_or_seedance2_pro_1080p: {
-    provider: 'openrouter',
+    provider: 'seedance',
     model: 'openrouter-seedance-2-0',
     method: 'text_to_video',
     imageMethod: 'image_to_video',
@@ -403,7 +403,7 @@ const PRESETS: Record<TaskType, PresetSpec> = {
     approxUsd: 2.25, // $0.45/s × 5s
   },
   text_to_video_or_seedance15_pro_1080p: {
-    provider: 'openrouter',
+    provider: 'seedance',
     model: 'openrouter-seedance-1-5-pro',
     method: 'text_to_video',
     imageMethod: 'image_to_video',
@@ -746,13 +746,11 @@ export function PlaygroundClient({ balance }: Props) {
         //   Seedance: image: string
         if (preset.provider === 'kling_ai') {
           params.input_images = readyImageUrls.slice(0, 2);
-        } else if (
-          preset.provider === 'seedance' ||
-          preset.provider === 'openrouter'
-        ) {
-          // Seedance + OpenRouter-routed Seedance both use `image` (the
+        } else if (preset.provider === 'seedance') {
+          // Both Seedance code paths (BytePlus-direct doubao-* and
+          // OpenRouter-routed openrouter-seedance-*) use `image` — the
           // OpenRouter adapter wraps it into `frame_images[0].image_url.url`
-          // server-side; the public schema just needs a single URL string).
+          // server-side; the public schema just needs a single URL string.
           params.image = readyImageUrls[0];
         } else {
           params.input_image_url = readyImageUrls[0];
@@ -764,11 +762,7 @@ export function PlaygroundClient({ balance }: Props) {
     // vs image_to_video) so the seed price for the chosen task type lines up.
     // For Kling the `mode` slot already carries 'standard' / 'pro' from the
     // preset above. OpenAI Image keeps the quality tier set above.
-    if (
-      preset.provider === 'google_veo' ||
-      preset.provider === 'seedance' ||
-      preset.provider === 'openrouter'
-    ) {
+    if (preset.provider === 'google_veo' || preset.provider === 'seedance') {
       params.mode = methodCode;
     }
 

@@ -154,11 +154,10 @@ const PROXY_REQUIRED = (process.env.BALANCER_PROXY_REQUIRED ?? 'true') === 'true
 // for providers where IP fingerprinting is a non-issue:
 //   - Kling AI: signs every request with HMAC over access/secret pair, the
 //     source IP isn't part of the abuse signal.
-//   - Seedance (BytePlus ModelArk, Singapore): authenticates via Bearer API
-//     key, no geographic / IP-based fingerprinting on the public endpoint.
-//   - OpenRouter: Bearer API key, globally reachable, no per-IP abuse signal.
+//   - Seedance: Bearer API key on either BytePlus ModelArk or OpenRouter's
+//     unified video endpoint — no per-IP abuse signal in either case.
 const PROXY_OPTIONAL_PROVIDERS = new Set(
-  (process.env.BALANCER_PROXY_OPTIONAL_PROVIDERS ?? 'kling_ai,seedance,openrouter')
+  (process.env.BALANCER_PROXY_OPTIONAL_PROVIDERS ?? 'kling_ai,seedance')
     .split(',')
     .map((s) => s.trim())
     .filter(Boolean),
