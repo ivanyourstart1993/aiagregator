@@ -86,7 +86,11 @@ type TaskType =
   | 'text_to_video_klingv3_pro'
   | 'text_to_video_seedance_lite_720p'
   | 'text_to_video_seedance_pro_720p'
-  | 'text_to_video_seedance_pro_1080p';
+  | 'text_to_video_seedance_pro_1080p'
+  | 'text_to_video_or_seedance2_fast_720p'
+  | 'text_to_video_or_seedance2_pro_720p'
+  | 'text_to_video_or_seedance2_pro_1080p'
+  | 'text_to_video_or_seedance15_pro_1080p';
 
 interface PresetSpec {
   provider: string;
@@ -362,6 +366,53 @@ const PRESETS: Record<TaskType, PresetSpec> = {
     needsVideo: true,
     approxUsd: 0.585, // $0.117/s × 5s
   },
+  // OpenRouter-routed Seedance 2.0 family. Same API key powers all three;
+  // bundle prices seeded in packages/db/prisma/seed.ts (OPENROUTER_PRICES).
+  // 2.0 Fast caps at 720p; 2.0 and 1.5 Pro reach 1080p.
+  text_to_video_or_seedance2_fast_720p: {
+    provider: 'openrouter',
+    model: 'openrouter-seedance-2-0-fast',
+    method: 'text_to_video',
+    imageMethod: 'image_to_video',
+    resolution: '720p',
+    durationOptions: [5, 10],
+    durationBase: 5,
+    needsVideo: true,
+    approxUsd: 0.85, // $0.17/s × 5s
+  },
+  text_to_video_or_seedance2_pro_720p: {
+    provider: 'openrouter',
+    model: 'openrouter-seedance-2-0',
+    method: 'text_to_video',
+    imageMethod: 'image_to_video',
+    resolution: '720p',
+    durationOptions: [5, 10],
+    durationBase: 5,
+    needsVideo: true,
+    approxUsd: 1.05, // $0.21/s × 5s
+  },
+  text_to_video_or_seedance2_pro_1080p: {
+    provider: 'openrouter',
+    model: 'openrouter-seedance-2-0',
+    method: 'text_to_video',
+    imageMethod: 'image_to_video',
+    resolution: '1080p',
+    durationOptions: [5, 10],
+    durationBase: 5,
+    needsVideo: true,
+    approxUsd: 2.25, // $0.45/s × 5s
+  },
+  text_to_video_or_seedance15_pro_1080p: {
+    provider: 'openrouter',
+    model: 'openrouter-seedance-1-5-pro',
+    method: 'text_to_video',
+    imageMethod: 'image_to_video',
+    resolution: '1080p',
+    durationOptions: [5, 10],
+    durationBase: 5,
+    needsVideo: true,
+    approxUsd: 0.85, // $0.17/s × 5s
+  },
 };
 
 const TASK_GROUPS: Array<{ labelKey: string; types: TaskType[] }> = [
@@ -406,6 +457,15 @@ const TASK_GROUPS: Array<{ labelKey: string; types: TaskType[] }> = [
       'text_to_video_seedance_lite_720p',
       'text_to_video_seedance_pro_720p',
       'text_to_video_seedance_pro_1080p',
+    ],
+  },
+  {
+    labelKey: 'groupVideoOpenRouter',
+    types: [
+      'text_to_video_or_seedance2_fast_720p',
+      'text_to_video_or_seedance2_pro_720p',
+      'text_to_video_or_seedance2_pro_1080p',
+      'text_to_video_or_seedance15_pro_1080p',
     ],
   },
 ];
@@ -688,7 +748,13 @@ export function PlaygroundClient({ balance }: Props) {
         //   Seedance: image: string
         if (preset.provider === 'kling_ai') {
           params.input_images = readyImageUrls.slice(0, 2);
-        } else if (preset.provider === 'seedance') {
+        } else if (
+          preset.provider === 'seedance' ||
+          preset.provider === 'openrouter'
+        ) {
+          // Seedance + OpenRouter-routed Seedance both use `image` (the
+          // OpenRouter adapter wraps it into `frame_images[0].image_url.url`
+          // server-side; the public schema just needs a single URL string).
           params.image = readyImageUrls[0];
         } else {
           params.input_image_url = readyImageUrls[0];
@@ -700,7 +766,11 @@ export function PlaygroundClient({ balance }: Props) {
     // vs image_to_video) so the seed price for the chosen task type lines up.
     // For Kling the `mode` slot already carries 'standard' / 'pro' from the
     // preset above. OpenAI Image keeps the quality tier set above.
-    if (preset.provider === 'google_veo' || preset.provider === 'seedance') {
+    if (
+      preset.provider === 'google_veo' ||
+      preset.provider === 'seedance' ||
+      preset.provider === 'openrouter'
+    ) {
       params.mode = methodCode;
     }
 
