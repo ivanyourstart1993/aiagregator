@@ -156,8 +156,9 @@ const PROXY_REQUIRED = (process.env.BALANCER_PROXY_REQUIRED ?? 'true') === 'true
 //     source IP isn't part of the abuse signal.
 //   - Seedance (BytePlus ModelArk, Singapore): authenticates via Bearer API
 //     key, no geographic / IP-based fingerprinting on the public endpoint.
+//   - OpenRouter: Bearer API key, globally reachable, no per-IP abuse signal.
 const PROXY_OPTIONAL_PROVIDERS = new Set(
-  (process.env.BALANCER_PROXY_OPTIONAL_PROVIDERS ?? 'kling_ai,seedance')
+  (process.env.BALANCER_PROXY_OPTIONAL_PROVIDERS ?? 'kling_ai,seedance,openrouter')
     .split(',')
     .map((s) => s.trim())
     .filter(Boolean),
