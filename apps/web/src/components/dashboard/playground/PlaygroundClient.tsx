@@ -761,9 +761,17 @@ export function PlaygroundClient({ balance }: Props) {
     // Veo and Seedance bundles are keyed by `mode = methodCode` (text_to_video
     // vs image_to_video) so the seed price for the chosen task type lines up.
     // For Kling the `mode` slot already carries 'standard' / 'pro' from the
-    // preset above. OpenAI Image keeps the quality tier set above.
+    // preset (set in the needsVideo block above).
     if (preset.provider === 'google_veo' || preset.provider === 'seedance') {
       params.mode = methodCode;
+    }
+    // For non-video presets (OpenAI Image gpt-image-1 low/medium/high,
+    // dall-e-3 standard/hd) — forward the preset's quality tier as
+    // params.mode if it isn't already set. The bundle key is hashed with
+    // mode as a dimension, so without this the admit lookup falls into a
+    // null-mode bundle with no price → "Pricing is not configured".
+    if (preset.mode && params.mode === undefined) {
+      params.mode = preset.mode;
     }
 
     const res = await submitGenerationAction({
