@@ -156,8 +156,10 @@ const PROXY_REQUIRED = (process.env.BALANCER_PROXY_REQUIRED ?? 'true') === 'true
 //     source IP isn't part of the abuse signal.
 //   - Seedance: Bearer API key on either BytePlus ModelArk or OpenRouter's
 //     unified video endpoint — no per-IP abuse signal in either case.
+//   - OpenAI Images: Bearer API key, no per-IP abuse signal (rate-limit and
+//     account-level reputation key off the API key itself).
 const PROXY_OPTIONAL_PROVIDERS = new Set(
-  (process.env.BALANCER_PROXY_OPTIONAL_PROVIDERS ?? 'kling_ai,seedance')
+  (process.env.BALANCER_PROXY_OPTIONAL_PROVIDERS ?? 'kling_ai,seedance,openai_image')
     .split(',')
     .map((s) => s.trim())
     .filter(Boolean),
