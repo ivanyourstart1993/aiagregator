@@ -684,6 +684,121 @@ async function seedSeedancePrices(tariffId: string): Promise<void> {
   console.log(`[seed] seedance tariff prices upserted: ${count}`);
 }
 
+// ---------------------------------------------------------------------------
+// OpenRouter Video — PER_SECOND prices for the Seedance 2.0 family routed
+// through OpenRouter's unified /api/v1/videos endpoint. Baseline cost from
+// a smoke-test invoice (Seedance 2.0 Fast 480p, 5s = $0.27 → $0.054/s
+// upstream). Other tiers extrapolated from OpenRouter's published per-token
+// rates (Fast $5.60/Mt, Pro $7.00/Mt, 1.5 Pro $2.40/Mt) — these are rough
+// pragmatic retail numbers that get the admit gate to find a bundle; the
+// operator should re-tune after a few real invoices.
+// ---------------------------------------------------------------------------
+
+interface OpenRouterBundleSpec {
+  modelSlug: string;
+  methodCode: 'text_to_video' | 'image_to_video';
+  resolution: string;
+  pricePerSecondUsd: number;
+}
+
+const OPENROUTER_PRICES: OpenRouterBundleSpec[] = [
+  // Seedance 2.0 Fast — no 1080p tier upstream. ~$0.054/s confirmed via curl.
+  { modelSlug: 'openrouter-seedance-2-0-fast', methodCode: 'text_to_video',  resolution: '480p',  pricePerSecondUsd: 0.081 },
+  { modelSlug: 'openrouter-seedance-2-0-fast', methodCode: 'text_to_video',  resolution: '720p',  pricePerSecondUsd: 0.17 },
+  { modelSlug: 'openrouter-seedance-2-0-fast', methodCode: 'image_to_video', resolution: '480p',  pricePerSecondUsd: 0.081 },
+  { modelSlug: 'openrouter-seedance-2-0-fast', methodCode: 'image_to_video', resolution: '720p',  pricePerSecondUsd: 0.17 },
+  // Seedance 2.0 full — 1.25× of Fast rate (Pro $7.00 vs Fast $5.60).
+  { modelSlug: 'openrouter-seedance-2-0', methodCode: 'text_to_video',  resolution: '480p',  pricePerSecondUsd: 0.10 },
+  { modelSlug: 'openrouter-seedance-2-0', methodCode: 'text_to_video',  resolution: '720p',  pricePerSecondUsd: 0.21 },
+  { modelSlug: 'openrouter-seedance-2-0', methodCode: 'text_to_video',  resolution: '1080p', pricePerSecondUsd: 0.45 },
+  { modelSlug: 'openrouter-seedance-2-0', methodCode: 'image_to_video', resolution: '480p',  pricePerSecondUsd: 0.10 },
+  { modelSlug: 'openrouter-seedance-2-0', methodCode: 'image_to_video', resolution: '720p',  pricePerSecondUsd: 0.21 },
+  { modelSlug: 'openrouter-seedance-2-0', methodCode: 'image_to_video', resolution: '1080p', pricePerSecondUsd: 0.45 },
+  // Seedance 1.5 Pro — 0.43× of Fast (cheaper at $2.40/Mt vs Fast $5.60/Mt).
+  { modelSlug: 'openrouter-seedance-1-5-pro', methodCode: 'text_to_video',  resolution: '480p',  pricePerSecondUsd: 0.035 },
+  { modelSlug: 'openrouter-seedance-1-5-pro', methodCode: 'text_to_video',  resolution: '720p',  pricePerSecondUsd: 0.085 },
+  { modelSlug: 'openrouter-seedance-1-5-pro', methodCode: 'text_to_video',  resolution: '1080p', pricePerSecondUsd: 0.17 },
+  { modelSlug: 'openrouter-seedance-1-5-pro', methodCode: 'image_to_video', resolution: '480p',  pricePerSecondUsd: 0.035 },
+  { modelSlug: 'openrouter-seedance-1-5-pro', methodCode: 'image_to_video', resolution: '720p',  pricePerSecondUsd: 0.085 },
+  { modelSlug: 'openrouter-seedance-1-5-pro', methodCode: 'image_to_video', resolution: '1080p', pricePerSecondUsd: 0.17 },
+];
+
+async function seedOpenRouterPrices(tariffId: string): Promise<void> {
+  let count = 0;
+  for (const spec of OPENROUTER_PRICES) {
+    const bundleKey = buildBundleKey({
+      providerSlug: 'openrouter',
+      modelSlug: spec.modelSlug,
+      method: BundleMethod.VIDEO_GENERATION,
+      mode: spec.methodCode, // discriminates t2v vs i2v
+      resolution: spec.resolution,
+      durationSeconds: null,
+      aspectRatio: null,
+    });
+    const bundle = await prisma.bundle.upsert({
+      where: { bundleKey },
+      create: {
+        bundleKey,
+        providerSlug: 'openrouter',
+        modelSlug: spec.modelSlug,
+        method: BundleMethod.VIDEO_GENERATION,
+        mode: spec.methodCode,
+        resolution: spec.resolution,
+        unit: BundleUnit.PER_SECOND,
+        isActive: true,
+      },
+      update: { unit: BundleUnit.PER_SECOND },
+    });
+    const perSecondUnits = dollarsPerSecondToUnits(spec.pricePerSecondUsd);
+    await prisma.tariffBundlePrice.upsert({
+      where: { tariffId_bundleId: { tariffId, bundleId: bundle.id } },
+      create: { tariffId, bundleId: bundle.id, perSecondUnits },
+      update: { perSecondUnits, basePriceUnits: null },
+    });
+    count++;
+  }
+  console.log(`[seed] openrouter tariff prices upserted: ${count}`);
+}
+
+async function seedOpenRouterProviderAccount(): Promise<void> {
+  const apiKey = process.env.OPENROUTER_API_KEY;
+  if (!apiKey) {
+    console.log('[seed] OPENROUTER_API_KEY not set — skipping OpenRouter ProviderAccount');
+    return;
+  }
+  const provider = await prisma.provider.findUnique({ where: { code: 'openrouter' } });
+  if (!provider) {
+    console.warn('[seed] provider openrouter not found — skipping account');
+    return;
+  }
+  const existing = await prisma.providerAccount.findFirst({
+    where: { providerId: provider.id, name: 'env-account' },
+  });
+  if (existing) {
+    await prisma.providerAccount.update({
+      where: { id: existing.id },
+      data: {
+        credentials: { apiKey } as Prisma.InputJsonValue,
+        status: ProviderAccountStatus.ACTIVE,
+      },
+    });
+    console.log(`[seed] openrouter env-account refreshed: ${existing.id}`);
+    return;
+  }
+  const acc = await prisma.providerAccount.create({
+    data: {
+      providerId: provider.id,
+      name: 'env-account',
+      description: 'Auto-seeded from OPENROUTER_API_KEY env var',
+      credentials: { apiKey } as Prisma.InputJsonValue,
+      status: ProviderAccountStatus.ACTIVE,
+      rotationEnabled: true,
+      maxConcurrentTasks: 5,
+    },
+  });
+  console.log(`[seed] openrouter env-account created: ${acc.id}`);
+}
+
 async function seedSeedanceProviderAccount(): Promise<void> {
   const apiKey = process.env.SEEDANCE_API_KEY;
   if (!apiKey) {
@@ -874,6 +989,8 @@ async function main(): Promise<void> {
   await seedKlingProviderAccount();
   await seedSeedancePrices(tariffId);
   await seedSeedanceProviderAccount();
+  await seedOpenRouterPrices(tariffId);
+  await seedOpenRouterProviderAccount();
   await seedOpenAIImagePrices(tariffId);
   await seedOpenAIImageProviderAccount();
 }
