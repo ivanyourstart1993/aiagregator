@@ -451,16 +451,14 @@ const TASK_GROUPS: Array<{ labelKey: string; types: TaskType[] }> = [
       'text_to_video_kling25_pro',
     ],
   },
+  // Direct Seedance (BytePlus) is intentionally not exposed here: BytePlus
+  // requires per-account model activation in their ARK Console, and the
+  // OpenRouter route covers the same model family with pre-activated access.
+  // The catalog rows + adapter for `seedance` provider stay in place so
+  // external API clients who activated their BytePlus account can still
+  // call /v1/generations directly.
   {
     labelKey: 'groupVideoSeedance',
-    types: [
-      'text_to_video_seedance_lite_720p',
-      'text_to_video_seedance_pro_720p',
-      'text_to_video_seedance_pro_1080p',
-    ],
-  },
-  {
-    labelKey: 'groupVideoOpenRouter',
     types: [
       'text_to_video_or_seedance2_fast_720p',
       'text_to_video_or_seedance2_pro_720p',
