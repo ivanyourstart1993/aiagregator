@@ -870,7 +870,47 @@ export function PlaygroundClient({ balance }: Props) {
   // task ID" template when even the raw message is empty (which happens
   // after sanitizeTaskError wipes internal codes for codes like `temporary`
   // that don't map cleanly to a public bucket — see sanitize-task-error.ts).
+  // Extract the most useful human-readable string from a provider error
+  // message — adapters and routers often double-wrap them (e.g. OpenRouter
+  // passes BytePlus errors back as `HTTP 400: {"error":{"message":"..."}}`).
+  // Returns null when the raw is empty or contains no extractable detail.
+  function extractProviderDetail(raw: string | null): string | null {
+    if (!raw) return null;
+    const trimmed = raw.trim();
+    if (!trimmed) return null;
+    // Strip an `HTTP <code>: ` prefix if present
+    const m = trimmed.match(/^HTTP\s+\d+:\s*(.*)$/is);
+    const body = m ? m[1]!.trim() : trimmed;
+    // If body looks like JSON, try to pull `.error.message` (or `.error`)
+    if (body.startsWith('{') || body.startsWith('[')) {
+      try {
+        const parsed = JSON.parse(body) as Record<string, unknown>;
+        const err = (parsed.error ?? parsed.errors) as unknown;
+        if (typeof err === 'string') return err;
+        if (err && typeof err === 'object') {
+          const msg = (err as { message?: unknown }).message;
+          if (typeof msg === 'string' && msg.length > 0) return msg;
+          const code = (err as { code?: unknown }).code;
+          if (typeof code === 'string' && code.length > 0) return code;
+        }
+        const topMsg = (parsed as { message?: unknown }).message;
+        if (typeof topMsg === 'string' && topMsg.length > 0) return topMsg;
+      } catch {
+        // fall through — keep raw body
+      }
+    }
+    return body || null;
+  }
+
+  // User-friendly error code → human text. Falls back to the raw error
+  // message if the code is unknown, and finally to a "contact support with
+  // task ID" template when even the raw message is empty. For
+  // user-caused codes (content_rejected, invalid_parameter, validation)
+  // the raw message often contains actionable detail (e.g. "input image
+  // may contain real person") — append it under the localized hint so the
+  // user sees BOTH the general explanation and the specific reason.
   function friendlyError(code: string | null, raw: string | null): string {
+    let localized: string | null = null;
     if (code) {
       const key = `error_${code}`;
       const translated = t(key);
@@ -880,10 +920,23 @@ export function PlaygroundClient({ balance }: Props) {
         translated !== `playground.${key}` &&
         translated !== key
       ) {
-        return translated;
+        localized = translated;
       }
     }
-    if (raw && raw.length > 0) return raw;
+    const detail = extractProviderDetail(raw);
+    if (localized) {
+      const surfacesRawDetail =
+        code === 'content_rejected' ||
+        code === 'content_filter' ||
+        code === 'invalid_parameter' ||
+        code === 'validation' ||
+        code === 'provider_rejected';
+      if (surfacesRawDetail && detail && detail !== localized) {
+        return `${localized}\n\n${t('providerDetailPrefix')} ${detail}`;
+      }
+      return localized;
+    }
+    if (detail) return detail;
     if (taskId) return t('errorUnknownWithTaskId', { taskId });
     return t('errorGeneric');
   }
@@ -1261,7 +1314,7 @@ export function PlaygroundClient({ balance }: Props) {
           {phase === 'failed' ? (
             <div className="w-full space-y-3 text-center">
               <p className="text-sm font-semibold text-destructive">{t('failedTitle')}</p>
-              <p className="text-xs text-muted-foreground">
+              <p className="whitespace-pre-line text-xs text-muted-foreground">
                 {friendlyError(errorCode, error)}
               </p>
               {errorCode ? (
