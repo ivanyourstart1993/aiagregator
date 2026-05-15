@@ -151,6 +151,12 @@ const bananaMethods: MethodSeed[] = [
       required: ['prompt', 'input_images'],
       additionalProperties: false,
     },
+    exampleRequest: {
+      prompt: 'Make this photo look like an oil painting, impressionist style',
+      input_images: ['https://example.com/portrait.jpg'],
+      resolution: '2K',
+      aspect_ratio: '1:1',
+    },
   },
   {
     code: 'multi_reference_image',
@@ -171,6 +177,15 @@ const bananaMethods: MethodSeed[] = [
       }),
       required: ['prompt', 'input_images'],
       additionalProperties: false,
+    },
+    exampleRequest: {
+      prompt: 'Combine the subject from the first reference with the style of the second',
+      input_images: [
+        'https://example.com/subject.jpg',
+        'https://example.com/style-ref.jpg',
+      ],
+      resolution: '2K',
+      aspect_ratio: '1:1',
     },
   },
 ];
@@ -251,6 +266,13 @@ const veoMethods: MethodSeed[] = [
       required: ['prompt', 'input_image_url'],
       additionalProperties: false,
     },
+    exampleRequest: {
+      prompt: 'Camera slowly pans around the scene with cinematic lighting',
+      input_image_url: 'https://example.com/start-frame.jpg',
+      resolution: '1080p',
+      duration_seconds: 8,
+      aspect_ratio: '16:9',
+    },
   },
   {
     code: 'video_extend',
@@ -265,6 +287,10 @@ const veoMethods: MethodSeed[] = [
       }),
       required: ['input_video_url'],
       additionalProperties: false,
+    },
+    exampleRequest: {
+      input_video_url: 'https://example.com/source.mp4',
+      duration_seconds: 4,
     },
   },
   {
@@ -282,6 +308,13 @@ const veoMethods: MethodSeed[] = [
       required: ['first_frame_url', 'last_frame_url'],
       additionalProperties: false,
     },
+    exampleRequest: {
+      first_frame_url: 'https://example.com/start.jpg',
+      last_frame_url: 'https://example.com/end.jpg',
+      duration_seconds: 6,
+      resolution: '1080p',
+      aspect_ratio: '16:9',
+    },
   },
   {
     code: 'video_to_video',
@@ -296,6 +329,12 @@ const veoMethods: MethodSeed[] = [
       }),
       required: ['prompt', 'input_video_url'],
       additionalProperties: false,
+    },
+    exampleRequest: {
+      prompt: 'Restyle as a noir black-and-white scene with rain',
+      input_video_url: 'https://example.com/source.mp4',
+      duration_seconds: 8,
+      resolution: '1080p',
     },
   },
 ];
@@ -345,6 +384,13 @@ const klingMethods: MethodSeed[] = [
       required: ['prompt'],
       additionalProperties: false,
     },
+    exampleRequest: {
+      prompt: 'A red sports car drifting around a mountain curve at sunset, cinematic',
+      mode: 'pro',
+      duration_seconds: 5,
+      resolution: '1080p',
+      aspect_ratio: '16:9',
+    },
   },
   {
     code: 'image_to_video',
@@ -365,123 +411,23 @@ const klingMethods: MethodSeed[] = [
       required: ['prompt', 'input_images'],
       additionalProperties: false,
     },
-  },
-  {
-    code: 'image_generation',
-    publicName: 'Image generation',
-    description: 'Generate one or more images from a text prompt.',
-    supportsAsync: true,
-    parametersSchema: {
-      $schema: 'http://json-schema.org/draft-07/schema#',
-      type: 'object',
-      properties: {
-        prompt: promptProp,
-        mode: {
-          type: 'string',
-          enum: ['standard', 'pro'],
-          'x-bundle-dim': true,
-        },
-        resolution: {
-          type: 'string',
-          enum: ['1K', '2K'],
-          'x-bundle-dim': true,
-        },
-        aspect_ratio: {
-          type: 'string',
-          enum: ['1:1', '16:9', '9:16'],
-          'x-bundle-dim': true,
-        },
-        images_count: { type: 'integer', minimum: 1, maximum: 4, default: 1 },
-        callback_url: callbackUrlProp,
-      },
-      required: ['prompt'],
-      additionalProperties: false,
+    exampleRequest: {
+      prompt: 'Subject turns their head slightly, light wind in their hair',
+      input_images: ['https://example.com/portrait.jpg'],
+      mode: 'pro',
+      duration_seconds: 5,
+      resolution: '1080p',
+      aspect_ratio: '9:16',
     },
   },
-  {
-    code: 'video_effect',
-    publicName: 'Video effect',
-    description: 'Apply a predefined cinematic effect to a video.',
-    supportsAsync: true,
-    parametersSchema: {
-      $schema: 'http://json-schema.org/draft-07/schema#',
-      type: 'object',
-      properties: {
-        effect_code: { type: 'string', minLength: 1 },
-        input_video_url: { type: 'string', format: 'uri' },
-        callback_url: callbackUrlProp,
-      },
-      required: ['effect_code', 'input_video_url'],
-      additionalProperties: false,
-    },
-  },
-  {
-    code: 'video_extend',
-    publicName: 'Video extend',
-    description: 'Extend an existing video forward in time.',
-    supportsAsync: true,
-    parametersSchema: {
-      $schema: 'http://json-schema.org/draft-07/schema#',
-      type: 'object',
-      properties: klingVideoBaseProps({
-        input_video_url: { type: 'string', format: 'uri' },
-      }),
-      required: ['input_video_url'],
-      additionalProperties: false,
-    },
-  },
-  {
-    code: 'virtual_try_on',
-    publicName: 'Virtual try-on',
-    description: 'Place a clothing/product image onto a person image.',
-    supportsAsync: true,
-    parametersSchema: {
-      $schema: 'http://json-schema.org/draft-07/schema#',
-      type: 'object',
-      properties: {
-        person_image_url: { type: 'string', format: 'uri' },
-        product_image_url: { type: 'string', format: 'uri' },
-        callback_url: callbackUrlProp,
-      },
-      required: ['person_image_url', 'product_image_url'],
-      additionalProperties: false,
-    },
-  },
-  {
-    code: 'lip_sync',
-    publicName: 'Lip sync',
-    description: 'Sync lip movements of a video to an audio clip.',
-    supportsAsync: true,
-    parametersSchema: {
-      $schema: 'http://json-schema.org/draft-07/schema#',
-      type: 'object',
-      properties: {
-        input_video_url: { type: 'string', format: 'uri' },
-        audio_url: { type: 'string', format: 'uri' },
-        callback_url: callbackUrlProp,
-      },
-      required: ['input_video_url', 'audio_url'],
-      additionalProperties: false,
-    },
-  },
-  {
-    code: 'tts',
-    publicName: 'Text-to-speech',
-    description: 'Synthesize speech audio from text.',
-    supportsAsync: true,
-    parametersSchema: {
-      $schema: 'http://json-schema.org/draft-07/schema#',
-      type: 'object',
-      properties: {
-        text: { type: 'string', minLength: 1, maxLength: 5000 },
-        voice_id: { type: 'string' },
-        language: { type: 'string', minLength: 2, maxLength: 8 },
-        callback_url: callbackUrlProp,
-      },
-      required: ['text'],
-      additionalProperties: false,
-    },
-  },
+  // NOTE: Kling AI exposes many other endpoints upstream (image_generation,
+  // video_effect, video_extend, virtual_try_on, lip_sync, tts) — those used
+  // to be listed here too, but the worker adapter only implements
+  // text_to_video / image_to_video (SUPPORTED_METHODS in apps/worker/.../
+  // kling-ai.ts). Listing the others in the catalog leaks them into /docs
+  // and /api-explorer as if they were callable, then admit fails with
+  // provider_not_implemented when a client actually tries. Restore them
+  // here only when the adapter learns the corresponding endpoint.
 ];
 
 // --------------------------------------------------------------------------
@@ -557,6 +503,13 @@ const seedanceMethods: MethodSeed[] = [
       }),
       required: ['image'],
       additionalProperties: false,
+    },
+    exampleRequest: {
+      prompt: 'Camera slowly zooms in, subtle ambient motion, broadcast aesthetics',
+      image: 'https://example.com/first-frame.jpg',
+      resolution: '1080p',
+      duration_seconds: 5,
+      aspect_ratio: '16:9',
     },
   },
 ];
@@ -671,6 +624,12 @@ const openaiImageMethods: MethodSeed[] = [
       required: ['prompt', 'input_images'],
       additionalProperties: false,
     },
+    exampleRequest: {
+      prompt: 'Replace the sky with a dramatic thunderstorm',
+      input_images: ['https://example.com/landscape.png'],
+      resolution: '1024x1024',
+      mode: 'medium',
+    },
   },
 ];
 
@@ -750,6 +709,13 @@ const openrouterVideoMethods: MethodSeed[] = [
       }),
       required: ['image'],
       additionalProperties: false,
+    },
+    exampleRequest: {
+      prompt: 'Subtle parallax and atmospheric haze, cinematic lighting',
+      image: 'https://example.com/first-frame.jpg',
+      resolution: '1080p',
+      duration_seconds: 5,
+      aspect_ratio: '16:9',
     },
   },
 ];
@@ -880,12 +846,9 @@ export const initialCatalog: ProviderSeed[] = [
         sortOrder: 20,
         methods: klingMethods.map((m, i) => ({ ...m, sortOrder: (i + 1) * 10 })),
       },
-      {
-        code: 'kling-o1',
-        publicName: 'Kling O1',
-        sortOrder: 30,
-        methods: klingMethods.map((m, i) => ({ ...m, sortOrder: (i + 1) * 10 })),
-      },
+      // kling-o1 used to be listed here, but the worker adapter doesn't
+      // include it in SUPPORTED_MODELS — leaving it in the catalog only
+      // misleads clients. Restore when the adapter learns it.
     ],
   },
   {
