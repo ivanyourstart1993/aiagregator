@@ -75,6 +75,7 @@ model User {
   couponRedemptions   CouponRedemption[]
   apiRequests         ApiRequest[]
   tasks               Task[]
+  apiErrorLogs        ApiErrorLog[]
 
   @@index([role])
   @@index([status])
@@ -1538,4 +1539,40 @@ model EmailSuppression {
 
   @@index([email])
   @@map("email_suppression")
+}
+
+// 5xx error log captured by PublicErrorFilter for support-side diagnostics.
+// Populated best-effort (fire-and-forget) when the catch-all filter returns a
+// 5xx status — i.e. cases where the request blew up before/after the ApiRequest
+// row could be written. The admin UI exposes a per-user view so support can
+// answer "what stack did my client hit?" without combing through runtime logs.
+//
+// requestBodyPreview is sanitised at write time (long strings collapsed to
+// `<truncated: N>`, fields matching */key|secret|token|password|authorization
+// replaced with `<redacted>`) so we never store raw API keys or 5MB base64
+// payloads.
+//
+// Retention is enforced by ApiErrorLogRetentionCron (30 days by default).
+model ApiErrorLog {
+  id                 String   @id @default(cuid())
+  userId             String?  // null when error fires before auth resolution
+  apiKeyId           String?
+  requestId          String?  // pino-http request id for cross-referencing runtime logs
+  httpMethod         String
+  url                String   @db.Text
+  statusCode         Int
+  errorCode          String?
+  errorMessage       String?  @db.Text
+  errorStack         String?  @db.Text
+  requestBodyPreview Json?
+  ipAddress          String?
+  userAgent          String?  @db.Text
+  createdAt          DateTime @default(now())
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([userId, createdAt])
+  @@index([createdAt])
+  @@index([statusCode, createdAt])
+  @@map("api_error_log")
 }

@@ -8,7 +8,10 @@ import {
 } from '@nestjs/common';
 import { ErrorCode } from '@aiagg/shared';
 import type { Request, Response } from 'express';
+import type { Prisma } from '@aiagg/db';
 import { getRequestId } from '../middleware/request-id.middleware';
+import { PrismaService } from '../prisma/prisma.service';
+import { sanitiseRequestBody } from './sanitise-request-body';
 import {
   CurrencyMismatchError,
   InsufficientBalanceError,
@@ -488,14 +491,23 @@ function fromDomainError(e: Error): MappedDomainError | undefined {
   return undefined;
 }
 
+interface RequestWithAuth extends Request {
+  publicAuth?: { user?: { id?: string }; apiKey?: { id?: string } };
+  user?: { id?: string };
+}
+
 @Catch()
 export class PublicErrorFilter implements ExceptionFilter {
   private readonly logger = new Logger(PublicErrorFilter.name);
 
+  // PrismaService is optional so this filter can still be unit-tested without
+  // a full Nest container; in prod it's always wired via APP_FILTER DI.
+  constructor(private readonly prisma?: PrismaService) {}
+
   catch(exception: unknown, host: ArgumentsHost): void {
     const ctx = host.switchToHttp();
     const res = ctx.getResponse<Response>();
-    const req = ctx.getRequest<Request>();
+    const req = ctx.getRequest<RequestWithAuth>();
     const requestId = getRequestId();
 
     let status = HttpStatus.INTERNAL_SERVER_ERROR;
@@ -533,5 +545,62 @@ export class PublicErrorFilter implements ExceptionFilter {
     };
 
     res.status(status).json(envelope);
+
+    // Best-effort: capture 5xx into ApiErrorLog for the admin diagnostic
+    // surface. Runs AFTER the response is sent so the client isn't blocked
+    // on a DB write — and silently swallows its own errors so a logging
+    // failure can't poison the error path.
+    if (status >= 500 && this.prisma) {
+      this.persistErrorLog(req, status, shape, exception, requestId);
+    }
+  }
+
+  private persistErrorLog(
+    req: RequestWithAuth,
+    status: number,
+    shape: InternalErrorShape,
+    exception: unknown,
+    requestId: string | undefined,
+  ): void {
+    const stack =
+      exception instanceof Error
+        ? exception.stack?.slice(0, 16 * 1024) ?? null
+        : null;
+    const userId = req.publicAuth?.user?.id ?? req.user?.id ?? null;
+    const apiKeyId = req.publicAuth?.apiKey?.id ?? null;
+    const ip =
+      typeof req.ip === 'string'
+        ? req.ip
+        : Array.isArray(req.ips) && req.ips[0]
+          ? req.ips[0]
+          : null;
+    const userAgent = req.headers['user-agent'] ?? null;
+    const bodyPreview = sanitiseRequestBody(req.body);
+
+    const data: Prisma.ApiErrorLogUncheckedCreateInput = {
+      userId,
+      apiKeyId,
+      requestId: requestId ?? null,
+      httpMethod: req.method,
+      url: req.originalUrl ?? req.url,
+      statusCode: status,
+      errorCode: shape.code,
+      errorMessage: shape.message?.slice(0, 4000) ?? null,
+      errorStack: stack,
+      requestBodyPreview: bodyPreview as Prisma.InputJsonValue,
+      ipAddress: typeof ip === 'string' ? ip : null,
+      userAgent: typeof userAgent === 'string' ? userAgent.slice(0, 1000) : null,
+    };
+
+    // Defer to next tick so the response flush happens first.
+    setImmediate(() => {
+      this.prisma!.apiErrorLog.create({ data }).catch((err) => {
+        this.logger.warn(
+          `failed to persist ApiErrorLog: ${
+            err instanceof Error ? err.message : String(err)
+          }`,
+        );
+      });
+    });
   }
 }

@@ -14,6 +14,7 @@ import {
   MessageSquare,
   Send,
   Mail,
+  AlertCircle,
   type LucideIcon,
 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
@@ -29,6 +30,7 @@ interface Item {
     | 'providerAccounts'
     | 'providerProxies'
     | 'tasks'
+    | 'errorLogs'
     | 'coupons'
     | 'load'
     | 'settings'
@@ -46,6 +48,7 @@ export const NAV_ITEMS: Item[] = [
   { href: '/providers/accounts', icon: Boxes, key: 'providerAccounts', group: 'main' },
   { href: '/providers/proxies', icon: Shield, key: 'providerProxies', group: 'main' },
   { href: '/tasks', icon: ListTree, key: 'tasks', group: 'main' },
+  { href: '/error-logs', icon: AlertCircle, key: 'errorLogs', group: 'main' },
   { href: '/coupons', icon: Ticket, key: 'coupons', group: 'main' },
   { href: '/crm/leads', icon: Target, key: 'crmLeads', group: 'crm' },
   { href: '/crm/campaigns', icon: Mail, key: 'crmCampaigns', group: 'crm' },

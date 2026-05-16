@@ -789,6 +789,14 @@ export const serverApi = {
       items: { errorCode: string; count: number }[];
     }>(`/internal/admin/tasks/errors/summary?hours=${hours}`),
 
+  // ---- Admin error logs (5xx capture from PublicErrorFilter) ----
+  adminListErrorLogs: (filters?: AdminErrorLogFilters) =>
+    apiGet<AdminErrorLogsPage>(
+      `/internal/admin/error-logs${qs({ ...(filters ?? {}) })}`,
+    ),
+  adminGetErrorLog: (id: string) =>
+    apiGet<AdminErrorLogDetail>(`/internal/admin/error-logs/${id}`),
+
   // ---- Stage 15: Files ----
   adminListFiles: (filters?: FilesFilters) =>
     apiGet<FilesPage>(`/internal/admin/files${qs({ ...filters })}`),
@@ -1786,6 +1794,54 @@ export interface AdminTasksPage {
   total: number;
   page: number;
   pageSize: number;
+}
+
+// ---- Admin error logs (5xx capture) ----
+
+export interface AdminErrorLogFilters {
+  page?: number;
+  pageSize?: number;
+  userId?: string;
+  userEmail?: string;
+  statusCode?: number;
+  errorCode?: string;
+  from?: string;
+  to?: string;
+}
+
+export interface AdminErrorLogListItem {
+  id: string;
+  userId: string | null;
+  user: { id: string; email: string; name: string | null } | null;
+  apiKeyId: string | null;
+  requestId: string | null;
+  httpMethod: string;
+  url: string;
+  statusCode: number;
+  errorCode: string | null;
+  errorMessage: string | null;
+  ipAddress: string | null;
+  createdAt: string;
+}
+
+export interface AdminErrorLogsPage {
+  items: AdminErrorLogListItem[];
+  total: number;
+  page: number;
+  pageSize: number;
+}
+
+export interface AdminErrorLogDetail extends AdminErrorLogListItem {
+  user: {
+    id: string;
+    email: string;
+    name: string | null;
+    role: string;
+    status: string;
+  } | null;
+  errorStack: string | null;
+  requestBodyPreview: unknown;
+  userAgent: string | null;
 }
 
 export interface AdminTaskDetail {
