@@ -47,6 +47,17 @@ async function bootstrap(): Promise<void> {
     express.raw({ type: 'image/*', limit: '15mb' }),
   );
 
+  // Global JSON body parser. Default body-parser limit (100kb) is way too
+  // small for `image_edit` / `multi_reference_image` calls that send
+  // `input_images: ["data:image/png;base64,..."]` — a 3MB PNG becomes a
+  // ~4MB JSON payload and Express rejects the request with
+  // PayloadTooLargeError BEFORE the route handler runs, so admit never
+  // sees it and the user gets a generic 500 (root cause for the
+  // google_banana 500s on visavoapp@gmail.com). Lift to 25MB to cover
+  // multi_reference_image which can carry up to 6 reference images.
+  app.use(express.json({ limit: '25mb' }));
+  app.use(express.urlencoded({ extended: true, limit: '25mb' }));
+
   app.enableCors({
     origin: process.env.WEB_URL ?? 'http://localhost:3000',
     credentials: true,
