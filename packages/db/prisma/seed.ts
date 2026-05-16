@@ -475,6 +475,52 @@ async function seedGoogleTextPrices(tariffId: string): Promise<void> {
   console.log(`[seed] google_banana text/embedding prices upserted: ${count}`);
 }
 
+/**
+ * Existing google_banana ProviderAccount rows may have been created with a
+ * narrow `supportedMethodIds` / `supportedModelIds` whitelist covering the
+ * original image-only methods. After we add text_generation + embedding,
+ * pickAccount() filters those accounts out for the new methods → user-facing
+ * `provider_outage`. Two policies are safe here:
+ *   a) Clear the lists (empty = all methods/models for this provider allowed).
+ *   b) Append the new method/model IDs to the existing lists.
+ *
+ * We pick (a) since these scopes were never deliberately curated — they
+ * were captured at account-creation time and serve no audit purpose. The
+ * Provider relationship already constrains "which provider's models/methods
+ * are even reachable" by this account.
+ *
+ * Idempotent: only writes when the row actually carries a non-empty scope.
+ */
+async function rescopeBananaAccounts(): Promise<void> {
+  const provider = await prisma.provider.findUnique({
+    where: { code: 'google_banana' },
+  });
+  if (!provider) return;
+  const stale = await prisma.providerAccount.findMany({
+    where: {
+      providerId: provider.id,
+      OR: [
+        { supportedModelIds: { isEmpty: false } },
+        { supportedMethodIds: { isEmpty: false } },
+      ],
+    },
+    select: { id: true, name: true },
+  });
+  if (stale.length === 0) {
+    console.log('[seed] no banana accounts with narrow scope — nothing to rescope');
+    return;
+  }
+  await prisma.providerAccount.updateMany({
+    where: { id: { in: stale.map((s) => s.id) } },
+    data: { supportedModelIds: [], supportedMethodIds: [] },
+  });
+  console.log(
+    `[seed] rescoped ${stale.length} banana accounts (cleared model/method whitelists): ${stale
+      .map((s) => `${s.name}#${s.id.slice(-6)}`)
+      .join(', ')}`,
+  );
+}
+
 async function seedBananaProviderAccount(): Promise<void> {
   const apiKey = process.env.GOOGLE_BANANA_API_KEY;
   if (!apiKey) {
@@ -1125,6 +1171,7 @@ async function main(): Promise<void> {
   const tariffId = await seedDefaultTariff();
   await seedBananaPrices(tariffId);
   await seedGoogleTextPrices(tariffId);
+  await rescopeBananaAccounts();
   await seedBananaProviderAccount();
   await seedVeoPrices(tariffId);
   await seedVeoProviderAccount();
