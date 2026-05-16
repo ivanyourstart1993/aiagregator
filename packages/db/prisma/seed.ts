@@ -227,6 +227,8 @@ function methodCodeToBundleMethod(code: string): BundleMethod {
   if (code === 'text_to_video' || code === 'image_to_video') {
     return BundleMethod.VIDEO_GENERATION;
   }
+  if (code === 'text_generation') return BundleMethod.TEXT_GENERATION;
+  if (code === 'embedding') return BundleMethod.EMBEDDING;
   return BundleMethod.OTHER;
 }
 
@@ -354,6 +356,123 @@ async function seedBananaPrices(tariffId: string): Promise<void> {
     count++;
   }
   console.log(`[seed] banana tariff prices upserted: ${count}`);
+}
+
+// --------------------------------------------------------------------------
+// Gemini text + embedding pricing (Visavo / Vertex AI text methods).
+//
+// v1 plan: PER_REQUEST flat pricing — basePriceUnits covers a typical
+// small call. We also record inputPerTokenUnits/outputPerTokenUnits in the
+// same TariffBundlePrice row so a future switch to true PER_TOKEN
+// reconciliation is data-only (no migration). Reference Vertex public
+// pricing (per 1M tokens, USD):
+//   gemini-2.5-pro:        $1.25 in / $5.00 out
+//   gemini-2.5-flash:      $0.075 in / $0.30 out
+//   gemini-2.5-flash-lite: $0.05 in / $0.20 out
+//   text-embedding-004:    $0.025 in
+// Margin: ~50% on per-token rates; flat per-call assumes ~3k input +
+// ~1k output tokens for a typical chat completion (plenty of headroom for
+// product-catalog Q&A workloads).
+// --------------------------------------------------------------------------
+
+interface GoogleTextBundleSpec {
+  modelSlug: string;
+  methodCode: 'text_generation' | 'embedding';
+  bundleMethod: BundleMethod;
+  // PER_REQUEST basePriceUnits in cents (flat per call).
+  basePriceCents: number;
+  // Per-token rates in cents per 1M tokens (for future PER_TOKEN reconciliation).
+  inputCentsPer1M?: number;
+  outputCentsPer1M?: number;
+}
+
+const GOOGLE_TEXT_PRICES: GoogleTextBundleSpec[] = [
+  {
+    modelSlug: 'gemini-2.5-pro',
+    methodCode: 'text_generation',
+    bundleMethod: BundleMethod.TEXT_GENERATION,
+    basePriceCents: 2.5, // ~3k in × $1.25/M + ~1k out × $5/M + 50% margin ≈ $0.018 → bumped to $0.025
+    inputCentsPer1M: 187, // $1.25 × 1.5 margin = $1.875 → 187.5¢/M
+    outputCentsPer1M: 750, // $5 × 1.5 = $7.5 → 750¢/M
+  },
+  {
+    modelSlug: 'gemini-2.5-flash',
+    methodCode: 'text_generation',
+    bundleMethod: BundleMethod.TEXT_GENERATION,
+    basePriceCents: 0.3, // ~3k in × $0.075/M + ~1k out × $0.3/M + margin ≈ $0.001 → bumped to $0.003 floor
+    inputCentsPer1M: 11,
+    outputCentsPer1M: 45,
+  },
+  {
+    modelSlug: 'gemini-2.5-flash-lite',
+    methodCode: 'text_generation',
+    bundleMethod: BundleMethod.TEXT_GENERATION,
+    basePriceCents: 0.2,
+    inputCentsPer1M: 7,
+    outputCentsPer1M: 30,
+  },
+  {
+    modelSlug: 'text-embedding-004',
+    methodCode: 'embedding',
+    bundleMethod: BundleMethod.EMBEDDING,
+    basePriceCents: 0.1, // covers up to 100 inputs × ~500 tokens each at $0.025/M with margin
+    inputCentsPer1M: 4, // $0.025 × ~1.6 margin
+  },
+];
+
+async function seedGoogleTextPrices(tariffId: string): Promise<void> {
+  let count = 0;
+  for (const spec of GOOGLE_TEXT_PRICES) {
+    const bundleKey = buildBundleKey({
+      providerSlug: 'google_banana',
+      modelSlug: spec.modelSlug,
+      method: spec.bundleMethod,
+      mode: null,
+      resolution: null,
+      durationSeconds: null,
+      aspectRatio: null,
+    });
+    const bundle = await prisma.bundle.upsert({
+      where: { bundleKey },
+      create: {
+        bundleKey,
+        providerSlug: 'google_banana',
+        modelSlug: spec.modelSlug,
+        method: spec.bundleMethod,
+        unit: BundleUnit.PER_REQUEST,
+        isActive: true,
+      },
+      update: { isActive: true },
+    });
+    const basePriceUnits = BigInt(
+      Math.round(spec.basePriceCents * Number(CENTS_TO_NANO)),
+    );
+    const inputPerTokenUnits =
+      spec.inputCentsPer1M != null
+        ? BigInt(Math.round((spec.inputCentsPer1M * Number(CENTS_TO_NANO)) / 1_000_000))
+        : null;
+    const outputPerTokenUnits =
+      spec.outputCentsPer1M != null
+        ? BigInt(Math.round((spec.outputCentsPer1M * Number(CENTS_TO_NANO)) / 1_000_000))
+        : null;
+    await prisma.tariffBundlePrice.upsert({
+      where: { tariffId_bundleId: { tariffId, bundleId: bundle.id } },
+      create: {
+        tariffId,
+        bundleId: bundle.id,
+        basePriceUnits,
+        inputPerTokenUnits,
+        outputPerTokenUnits,
+      },
+      update: {
+        basePriceUnits,
+        inputPerTokenUnits,
+        outputPerTokenUnits,
+      },
+    });
+    count++;
+  }
+  console.log(`[seed] google_banana text/embedding prices upserted: ${count}`);
 }
 
 async function seedBananaProviderAccount(): Promise<void> {
@@ -1005,6 +1124,7 @@ async function main(): Promise<void> {
   await seedCatalog();
   const tariffId = await seedDefaultTariff();
   await seedBananaPrices(tariffId);
+  await seedGoogleTextPrices(tariffId);
   await seedBananaProviderAccount();
   await seedVeoPrices(tariffId);
   await seedVeoProviderAccount();

@@ -5,6 +5,7 @@
 import { Queue, Worker, type ConnectionOptions } from 'bullmq';
 import {
   ApiRequestStatus,
+  Prisma,
   ProviderAccountStatus,
   ProxyStatus,
   ReservationStatus,
@@ -575,6 +576,10 @@ async function succeedTask(
     methodCode: string;
     files: AdapterFile[];
     providerCostUnits?: bigint | null;
+    // For non-file outputs (text completions, embeddings) the adapter
+    // surfaces a payload via AdapterResult.meta. We merge it into
+    // Task.resultData alongside `files: []` so /v1/tasks/:id returns it.
+    resultMeta?: Record<string, unknown> | null;
   },
 ): Promise<void> {
   const expiresAt = new Date(Date.now() + RESULT_TTL_MS);
@@ -615,13 +620,17 @@ async function succeedTask(
       durationSeconds: c.durationSeconds?.toString() ?? null,
       expiresAt: c.expiresAt.toISOString(),
     }));
+    const resultData: Record<string, unknown> = { files: fileViews };
+    if (opts.resultMeta && typeof opts.resultMeta === 'object') {
+      Object.assign(resultData, opts.resultMeta);
+    }
     await tx.task.update({
       where: { id: opts.taskId },
       data: {
         status: TaskStatus.SUCCEEDED,
         finishedAt: new Date(),
         attempts: { increment: 1 },
-        resultData: { files: fileViews },
+        resultData: resultData as Prisma.InputJsonValue,
         resultFiles: fileViews,
       },
     });
@@ -927,6 +936,7 @@ export function createGenerationWorker(opts: {
             methodCode: method.code,
             files: result.files ?? [],
             providerCostUnits,
+            resultMeta: result.meta ?? null,
           });
           await enqueueCallback(task.apiRequestId);
           return;

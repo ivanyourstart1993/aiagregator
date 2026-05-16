@@ -93,7 +93,7 @@ function isImagenModel(catalogModelCode: string): boolean {
 
 const VERTEX_LOCATION = 'us-central1';
 
-const SUPPORTED_MODELS = new Set([
+const SUPPORTED_IMAGE_MODELS = new Set([
   // Gemini family (Nano Banana). text_to_image and image_edit go through
   // Vertex `generateContent` on Vertex SA path or AI Studio on key path.
   'gemini-2.5-flash-image',
@@ -106,24 +106,47 @@ const SUPPORTED_MODELS = new Set([
   'imagen-4.0-ultra-generate-001',
 ]);
 
-const SUPPORTED_METHODS = new Set([
+const SUPPORTED_TEXT_MODELS = new Set([
+  'gemini-2.5-pro',
+  'gemini-2.5-flash',
+  'gemini-2.5-flash-lite',
+]);
+
+const SUPPORTED_EMBEDDING_MODELS = new Set(['text-embedding-004']);
+
+const SUPPORTED_IMAGE_METHODS = new Set([
   'text_to_image',
   'image_edit',
   'image_to_image',
   'multi_reference_image',
 ]);
 
+const SUPPORTED_TEXT_METHODS = new Set(['text_generation']);
+const SUPPORTED_EMBEDDING_METHODS = new Set(['embedding']);
+
 interface GeminiPart {
   inlineData?: { mimeType?: string; data?: string };
   text?: string;
+  functionCall?: { name: string; args?: Record<string, unknown> };
 }
 
 interface GeminiResponse {
   candidates?: Array<{
-    content?: { parts?: GeminiPart[] };
+    content?: { role?: string; parts?: GeminiPart[] };
     finishReason?: string;
   }>;
   promptFeedback?: { blockReason?: string };
+  usageMetadata?: {
+    promptTokenCount?: number;
+    candidatesTokenCount?: number;
+    totalTokenCount?: number;
+  };
+  error?: { code?: number; status?: string; message?: string };
+}
+
+interface GeminiEmbeddingResponse {
+  embedding?: { values?: number[] };
+  embeddings?: Array<{ values?: number[] }>;
   error?: { code?: number; status?: string; message?: string };
 }
 
@@ -163,6 +186,126 @@ async function fetchAsBase64(
   }
 }
 
+// --- Gemini text helpers (chat completion / structured output / tools) ---
+
+interface GeminiMessageContent {
+  role: 'user' | 'model';
+  parts: Array<{ text?: string }>;
+}
+
+function buildGeminiContents(
+  params: Record<string, unknown>,
+): GeminiMessageContent[] {
+  const messages = params['messages'];
+  if (Array.isArray(messages) && messages.length > 0) {
+    const out: GeminiMessageContent[] = [];
+    for (const raw of messages) {
+      if (!raw || typeof raw !== 'object') continue;
+      const m = raw as Record<string, unknown>;
+      const role = m['role'];
+      if (role === 'system') continue;
+      const geminiRole: 'user' | 'model' = role === 'assistant' ? 'model' : 'user';
+      const content = m['content'];
+      const parts: Array<{ text?: string }> = [];
+      if (typeof content === 'string') {
+        parts.push({ text: content });
+      } else if (Array.isArray(content)) {
+        for (const item of content) {
+          if (!item || typeof item !== 'object') continue;
+          const it = item as Record<string, unknown>;
+          if (it['type'] === 'text' && typeof it['text'] === 'string') {
+            parts.push({ text: it['text'] as string });
+          }
+        }
+      }
+      if (parts.length > 0) out.push({ role: geminiRole, parts });
+    }
+    if (out.length > 0) return out;
+  }
+  const prompt = params['prompt'];
+  if (typeof prompt === 'string' && prompt.length > 0) {
+    return [{ role: 'user', parts: [{ text: prompt }] }];
+  }
+  throw new AdapterError(
+    'validation',
+    'text_generation requires either `messages` or `prompt`',
+  );
+}
+
+function buildSystemInstruction(
+  params: Record<string, unknown>,
+): { parts: Array<{ text: string }> } | null {
+  const sys = params['system_instruction'] ?? params['systemInstruction'];
+  if (typeof sys === 'string' && sys.length > 0) {
+    return { parts: [{ text: sys }] };
+  }
+  const messages = params['messages'];
+  if (Array.isArray(messages)) {
+    const sysParts: Array<{ text: string }> = [];
+    for (const raw of messages) {
+      if (!raw || typeof raw !== 'object') continue;
+      const m = raw as Record<string, unknown>;
+      if (m['role'] === 'system' && typeof m['content'] === 'string') {
+        sysParts.push({ text: m['content'] as string });
+      }
+    }
+    if (sysParts.length > 0) return { parts: sysParts };
+  }
+  return null;
+}
+
+function buildTools(
+  params: Record<string, unknown>,
+): Array<{ functionDeclarations: Array<Record<string, unknown>> }> | null {
+  const tools = params['tools'];
+  if (!Array.isArray(tools) || tools.length === 0) return null;
+  const decls: Array<Record<string, unknown>> = [];
+  for (const raw of tools) {
+    if (!raw || typeof raw !== 'object') continue;
+    const t = raw as Record<string, unknown>;
+    if (t['type'] !== 'function') continue;
+    const fn = t['function'] as Record<string, unknown> | undefined;
+    if (!fn || typeof fn['name'] !== 'string') continue;
+    const decl: Record<string, unknown> = { name: fn['name'] };
+    if (typeof fn['description'] === 'string') decl.description = fn['description'];
+    if (fn['parameters'] && typeof fn['parameters'] === 'object') {
+      decl.parameters = fn['parameters'];
+    }
+    decls.push(decl);
+  }
+  if (decls.length === 0) return null;
+  return [{ functionDeclarations: decls }];
+}
+
+function buildToolConfig(choice: unknown): Record<string, unknown> {
+  if (typeof choice === 'string') {
+    const mode =
+      choice === 'auto'
+        ? 'AUTO'
+        : choice === 'none'
+          ? 'NONE'
+          : choice === 'required'
+            ? 'ANY'
+            : 'AUTO';
+    return { functionCallingConfig: { mode } };
+  }
+  if (choice && typeof choice === 'object') {
+    const c = choice as Record<string, unknown>;
+    if (c['type'] === 'function') {
+      const fn = c['function'] as Record<string, unknown> | undefined;
+      if (fn && typeof fn['name'] === 'string') {
+        return {
+          functionCallingConfig: {
+            mode: 'ANY',
+            allowedFunctionNames: [fn['name']],
+          },
+        };
+      }
+    }
+  }
+  return { functionCallingConfig: { mode: 'AUTO' } };
+}
+
 async function buildInlineImages(
   params: Record<string, unknown>,
 ): Promise<Array<{ inlineData: { mimeType: string; data: string } }>> {
@@ -194,10 +337,49 @@ export class GoogleBananaAdapter implements ProviderAdapter {
   constructor(private readonly storage: WorkerStorage) {}
 
   supports(modelCode: string, methodCode: string): boolean {
-    return SUPPORTED_MODELS.has(modelCode) && SUPPORTED_METHODS.has(methodCode);
+    if (
+      SUPPORTED_IMAGE_MODELS.has(modelCode) &&
+      SUPPORTED_IMAGE_METHODS.has(methodCode)
+    ) {
+      return true;
+    }
+    if (
+      SUPPORTED_TEXT_MODELS.has(modelCode) &&
+      SUPPORTED_TEXT_METHODS.has(methodCode)
+    ) {
+      return true;
+    }
+    if (
+      SUPPORTED_EMBEDDING_MODELS.has(modelCode) &&
+      SUPPORTED_EMBEDDING_METHODS.has(methodCode)
+    ) {
+      return true;
+    }
+    return false;
   }
 
   async execute(ctx: AdapterContext): Promise<AdapterResult> {
+    // Text + embedding methods go via AI Studio (API key) regardless of
+    // whether the account also has a Service Account — Vertex SA path for
+    // text/embedding is on the roadmap. Image methods continue to prefer SA
+    // if available (Vertex billing) and fall back to AI Studio.
+    if (
+      SUPPORTED_EMBEDDING_METHODS.has(ctx.method.code) ||
+      SUPPORTED_TEXT_METHODS.has(ctx.method.code)
+    ) {
+      const apiKey = this.extractApiKey(ctx);
+      if (!apiKey) {
+        throw new AdapterError(
+          'invalid_credentials',
+          'google_banana text/embedding requires apiKey credential',
+        );
+      }
+      if (SUPPORTED_EMBEDDING_METHODS.has(ctx.method.code)) {
+        return this.executeEmbedding(ctx, apiKey);
+      }
+      return this.executeTextGeneration(ctx, apiKey);
+    }
+
     // Service Account credential? → Vertex AI / Imagen path (uses Cloud Billing).
     const sa = this.extractServiceAccount(ctx);
     if (sa) {
@@ -337,7 +519,7 @@ export class GoogleBananaAdapter implements ProviderAdapter {
     sa: ServiceAccountKey,
   ): Promise<AdapterResult> {
     const { method } = ctx;
-    if (!SUPPORTED_METHODS.has(method.code)) {
+    if (!SUPPORTED_IMAGE_METHODS.has(method.code)) {
       throw new AdapterError('validation', `unsupported method: ${method.code}`);
     }
 
@@ -585,12 +767,17 @@ export class GoogleBananaAdapter implements ProviderAdapter {
     }
   }
 
-  private async callApi(
+  /**
+   * Low-level POST → JSON. Maps Google HTTP errors → AdapterError but does
+   * NOT inspect candidate content (no SAFETY/promptFeedback checks). Shared
+   * by image (via callApi), text completion, and embeddings.
+   */
+  private async callRawApi(
     url: string,
     body: unknown,
     agent: HttpsProxyAgent<string> | undefined,
     extraHeaders?: Record<string, string>,
-  ): Promise<GeminiResponse> {
+  ): Promise<Record<string, unknown>> {
     let res: Response;
     try {
       const init: RequestInit & { agent?: unknown } = {
@@ -607,18 +794,21 @@ export class GoogleBananaAdapter implements ProviderAdapter {
       );
     }
     const text = await res.text();
-    let parsed: GeminiResponse;
+    let parsed: Record<string, unknown>;
     try {
-      parsed = text ? (JSON.parse(text) as GeminiResponse) : {};
+      parsed = text ? (JSON.parse(text) as Record<string, unknown>) : {};
     } catch {
       parsed = {};
     }
     if (!res.ok) {
       const status = res.status;
+      const errObj =
+        (parsed.error as { message?: string; status?: string } | undefined) ??
+        undefined;
       const message =
-        parsed.error?.message ??
+        errObj?.message ??
         `google returned status ${status}: ${text.slice(0, 500)}`;
-      const code = parsed.error?.status ?? '';
+      const code = errObj?.status ?? '';
       if (status === 401 || status === 403) {
         throw new AdapterError('invalid_credentials', message);
       }
@@ -652,6 +842,21 @@ export class GoogleBananaAdapter implements ProviderAdapter {
       }
       throw new AdapterError('unknown', message);
     }
+    return parsed;
+  }
+
+  private async callApi(
+    url: string,
+    body: unknown,
+    agent: HttpsProxyAgent<string> | undefined,
+    extraHeaders?: Record<string, string>,
+  ): Promise<GeminiResponse> {
+    const parsed = (await this.callRawApi(
+      url,
+      body,
+      agent,
+      extraHeaders,
+    )) as GeminiResponse;
     if (parsed.promptFeedback?.blockReason) {
       throw new AdapterError(
         'content_rejected',
@@ -663,6 +868,185 @@ export class GoogleBananaAdapter implements ProviderAdapter {
       throw new AdapterError('content_rejected', `finishReason=${finish}`);
     }
     return parsed;
+  }
+
+  // -----------------------------------------------------------------------
+  // Text generation (Gemini 2.5 chat completion / structured output / tools)
+  // -----------------------------------------------------------------------
+  private async executeTextGeneration(
+    ctx: AdapterContext,
+    apiKey: string,
+  ): Promise<AdapterResult> {
+    const { model, params } = ctx;
+    const contents = buildGeminiContents(params);
+    const systemInstruction = buildSystemInstruction(params);
+    const generationConfig: Record<string, unknown> = {};
+    const temperature = params['temperature'];
+    const topP = params['top_p'] ?? params['topP'];
+    const topK = params['top_k'] ?? params['topK'];
+    const maxOut = params['max_output_tokens'] ?? params['maxOutputTokens'];
+    const stop = params['stop_sequences'] ?? params['stopSequences'];
+    const respMime = params['response_mime_type'] ?? params['responseMimeType'];
+    const respSchema = params['response_schema'] ?? params['responseSchema'];
+    if (typeof temperature === 'number') generationConfig.temperature = temperature;
+    if (typeof topP === 'number') generationConfig.topP = topP;
+    if (typeof topK === 'number') generationConfig.topK = topK;
+    if (typeof maxOut === 'number') generationConfig.maxOutputTokens = maxOut;
+    if (Array.isArray(stop) && stop.every((s) => typeof s === 'string')) {
+      generationConfig.stopSequences = stop;
+    }
+    if (respSchema && typeof respSchema === 'object') {
+      generationConfig.responseMimeType = 'application/json';
+      generationConfig.responseSchema = respSchema;
+    } else if (typeof respMime === 'string') {
+      generationConfig.responseMimeType = respMime;
+    }
+
+    const body: Record<string, unknown> = { contents, generationConfig };
+    if (systemInstruction) body.systemInstruction = systemInstruction;
+    const tools = buildTools(params);
+    if (tools) body.tools = tools;
+    const toolChoice = params['tool_choice'] ?? params['toolChoice'];
+    if (toolChoice !== undefined) {
+      body.toolConfig = buildToolConfig(toolChoice);
+    }
+
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model.code)}:generateContent?key=${encodeURIComponent(apiKey)}`;
+    const agent = this.buildProxyAgent(ctx);
+    const response = (await this.callRawApi(url, body, agent)) as GeminiResponse;
+
+    const candidate = response.candidates?.[0];
+    const parts = candidate?.content?.parts ?? [];
+    let text = '';
+    const toolCalls: Array<{ name: string; arguments: Record<string, unknown> }> = [];
+    for (const part of parts) {
+      if (typeof part.text === 'string') text += part.text;
+      if (part.functionCall) {
+        toolCalls.push({
+          name: part.functionCall.name,
+          arguments: part.functionCall.args ?? {},
+        });
+      }
+    }
+    if (!text && toolCalls.length === 0) {
+      throw new AdapterError(
+        'unknown',
+        `google response contained no text or tool calls (finishReason=${candidate?.finishReason ?? 'unknown'})`,
+      );
+    }
+    const usage = response.usageMetadata;
+    const meta: Record<string, unknown> = {
+      text,
+      finish_reason: candidate?.finishReason ?? null,
+      model: model.code,
+      usage: usage
+        ? {
+            input_tokens: usage.promptTokenCount ?? 0,
+            output_tokens: usage.candidatesTokenCount ?? 0,
+            total_tokens: usage.totalTokenCount ?? 0,
+          }
+        : null,
+    };
+    if (toolCalls.length > 0) meta.tool_calls = toolCalls;
+    return { meta };
+  }
+
+  // -----------------------------------------------------------------------
+  // Text embedding
+  // -----------------------------------------------------------------------
+  private async executeEmbedding(
+    ctx: AdapterContext,
+    apiKey: string,
+  ): Promise<AdapterResult> {
+    const { model, params } = ctx;
+    const inputRaw = params['input'];
+    const inputs: string[] = [];
+    if (typeof inputRaw === 'string') {
+      inputs.push(inputRaw);
+    } else if (Array.isArray(inputRaw)) {
+      for (const v of inputRaw) {
+        if (typeof v === 'string' && v.length > 0) inputs.push(v);
+      }
+    }
+    if (inputs.length === 0) {
+      throw new AdapterError(
+        'validation',
+        'embedding input must be a non-empty string or array of strings',
+      );
+    }
+    if (inputs.length > 100) {
+      throw new AdapterError(
+        'validation',
+        `embedding input array exceeds maximum size (got ${inputs.length}, max 100)`,
+      );
+    }
+
+    const taskType =
+      typeof params['task_type'] === 'string'
+        ? (params['task_type'] as string)
+        : typeof params['taskType'] === 'string'
+          ? (params['taskType'] as string)
+          : undefined;
+    const title =
+      typeof params['title'] === 'string' ? (params['title'] as string) : undefined;
+    const outputDim =
+      typeof params['output_dimensionality'] === 'number'
+        ? (params['output_dimensionality'] as number)
+        : typeof params['outputDimensionality'] === 'number'
+          ? (params['outputDimensionality'] as number)
+          : undefined;
+
+    const buildRequest = (text: string): Record<string, unknown> => {
+      const req: Record<string, unknown> = {
+        model: `models/${model.code}`,
+        content: { parts: [{ text }] },
+      };
+      if (taskType) req.taskType = taskType;
+      if (title && taskType === 'RETRIEVAL_DOCUMENT') req.title = title;
+      if (typeof outputDim === 'number' && outputDim > 0) req.outputDimensionality = outputDim;
+      return req;
+    };
+
+    const agent = this.buildProxyAgent(ctx);
+    const embeddings: number[][] = [];
+
+    if (inputs.length === 1) {
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model.code)}:embedContent?key=${encodeURIComponent(apiKey)}`;
+      const single = buildRequest(inputs[0]!);
+      delete single.model; // single endpoint rejects `model` in body
+      const resp = (await this.callRawApi(url, single, agent)) as GeminiEmbeddingResponse;
+      const values = resp.embedding?.values;
+      if (!Array.isArray(values)) {
+        throw new AdapterError('unknown', 'google returned no embedding values');
+      }
+      embeddings.push(values);
+    } else {
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model.code)}:batchEmbedContents?key=${encodeURIComponent(apiKey)}`;
+      const body = { requests: inputs.map((t) => buildRequest(t)) };
+      const resp = (await this.callRawApi(url, body, agent)) as GeminiEmbeddingResponse;
+      const list = resp.embeddings ?? [];
+      if (list.length !== inputs.length) {
+        throw new AdapterError(
+          'unknown',
+          `google returned ${list.length} embeddings for ${inputs.length} inputs`,
+        );
+      }
+      for (const e of list) {
+        if (!Array.isArray(e.values)) {
+          throw new AdapterError('unknown', 'google returned embedding without values');
+        }
+        embeddings.push(e.values);
+      }
+    }
+
+    return {
+      meta: {
+        model: model.code,
+        embeddings,
+        dimension: embeddings[0]?.length ?? 0,
+        count: embeddings.length,
+      },
+    };
   }
 
   private extractFiles(

@@ -191,6 +191,250 @@ const bananaMethods: MethodSeed[] = [
 ];
 
 // --------------------------------------------------------------------------
+// Gemini text methods (chat completion, structured output, function calling)
+// + text embeddings. Shares the google_banana provider — same API key, just
+// different model codes and endpoints (:generateContent vs :embedContent on
+// AI Studio; equivalently Vertex AI for SA-credentialled accounts).
+//
+// Pricing note (v1): metered at PER_REQUEST flat with a per-call cap. Token
+// reconciliation (PER_TOKEN_INPUT + PER_TOKEN_OUTPUT) is a planned upgrade
+// — meanwhile the adapter records usage in `meta.usage` for audit. For
+// large-volume embedding workloads contact support.
+// --------------------------------------------------------------------------
+
+// Subset of the OpenAI-style ChatCompletion message shape. We accept the same
+// roles Gemini understands so existing OpenAI client code is easy to port.
+const chatMessageSchema = {
+  type: 'object',
+  required: ['role', 'content'],
+  properties: {
+    role: {
+      type: 'string',
+      enum: ['system', 'user', 'assistant', 'tool'],
+    },
+    content: {
+      oneOf: [
+        { type: 'string' },
+        {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              type: { type: 'string', enum: ['text', 'image_url'] },
+              text: { type: 'string' },
+              image_url: {
+                type: 'object',
+                properties: { url: { type: 'string', format: 'uri' } },
+              },
+            },
+          },
+        },
+      ],
+    },
+    name: { type: 'string' },
+    tool_call_id: { type: 'string' },
+  },
+} as const;
+
+const toolDefinitionSchema = {
+  type: 'object',
+  required: ['type', 'function'],
+  properties: {
+    type: { type: 'string', enum: ['function'] },
+    function: {
+      type: 'object',
+      required: ['name'],
+      properties: {
+        name: { type: 'string' },
+        description: { type: 'string' },
+        parameters: { type: 'object', description: 'JSON Schema for function arguments.' },
+      },
+    },
+  },
+} as const;
+
+const geminiTextMethods: MethodSeed[] = [
+  {
+    code: 'text_generation',
+    publicName: 'Text generation (chat completion)',
+    description:
+      'Chat-style text completion with the Gemini 2.5 family. Supports system/user/assistant messages, structured JSON output (response_schema), and function calling (tools). Compatible with the OpenAI ChatCompletion request shape for easy migration.',
+    supportsSync: true,
+    supportsAsync: true,
+    parametersSchema: {
+      $schema: 'http://json-schema.org/draft-07/schema#',
+      type: 'object',
+      'x-bundle-unit': 'PER_REQUEST',
+      properties: {
+        messages: {
+          type: 'array',
+          minItems: 1,
+          maxItems: 200,
+          items: chatMessageSchema,
+          description:
+            'Chat history. Provide either `messages` OR `prompt`; if both are present `messages` wins.',
+        },
+        prompt: {
+          type: 'string',
+          maxLength: 200_000,
+          description:
+            'Convenience alternative to `messages`: a single user turn. Ignored when `messages` is set.',
+        },
+        system_instruction: {
+          type: 'string',
+          maxLength: 32_000,
+          description:
+            'System-level guidance prepended to the prompt (separate from the messages array).',
+        },
+        temperature: { type: 'number', minimum: 0, maximum: 2, default: 1 },
+        top_p: { type: 'number', minimum: 0, maximum: 1 },
+        top_k: { type: 'integer', minimum: 1, maximum: 100 },
+        max_output_tokens: { type: 'integer', minimum: 1, maximum: 65_535 },
+        stop_sequences: {
+          type: 'array',
+          items: { type: 'string' },
+          maxItems: 5,
+        },
+        response_mime_type: {
+          type: 'string',
+          enum: ['text/plain', 'application/json'],
+          description:
+            'Force the model to emit JSON when set to "application/json". Pair with `response_schema` for strict structured output.',
+        },
+        response_schema: {
+          type: 'object',
+          description:
+            'JSON Schema (draft-07 subset) the response must conform to. Implies `response_mime_type=application/json`.',
+        },
+        tools: {
+          type: 'array',
+          items: toolDefinitionSchema,
+          maxItems: 32,
+          description:
+            'Function-calling: list of tools the model may invoke. The response contains tool_calls in `meta.tool_calls`.',
+        },
+        tool_choice: {
+          oneOf: [
+            { type: 'string', enum: ['auto', 'none', 'required'] },
+            {
+              type: 'object',
+              required: ['type', 'function'],
+              properties: {
+                type: { type: 'string', enum: ['function'] },
+                function: {
+                  type: 'object',
+                  required: ['name'],
+                  properties: { name: { type: 'string' } },
+                },
+              },
+            },
+          ],
+        },
+        callback_url: callbackUrlProp,
+      },
+      additionalProperties: false,
+    },
+    exampleRequest: {
+      messages: [
+        { role: 'system', content: 'You are a helpful product catalog assistant.' },
+        { role: 'user', content: 'Find SKU "6204-2RS" and return its specs as JSON.' },
+      ],
+      response_mime_type: 'application/json',
+      response_schema: {
+        type: 'object',
+        properties: {
+          sku: { type: 'string' },
+          name: { type: 'string' },
+          inner_diameter_mm: { type: 'number' },
+          outer_diameter_mm: { type: 'number' },
+          width_mm: { type: 'number' },
+        },
+        required: ['sku'],
+      },
+      temperature: 0.2,
+      max_output_tokens: 512,
+    },
+    exampleResponse: {
+      task_id: 'tsk_01H...',
+      status: 'queued',
+    },
+  },
+  {
+    code: 'embedding',
+    publicName: 'Text embedding',
+    description:
+      'Generate a dense vector embedding for a piece of text. Useful for semantic search, classification, RAG, and recommendation. Input may be a single string or an array (batch). Returns one vector per input in `meta.embeddings`.',
+    supportsSync: true,
+    supportsAsync: true,
+    parametersSchema: {
+      $schema: 'http://json-schema.org/draft-07/schema#',
+      type: 'object',
+      'x-bundle-unit': 'PER_REQUEST',
+      properties: {
+        input: {
+          oneOf: [
+            { type: 'string', minLength: 1, maxLength: 200_000 },
+            {
+              type: 'array',
+              minItems: 1,
+              maxItems: 100,
+              items: { type: 'string', minLength: 1, maxLength: 200_000 },
+              description:
+                'Batch up to 100 inputs per call. For larger jobs make multiple calls — a true batch endpoint is on the roadmap.',
+            },
+          ],
+          description: 'The text(s) to embed.',
+        },
+        task_type: {
+          type: 'string',
+          enum: [
+            'RETRIEVAL_QUERY',
+            'RETRIEVAL_DOCUMENT',
+            'SEMANTIC_SIMILARITY',
+            'CLASSIFICATION',
+            'CLUSTERING',
+            'QUESTION_ANSWERING',
+            'FACT_VERIFICATION',
+            'CODE_RETRIEVAL_QUERY',
+          ],
+          default: 'RETRIEVAL_DOCUMENT',
+          description:
+            'Hint to the embedding model about the downstream use case. Improves retrieval quality.',
+        },
+        title: {
+          type: 'string',
+          maxLength: 4_000,
+          description:
+            'Optional document title — only used when task_type=RETRIEVAL_DOCUMENT.',
+        },
+        output_dimensionality: {
+          type: 'integer',
+          minimum: 8,
+          maximum: 768,
+          description:
+            'Truncate the output vector to N dimensions (default: model native — 768).',
+        },
+        callback_url: callbackUrlProp,
+      },
+      required: ['input'],
+      additionalProperties: false,
+    },
+    exampleRequest: {
+      input: [
+        'SKF 6204-2RS deep groove ball bearing, 20mm bore, ZZ shielded',
+        'NSK 6205-RS sealed bearing 25mm bore',
+      ],
+      task_type: 'RETRIEVAL_DOCUMENT',
+      output_dimensionality: 768,
+    },
+    exampleResponse: {
+      task_id: 'tsk_01H...',
+      status: 'queued',
+    },
+  },
+];
+
+// --------------------------------------------------------------------------
 // Veo methods
 // --------------------------------------------------------------------------
 
@@ -789,6 +1033,39 @@ export const initialCatalog: ProviderSeed[] = [
             sortOrder: 10,
           },
         ],
+      },
+      // ---------- Gemini text + embedding models -----------------------
+      {
+        code: 'gemini-2.5-pro',
+        publicName: 'Gemini 2.5 Pro',
+        description:
+          'Top-tier reasoning model — best for complex multi-step tasks, code, structured extraction. 1M token context, JSON & function-calling support.',
+        sortOrder: 100,
+        methods: [{ ...geminiTextMethods[0]!, sortOrder: 10 }], // text_generation
+      },
+      {
+        code: 'gemini-2.5-flash',
+        publicName: 'Gemini 2.5 Flash',
+        description:
+          'Fast, capable workhorse model. 1M token context. Best price/performance for chat completion, summarisation, JSON extraction at scale.',
+        sortOrder: 110,
+        methods: [{ ...geminiTextMethods[0]!, sortOrder: 10 }],
+      },
+      {
+        code: 'gemini-2.5-flash-lite',
+        publicName: 'Gemini 2.5 Flash Lite',
+        description:
+          'Cheapest Gemini 2.5 tier — high throughput, latency-sensitive workloads. 1M token context.',
+        sortOrder: 120,
+        methods: [{ ...geminiTextMethods[0]!, sortOrder: 10 }],
+      },
+      {
+        code: 'text-embedding-004',
+        publicName: 'Text Embedding 004',
+        description:
+          'Google text-embedding-004 — 768-dim multilingual embeddings (truncatable). Use for semantic search, RAG, classification, clustering. Inputs up to 2048 tokens each, up to 100 inputs per call.',
+        sortOrder: 130,
+        methods: [{ ...geminiTextMethods[1]!, sortOrder: 10 }], // embedding
       },
     ],
   },
