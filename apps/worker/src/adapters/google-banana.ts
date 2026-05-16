@@ -359,19 +359,26 @@ export class GoogleBananaAdapter implements ProviderAdapter {
   }
 
   async execute(ctx: AdapterContext): Promise<AdapterResult> {
-    // Text + embedding methods go via AI Studio (API key) regardless of
-    // whether the account also has a Service Account — Vertex SA path for
-    // text/embedding is on the roadmap. Image methods continue to prefer SA
-    // if available (Vertex billing) and fall back to AI Studio.
+    // Text + embedding methods support BOTH credential paths:
+    //   - Service Account → Vertex AI (preferred when SA present; Cloud billing)
+    //   - API key → AI Studio (fallback for key-only accounts)
+    // Image methods keep their existing preference (SA-first via executeVertex).
     if (
       SUPPORTED_EMBEDDING_METHODS.has(ctx.method.code) ||
       SUPPORTED_TEXT_METHODS.has(ctx.method.code)
     ) {
+      const sa = this.extractServiceAccount(ctx);
+      if (sa) {
+        if (SUPPORTED_EMBEDDING_METHODS.has(ctx.method.code)) {
+          return this.executeEmbeddingVertex(ctx, sa);
+        }
+        return this.executeTextGenerationVertex(ctx, sa);
+      }
       const apiKey = this.extractApiKey(ctx);
       if (!apiKey) {
         throw new AdapterError(
           'invalid_credentials',
-          'google_banana text/embedding requires apiKey credential',
+          'google_banana text/embedding requires apiKey OR serviceAccount credential',
         );
       }
       if (SUPPORTED_EMBEDDING_METHODS.has(ctx.method.code)) {
@@ -873,11 +880,13 @@ export class GoogleBananaAdapter implements ProviderAdapter {
   // -----------------------------------------------------------------------
   // Text generation (Gemini 2.5 chat completion / structured output / tools)
   // -----------------------------------------------------------------------
-  private async executeTextGeneration(
-    ctx: AdapterContext,
-    apiKey: string,
-  ): Promise<AdapterResult> {
-    const { model, params } = ctx;
+  /**
+   * Build the generateContent request body — shared by AI Studio (key auth)
+   * and Vertex AI (SA bearer) paths since both use the same body shape.
+   */
+  private buildTextGenerationBody(
+    params: Record<string, unknown>,
+  ): Record<string, unknown> {
     const contents = buildGeminiContents(params);
     const systemInstruction = buildSystemInstruction(params);
     const generationConfig: Record<string, unknown> = {};
@@ -901,7 +910,6 @@ export class GoogleBananaAdapter implements ProviderAdapter {
     } else if (typeof respMime === 'string') {
       generationConfig.responseMimeType = respMime;
     }
-
     const body: Record<string, unknown> = { contents, generationConfig };
     if (systemInstruction) body.systemInstruction = systemInstruction;
     const tools = buildTools(params);
@@ -910,11 +918,13 @@ export class GoogleBananaAdapter implements ProviderAdapter {
     if (toolChoice !== undefined) {
       body.toolConfig = buildToolConfig(toolChoice);
     }
+    return body;
+  }
 
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model.code)}:generateContent?key=${encodeURIComponent(apiKey)}`;
-    const agent = this.buildProxyAgent(ctx);
-    const response = (await this.callRawApi(url, body, agent)) as GeminiResponse;
-
+  private extractTextGenerationMeta(
+    response: GeminiResponse,
+    modelCode: string,
+  ): Record<string, unknown> {
     const candidate = response.candidates?.[0];
     const parts = candidate?.content?.parts ?? [];
     let text = '';
@@ -938,7 +948,7 @@ export class GoogleBananaAdapter implements ProviderAdapter {
     const meta: Record<string, unknown> = {
       text,
       finish_reason: candidate?.finishReason ?? null,
-      model: model.code,
+      model: modelCode,
       usage: usage
         ? {
             input_tokens: usage.promptTokenCount ?? 0,
@@ -948,17 +958,49 @@ export class GoogleBananaAdapter implements ProviderAdapter {
         : null,
     };
     if (toolCalls.length > 0) meta.tool_calls = toolCalls;
-    return { meta };
+    return meta;
   }
 
-  // -----------------------------------------------------------------------
-  // Text embedding
-  // -----------------------------------------------------------------------
-  private async executeEmbedding(
+  private async executeTextGenerationVertex(
+    ctx: AdapterContext,
+    sa: ServiceAccountKey,
+  ): Promise<AdapterResult> {
+    const { model, params } = ctx;
+    const body = this.buildTextGenerationBody(params);
+    // Vertex requires `role: "user"` on each content; AI Studio is lenient.
+    // The contents already come with roles set from buildGeminiContents.
+    const access = await getSAAccessToken(sa);
+    const url = `https://${VERTEX_LOCATION}-aiplatform.googleapis.com/v1/projects/${sa.project_id}/locations/${VERTEX_LOCATION}/publishers/google/models/${encodeURIComponent(model.code)}:generateContent`;
+    const agent = this.buildProxyAgent(ctx);
+    const response = (await this.callRawApi(url, body, agent, {
+      authorization: `Bearer ${access}`,
+    })) as GeminiResponse;
+    return { meta: this.extractTextGenerationMeta(response, model.code) };
+  }
+
+  private async executeTextGeneration(
     ctx: AdapterContext,
     apiKey: string,
   ): Promise<AdapterResult> {
     const { model, params } = ctx;
+    const body = this.buildTextGenerationBody(params);
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model.code)}:generateContent?key=${encodeURIComponent(apiKey)}`;
+    const agent = this.buildProxyAgent(ctx);
+    const response = (await this.callRawApi(url, body, agent)) as GeminiResponse;
+    return { meta: this.extractTextGenerationMeta(response, model.code) };
+  }
+
+  // -----------------------------------------------------------------------
+  // Text embedding — shared input parsing
+  // -----------------------------------------------------------------------
+  private parseEmbeddingInputs(
+    params: Record<string, unknown>,
+  ): {
+    inputs: string[];
+    taskType: string | undefined;
+    title: string | undefined;
+    outputDim: number | undefined;
+  } {
     const inputRaw = params['input'];
     const inputs: string[] = [];
     if (typeof inputRaw === 'string') {
@@ -980,7 +1022,6 @@ export class GoogleBananaAdapter implements ProviderAdapter {
         `embedding input array exceeds maximum size (got ${inputs.length}, max 100)`,
       );
     }
-
     const taskType =
       typeof params['task_type'] === 'string'
         ? (params['task_type'] as string)
@@ -995,6 +1036,71 @@ export class GoogleBananaAdapter implements ProviderAdapter {
         : typeof params['outputDimensionality'] === 'number'
           ? (params['outputDimensionality'] as number)
           : undefined;
+    return { inputs, taskType, title, outputDim };
+  }
+
+  private async executeEmbeddingVertex(
+    ctx: AdapterContext,
+    sa: ServiceAccountKey,
+  ): Promise<AdapterResult> {
+    const { model, params } = ctx;
+    const { inputs, taskType, title, outputDim } = this.parseEmbeddingInputs(params);
+
+    // Vertex AI uses `:predict` with `instances=[{content, task_type, title}]`
+    // — NOT the AI Studio `:embedContent`/`:batchEmbedContents` shape.
+    const instances = inputs.map((text) => {
+      const inst: Record<string, unknown> = { content: text };
+      if (taskType) inst.task_type = taskType;
+      if (title && taskType === 'RETRIEVAL_DOCUMENT') inst.title = title;
+      return inst;
+    });
+    const parameters: Record<string, unknown> = {};
+    if (typeof outputDim === 'number' && outputDim > 0) {
+      parameters.outputDimensionality = outputDim;
+    }
+    const body: Record<string, unknown> = { instances };
+    if (Object.keys(parameters).length > 0) body.parameters = parameters;
+
+    const access = await getSAAccessToken(sa);
+    const url = `https://${VERTEX_LOCATION}-aiplatform.googleapis.com/v1/projects/${sa.project_id}/locations/${VERTEX_LOCATION}/publishers/google/models/${encodeURIComponent(model.code)}:predict`;
+    const agent = this.buildProxyAgent(ctx);
+    const resp = (await this.callRawApi(url, body, agent, {
+      authorization: `Bearer ${access}`,
+    })) as {
+      predictions?: Array<{ embeddings?: { values?: number[]; statistics?: unknown } }>;
+    };
+
+    const preds = resp.predictions ?? [];
+    if (preds.length !== inputs.length) {
+      throw new AdapterError(
+        'unknown',
+        `vertex returned ${preds.length} predictions for ${inputs.length} inputs`,
+      );
+    }
+    const embeddings: number[][] = [];
+    for (const p of preds) {
+      const values = p.embeddings?.values;
+      if (!Array.isArray(values)) {
+        throw new AdapterError('unknown', 'vertex returned embedding without values');
+      }
+      embeddings.push(values);
+    }
+    return {
+      meta: {
+        model: model.code,
+        embeddings,
+        dimension: embeddings[0]?.length ?? 0,
+        count: embeddings.length,
+      },
+    };
+  }
+
+  private async executeEmbedding(
+    ctx: AdapterContext,
+    apiKey: string,
+  ): Promise<AdapterResult> {
+    const { model, params } = ctx;
+    const { inputs, taskType, title, outputDim } = this.parseEmbeddingInputs(params);
 
     const buildRequest = (text: string): Record<string, unknown> => {
       const req: Record<string, unknown> = {
