@@ -361,10 +361,14 @@ const klingVideoBaseProps = (extra: Record<string, unknown> = {}) => ({
     enum: ['720p', '1080p'],
     'x-bundle-dim': true,
   },
+  // aspect_ratio is forwarded to Kling but is NOT a pricing dimension —
+  // tariff entries for kling are identical across ratios (see seedKlingPrices
+  // in packages/db/prisma/seed.ts which writes aspectRatio: null). Marking it
+  // x-bundle-dim makes the runtime bundleKey diverge from seed and surface
+  // as price_not_configured.
   aspect_ratio: {
     type: 'string',
     enum: ['16:9', '9:16', '1:1'],
-    'x-bundle-dim': true,
   },
   videos_count: { type: 'integer', minimum: 1, maximum: 4, default: 1 },
   callback_url: callbackUrlProp,
@@ -381,7 +385,7 @@ const klingMethods: MethodSeed[] = [
       $schema: 'http://json-schema.org/draft-07/schema#',
       type: 'object',
       properties: klingVideoBaseProps(),
-      required: ['prompt'],
+      required: ['prompt', 'mode', 'duration_seconds', 'resolution'],
       additionalProperties: false,
     },
     exampleRequest: {
@@ -408,7 +412,7 @@ const klingMethods: MethodSeed[] = [
           items: { type: 'string', format: 'uri' },
         },
       }),
-      required: ['prompt', 'input_images'],
+      required: ['prompt', 'input_images', 'mode', 'duration_seconds', 'resolution'],
       additionalProperties: false,
     },
     exampleRequest: {

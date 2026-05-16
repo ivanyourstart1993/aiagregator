@@ -1,4 +1,10 @@
-import { BadRequestException, Inject, Injectable, Logger } from '@nestjs/common';
+import {
+  BadRequestException,
+  Inject,
+  Injectable,
+  InternalServerErrorException,
+  Logger,
+} from '@nestjs/common';
 import { checkUrlShape } from '@aiagg/shared';
 import { InjectQueue } from '@nestjs/bullmq';
 import {
@@ -193,7 +199,13 @@ export class GenerationsService {
       persistSnapshot: true,
     });
     if (!resolved.pricingSnapshotId) {
-      throw new Error('PricingService did not return a snapshot id');
+      this.logger.error(
+        `PricingService returned no snapshot id for bundle ${bundle.bundleKey} (user ${userId})`,
+      );
+      throw new InternalServerErrorException({
+        code: 'pricing_snapshot_missing',
+        message: 'Failed to materialise pricing snapshot.',
+      });
     }
 
     const { basePriceUnits } = this.estimate.computePrice(
