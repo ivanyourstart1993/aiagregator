@@ -1,4 +1,5 @@
 import { getTranslations } from 'next-intl/server';
+import { Link } from '@/i18n/navigation';
 
 export default async function GettingStartedPage() {
   const t = await getTranslations('docs');
@@ -6,6 +7,16 @@ export default async function GettingStartedPage() {
     <article className="prose max-w-none space-y-6">
       <h1 className="text-3xl font-semibold tracking-tight">{t('gettingStartedTitle')}</h1>
       <p className="text-muted-foreground">{t('gettingStartedBody')}</p>
+
+      <div className="rounded-md border bg-muted/40 p-4 text-sm">
+        {t.rich('gsGeminiTextHint', {
+          link: (chunks) => (
+            <Link href="/docs/guides/gemini-text" className="underline">
+              {chunks}
+            </Link>
+          ),
+        })}
+      </div>
 
       <ol className="ml-4 list-decimal space-y-3 text-sm">
         <li>{t('gsStep1')}</li>
@@ -29,6 +40,9 @@ export default async function GettingStartedPage() {
       </pre>
 
       <h2 className="mt-8 text-xl font-semibold">{t('gsGenerationsTitle')}</h2>
+      <h3 className="mt-4 text-sm font-semibold uppercase tracking-wider text-muted-foreground">
+        {t('gsGenImageSubtitle')}
+      </h3>
       <pre className="overflow-x-auto rounded-md border bg-muted p-4 text-xs">
         <code>{`curl -X POST https://api.aigenway.com/v1/generations \\
   -H "Authorization: Bearer sk_live_..." \\
@@ -41,6 +55,54 @@ export default async function GettingStartedPage() {
     "params": { "prompt": "a cat" },
     "coupon": "WELCOME10",
     "callback_url": "https://your-host.example.com/webhooks/aigenway"
+  }'`}</code>
+      </pre>
+
+      <h3 className="mt-4 text-sm font-semibold uppercase tracking-wider text-muted-foreground">
+        {t('gsGenTextSubtitle')}
+      </h3>
+      <pre className="overflow-x-auto rounded-md border bg-muted p-4 text-xs">
+        <code>{`curl -X POST https://api.aigenway.com/v1/generations \\
+  -H "Authorization: Bearer sk_live_..." \\
+  -H "Idempotency-Key: $(uuidgen)" \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "provider": "google_banana",
+    "model": "gemini-2.5-flash",
+    "method": "text_generation",
+    "params": {
+      "prompt": "Объясни в одно предложение, что такое HTTP/3.",
+      "temperature": 0.4,
+      "max_output_tokens": 200
+    }
+  }'`}</code>
+      </pre>
+      <p className="text-sm text-muted-foreground">
+        {t.rich('gsGenTextSeeMore', {
+          link: (chunks) => (
+            <Link href="/docs/guides/gemini-text" className="underline">
+              {chunks}
+            </Link>
+          ),
+        })}
+      </p>
+
+      <h3 className="mt-4 text-sm font-semibold uppercase tracking-wider text-muted-foreground">
+        {t('gsGenEmbedSubtitle')}
+      </h3>
+      <pre className="overflow-x-auto rounded-md border bg-muted p-4 text-xs">
+        <code>{`curl -X POST https://api.aigenway.com/v1/generations \\
+  -H "Authorization: Bearer sk_live_..." \\
+  -H "Idempotency-Key: $(uuidgen)" \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "provider": "google_banana",
+    "model": "text-embedding-004",
+    "method": "embedding",
+    "params": {
+      "inputs": ["первый текст", "второй текст"],
+      "task_type": "RETRIEVAL_DOCUMENT"
+    }
   }'`}</code>
       </pre>
       <p className="text-sm text-muted-foreground">{t('gsGenerationsOptionalsBody')}</p>
