@@ -65,6 +65,15 @@ export function DocsSidebar({ providers }: Props) {
         {t('errors')}
       </Link>
       <div className="mt-3 mb-1 text-xs uppercase tracking-wide text-muted-foreground">
+        {t('navGuides')}
+      </div>
+      <Link
+        href="/docs/guides/gemini-text"
+        className={linkClass(pathname === '/docs/guides/gemini-text')}
+      >
+        {t('navGuideGeminiText')}
+      </Link>
+      <div className="mt-3 mb-1 text-xs uppercase tracking-wide text-muted-foreground">
         {t('navMethods')}
       </div>
       <Link
