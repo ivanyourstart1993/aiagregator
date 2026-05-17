@@ -90,11 +90,18 @@ type TaskType =
   | 'text_to_video_or_seedance2_fast_720p'
   | 'text_to_video_or_seedance2_pro_720p'
   | 'text_to_video_or_seedance2_pro_1080p'
-  | 'text_to_video_or_seedance15_pro_1080p';
+  | 'text_to_video_or_seedance15_pro_1080p'
+  | 'text_gen_pro'
+  | 'text_gen_flash'
+  | 'text_gen_flash_lite'
+  | 'embed_004';
 
 interface PresetSpec {
   provider: string;
   model: string;
+  // Output kind. Drives which form controls render and how the result is
+  // displayed. Defaults to 'image' for back-compat with existing presets.
+  kind?: 'image' | 'video' | 'text' | 'embedding';
   // Default method when no input image is attached. For video presets,
   // an attached image switches the call to imageMethod automatically.
   method: string;
@@ -413,6 +420,37 @@ const PRESETS: Record<TaskType, PresetSpec> = {
     needsVideo: true,
     approxUsd: 0.85, // $0.17/s × 5s
   },
+  // Gemini 2.5 family — text generation via Vertex AI. PER_REQUEST tier
+  // for predictable playground cost; reconciliation against per-token
+  // pricing happens server-side at admit time.
+  text_gen_pro: {
+    provider: 'google_banana',
+    model: 'gemini-2.5-pro',
+    kind: 'text',
+    method: 'text_generation',
+    approxUsd: 0.025,
+  },
+  text_gen_flash: {
+    provider: 'google_banana',
+    model: 'gemini-2.5-flash',
+    kind: 'text',
+    method: 'text_generation',
+    approxUsd: 0.003,
+  },
+  text_gen_flash_lite: {
+    provider: 'google_banana',
+    model: 'gemini-2.5-flash-lite',
+    kind: 'text',
+    method: 'text_generation',
+    approxUsd: 0.002,
+  },
+  embed_004: {
+    provider: 'google_banana',
+    model: 'text-embedding-004',
+    kind: 'embedding',
+    method: 'embedding',
+    approxUsd: 0.001,
+  },
 };
 
 const TASK_GROUPS: Array<{ labelKey: string; types: TaskType[] }> = [
@@ -466,7 +504,72 @@ const TASK_GROUPS: Array<{ labelKey: string; types: TaskType[] }> = [
       'text_to_video_or_seedance15_pro_1080p',
     ],
   },
+  {
+    labelKey: 'groupGeminiText',
+    types: ['text_gen_pro', 'text_gen_flash', 'text_gen_flash_lite', 'embed_004'],
+  },
 ];
+
+// Vertex AI embedding task_type enum (text-embedding-004 supports all 8).
+// RETRIEVAL_DOCUMENT is the most common default for indexing-side calls.
+const EMBED_TASK_TYPES = [
+  'RETRIEVAL_DOCUMENT',
+  'RETRIEVAL_QUERY',
+  'SEMANTIC_SIMILARITY',
+  'CLASSIFICATION',
+  'CLUSTERING',
+  'QUESTION_ANSWERING',
+  'FACT_VERIFICATION',
+  'CODE_RETRIEVAL_QUERY',
+] as const;
+type EmbedTaskType = (typeof EMBED_TASK_TYPES)[number];
+
+interface TextResult {
+  text: string;
+  finish_reason?: string;
+  model?: string;
+  usage?: {
+    input_tokens?: number;
+    output_tokens?: number;
+    total_tokens?: number;
+  };
+  tool_calls?: unknown[];
+}
+
+interface EmbeddingResult {
+  model?: string;
+  embeddings: number[][];
+  dimension?: number;
+  count?: number;
+}
+
+function parseTextResult(raw: unknown): TextResult | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const r = raw as Record<string, unknown>;
+  if (typeof r.text !== 'string') return null;
+  return {
+    text: r.text,
+    finish_reason: typeof r.finish_reason === 'string' ? r.finish_reason : undefined,
+    model: typeof r.model === 'string' ? r.model : undefined,
+    usage:
+      r.usage && typeof r.usage === 'object'
+        ? (r.usage as TextResult['usage'])
+        : undefined,
+    tool_calls: Array.isArray(r.tool_calls) ? r.tool_calls : undefined,
+  };
+}
+
+function parseEmbeddingResult(raw: unknown): EmbeddingResult | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const r = raw as Record<string, unknown>;
+  if (!Array.isArray(r.embeddings)) return null;
+  return {
+    embeddings: r.embeddings as number[][],
+    model: typeof r.model === 'string' ? r.model : undefined,
+    dimension: typeof r.dimension === 'number' ? r.dimension : undefined,
+    count: typeof r.count === 'number' ? r.count : undefined,
+  };
+}
 
 type Phase = 'idle' | 'submitting' | 'queued' | 'processing' | 'succeeded' | 'failed';
 
@@ -534,11 +637,27 @@ export function PlaygroundClient({ balance }: Props) {
   const [aspect, setAspect] = useState<'1:1' | '16:9' | '9:16' | '4:3' | '3:4'>('1:1');
   const [duration, setDuration] = useState<number>(8);
 
+  // Gemini text generation controls.
+  const [systemInstruction, setSystemInstruction] = useState('');
+  const [responseMime, setResponseMime] = useState<'text/plain' | 'application/json'>(
+    'text/plain',
+  );
+  const [responseSchemaText, setResponseSchemaText] = useState('');
+  const [temperature, setTemperature] = useState(0.7);
+  const [maxOutputTokens, setMaxOutputTokens] = useState<number | ''>(1024);
+
+  // Gemini embedding controls.
+  const [embedInputs, setEmbedInputs] = useState('');
+  const [embedTaskType, setEmbedTaskType] = useState<EmbedTaskType>('RETRIEVAL_DOCUMENT');
+  const [outputDimensionality, setOutputDimensionality] = useState<number | ''>('');
+
   const [phase, setPhase] = useState<Phase>('idle');
   const [taskId, setTaskId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [errorCode, setErrorCode] = useState<string | null>(null);
   const [files, setFiles] = useState<ResultFile[]>([]);
+  const [textResult, setTextResult] = useState<TextResult | null>(null);
+  const [embeddingResult, setEmbeddingResult] = useState<EmbeddingResult | null>(null);
   const pollRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pollStartRef = useRef<number>(0);
   const pollCountRef = useRef<number>(0);
@@ -645,9 +764,16 @@ export function PlaygroundClient({ balance }: Props) {
     };
   }, []);
 
+  const presetKind = preset.kind ?? 'image';
+  const isTextPreset = presetKind === 'text';
+  const isEmbeddingPreset = presetKind === 'embedding';
+  const isMediaPreset = !isTextPreset && !isEmbeddingPreset;
+
   // The upload zone is shown when an image is required (image_edit) or
-  // optional (video → image_to_video).
-  const acceptsImage = preset.needsImage || (preset.needsVideo && !!preset.imageMethod);
+  // optional (video → image_to_video). Text/embedding presets never accept
+  // images.
+  const acceptsImage =
+    isMediaPreset && (preset.needsImage || (preset.needsVideo && !!preset.imageMethod));
   // Veo's image_to_video takes a single first-frame image; Banana's
   // image_edit accepts up to MAX_INPUT_IMAGES. Cap at runtime.
   const imageCap = preset.needsImage ? MAX_INPUT_IMAGES : 1;
@@ -698,32 +824,93 @@ export function PlaygroundClient({ balance }: Props) {
   }, []);
 
   async function handleSubmit() {
-    if (!prompt.trim()) {
-      toast.error(t('promptRequired'));
-      return;
+    // Branch: embedding presets read from `embedInputs` instead of `prompt`.
+    if (isEmbeddingPreset) {
+      const lines = embedInputs
+        .split('\n')
+        .map((l) => l.trim())
+        .filter((l) => l.length > 0);
+      if (lines.length === 0) {
+        toast.error(t('embedInputsRequired'));
+        return;
+      }
+      if (lines.length > 100) {
+        toast.error(t('embedInputsTooMany'));
+        return;
+      }
+      if (
+        outputDimensionality !== '' &&
+        (outputDimensionality < 8 || outputDimensionality > 768)
+      ) {
+        toast.error(t('embedDimOutOfRange'));
+        return;
+      }
+    } else {
+      if (!prompt.trim()) {
+        toast.error(t('promptRequired'));
+        return;
+      }
+      if (uploading) {
+        toast.error(t('imageStillUploading'));
+        return;
+      }
+      if (preset.needsImage && readyImageUrls.length === 0) {
+        toast.error(t('imageRequired'));
+        return;
+      }
     }
-    if (uploading) {
-      toast.error(t('imageStillUploading'));
-      return;
-    }
-    if (preset.needsImage && readyImageUrls.length === 0) {
-      toast.error(t('imageRequired'));
-      return;
+
+    // Validate JSON schema textarea up front for text + JSON-mode so the
+    // user gets a clear toast rather than a generic provider error.
+    let parsedResponseSchema: unknown = undefined;
+    if (isTextPreset && responseMime === 'application/json' && responseSchemaText.trim()) {
+      try {
+        parsedResponseSchema = JSON.parse(responseSchemaText);
+      } catch {
+        toast.error(t('responseSchemaInvalid'));
+        return;
+      }
     }
 
     setPhase('submitting');
     setError(null);
     setErrorCode(null);
     setFiles([]);
+    setTextResult(null);
+    setEmbeddingResult(null);
     setTaskId(null);
     pollCountRef.current = 0;
     pollStartRef.current = Date.now();
 
-    const params: Record<string, unknown> = {
-      prompt: prompt.trim(),
-    };
-    if (!preset.needsVideo) params.aspect_ratio = aspect;
-    if (preset.resolution) params.resolution = preset.resolution;
+    const params: Record<string, unknown> = {};
+
+    if (isTextPreset) {
+      params.prompt = prompt.trim();
+      if (systemInstruction.trim()) params.system_instruction = systemInstruction.trim();
+      params.response_mime_type = responseMime;
+      if (responseMime === 'application/json' && parsedResponseSchema !== undefined) {
+        params.response_schema = parsedResponseSchema;
+      }
+      params.temperature = temperature;
+      if (typeof maxOutputTokens === 'number' && maxOutputTokens > 0) {
+        params.max_output_tokens = maxOutputTokens;
+      }
+    } else if (isEmbeddingPreset) {
+      const inputs = embedInputs
+        .split('\n')
+        .map((l) => l.trim())
+        .filter((l) => l.length > 0);
+      params.inputs = inputs;
+      params.task_type = embedTaskType;
+      if (typeof outputDimensionality === 'number' && outputDimensionality > 0) {
+        params.output_dimensionality = outputDimensionality;
+      }
+    } else {
+      params.prompt = prompt.trim();
+    }
+
+    if (isMediaPreset && !preset.needsVideo) params.aspect_ratio = aspect;
+    if (isMediaPreset && preset.resolution) params.resolution = preset.resolution;
 
     // Method routing:
     //   image_edit: bound by preset (needsImage = true)
@@ -810,6 +997,15 @@ export function PlaygroundClient({ balance }: Props) {
     {
       if (task.status === 'SUCCEEDED') {
         setPhase('succeeded');
+        // For text/embedding presets the payload lives in task.result;
+        // result_files is an empty array. Extract structured data so the
+        // result panel can render it without falling through to the
+        // file-grid renderer.
+        if (isTextPreset) {
+          setTextResult(parseTextResult(task.result));
+        } else if (isEmbeddingPreset) {
+          setEmbeddingResult(parseEmbeddingResult(task.result));
+        }
         const result = task.result_files ?? task.result;
         const arr: ResultFile[] = [];
         if (Array.isArray(result)) {
@@ -1026,17 +1222,166 @@ export function PlaygroundClient({ balance }: Props) {
           </div>
         </div>
 
-        <div className="space-y-2 rounded-lg border bg-card/40 p-5">
-          <Label htmlFor="prompt">{t('promptLabel')}</Label>
-          <Textarea
-            id="prompt"
-            value={prompt}
-            onChange={(e) => setPrompt(e.target.value)}
-            rows={4}
-            placeholder={t('promptPlaceholder')}
-          />
-          <p className="text-xs text-muted-foreground">{t('promptHint')}</p>
-        </div>
+        {isTextPreset ? (
+          <div className="space-y-2 rounded-lg border bg-card/40 p-5">
+            <Label htmlFor="systemInstruction">{t('systemInstructionLabel')}</Label>
+            <Textarea
+              id="systemInstruction"
+              value={systemInstruction}
+              onChange={(e) => setSystemInstruction(e.target.value)}
+              rows={3}
+              placeholder={t('systemInstructionPlaceholder')}
+            />
+            <p className="text-xs text-muted-foreground">{t('systemInstructionHint')}</p>
+          </div>
+        ) : null}
+
+        {!isEmbeddingPreset ? (
+          <div className="space-y-2 rounded-lg border bg-card/40 p-5">
+            <Label htmlFor="prompt">{t('promptLabel')}</Label>
+            <Textarea
+              id="prompt"
+              value={prompt}
+              onChange={(e) => setPrompt(e.target.value)}
+              rows={4}
+              placeholder={t('promptPlaceholder')}
+            />
+            <p className="text-xs text-muted-foreground">{t('promptHint')}</p>
+          </div>
+        ) : null}
+
+        {isEmbeddingPreset ? (
+          <div className="space-y-3 rounded-lg border bg-card/40 p-5">
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <Label htmlFor="embedInputs">{t('embedInputsLabel')}</Label>
+                <span className="text-xs text-muted-foreground">
+                  {(() => {
+                    const lines = embedInputs
+                      .split('\n')
+                      .map((l) => l.trim())
+                      .filter((l) => l.length > 0).length;
+                    return t('embedInputsCount', { current: lines, max: 100 });
+                  })()}
+                </span>
+              </div>
+              <Textarea
+                id="embedInputs"
+                value={embedInputs}
+                onChange={(e) => setEmbedInputs(e.target.value)}
+                rows={6}
+                placeholder={t('embedInputsPlaceholder')}
+              />
+              <p className="text-xs text-muted-foreground">{t('embedInputsHint')}</p>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="space-y-1.5">
+                <Label htmlFor="embedTaskType">{t('embedTaskTypeLabel')}</Label>
+                <select
+                  id="embedTaskType"
+                  value={embedTaskType}
+                  onChange={(e) => setEmbedTaskType(e.target.value as EmbedTaskType)}
+                  className="h-9 w-full rounded-md border border-border/60 bg-background px-2 text-sm"
+                >
+                  {EMBED_TASK_TYPES.map((tt) => (
+                    <option key={tt} value={tt}>
+                      {tt}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="outputDim">{t('embedOutputDimLabel')}</Label>
+                <Input
+                  id="outputDim"
+                  type="number"
+                  min={8}
+                  max={768}
+                  value={outputDimensionality}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    setOutputDimensionality(v === '' ? '' : Number(v));
+                  }}
+                  placeholder={t('embedOutputDimPlaceholder')}
+                />
+                <p className="text-[10px] text-muted-foreground">
+                  {t('embedOutputDimHint')}
+                </p>
+              </div>
+            </div>
+          </div>
+        ) : null}
+
+        {isTextPreset ? (
+          <div className="space-y-3 rounded-lg border bg-card/40 p-5">
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="space-y-1.5">
+                <Label htmlFor="responseMime">{t('responseMimeLabel')}</Label>
+                <select
+                  id="responseMime"
+                  value={responseMime}
+                  onChange={(e) =>
+                    setResponseMime(
+                      e.target.value as 'text/plain' | 'application/json',
+                    )
+                  }
+                  className="h-9 w-full rounded-md border border-border/60 bg-background px-2 text-sm"
+                >
+                  <option value="text/plain">text/plain</option>
+                  <option value="application/json">application/json</option>
+                </select>
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="maxOutputTokens">{t('maxOutputTokensLabel')}</Label>
+                <Input
+                  id="maxOutputTokens"
+                  type="number"
+                  min={1}
+                  max={8192}
+                  value={maxOutputTokens}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    setMaxOutputTokens(v === '' ? '' : Number(v));
+                  }}
+                />
+              </div>
+            </div>
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between">
+                <Label htmlFor="temperature">{t('temperatureLabel')}</Label>
+                <span className="font-mono text-xs text-muted-foreground">
+                  {temperature.toFixed(2)}
+                </span>
+              </div>
+              <input
+                id="temperature"
+                type="range"
+                min={0}
+                max={2}
+                step={0.05}
+                value={temperature}
+                onChange={(e) => setTemperature(Number(e.target.value))}
+                className="w-full"
+              />
+            </div>
+            {responseMime === 'application/json' ? (
+              <div className="space-y-1.5">
+                <Label htmlFor="responseSchema">{t('responseSchemaLabel')}</Label>
+                <Textarea
+                  id="responseSchema"
+                  value={responseSchemaText}
+                  onChange={(e) => setResponseSchemaText(e.target.value)}
+                  rows={6}
+                  placeholder={t('responseSchemaPlaceholder')}
+                  className="font-mono text-xs"
+                />
+                <p className="text-[10px] text-muted-foreground">
+                  {t('responseSchemaHint')}
+                </p>
+              </div>
+            ) : null}
+          </div>
+        ) : null}
 
         {acceptsImage ? (
           <div className="space-y-3 rounded-lg border bg-card/40 p-5">
@@ -1146,7 +1491,7 @@ export function PlaygroundClient({ balance }: Props) {
           </div>
         ) : null}
 
-        {!preset.needsVideo ? (
+        {isMediaPreset && !preset.needsVideo ? (
           <div className="space-y-2 rounded-lg border bg-card/40 p-5">
             <Label className="text-xs uppercase tracking-wider text-muted-foreground">
               {t('aspectRatio')}
@@ -1363,6 +1708,14 @@ export function PlaygroundClient({ balance }: Props) {
               ))}
             </div>
           ) : null}
+
+          {phase === 'succeeded' && isTextPreset && textResult ? (
+            <TextResultView result={textResult} />
+          ) : null}
+
+          {phase === 'succeeded' && isEmbeddingPreset && embeddingResult ? (
+            <EmbeddingResultView result={embeddingResult} />
+          ) : null}
         </div>
       </div>
     </div>
@@ -1421,6 +1774,149 @@ export function PlaygroundClient({ balance }: Props) {
           </div>
         </div>
       ) : null}
+    </div>
+  );
+}
+
+function TextResultView({ result }: { result: TextResult }) {
+  const t = useTranslations('playground');
+  // Auto-detect JSON: if the trimmed text starts with { or [ and parses,
+  // pretty-print it. Otherwise show raw text. Keeps the playground useful
+  // for both chat completions and structured-output workloads.
+  let pretty = result.text;
+  let isJson = false;
+  const trimmed = result.text.trim();
+  if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
+    try {
+      pretty = JSON.stringify(JSON.parse(trimmed), null, 2);
+      isJson = true;
+    } catch {
+      // not JSON — fall through
+    }
+  }
+
+  async function copy() {
+    try {
+      await navigator.clipboard.writeText(pretty);
+      toast.success(t('textCopied'));
+    } catch {
+      toast.error(t('errorGeneric'));
+    }
+  }
+
+  const u = result.usage ?? {};
+  return (
+    <div className="w-full space-y-3">
+      <pre className="max-h-[480px] overflow-auto rounded-md border bg-background/60 p-3 text-xs leading-relaxed">
+        <code className={isJson ? 'font-mono' : 'whitespace-pre-wrap'}>{pretty}</code>
+      </pre>
+      <div className="flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
+        {result.model ? (
+          <span className="rounded bg-muted px-1.5 py-0.5 font-mono">{result.model}</span>
+        ) : null}
+        {u.input_tokens !== undefined ? (
+          <span className="rounded bg-muted px-1.5 py-0.5">
+            {t('usageInputTokens', { n: u.input_tokens })}
+          </span>
+        ) : null}
+        {u.output_tokens !== undefined ? (
+          <span className="rounded bg-muted px-1.5 py-0.5">
+            {t('usageOutputTokens', { n: u.output_tokens })}
+          </span>
+        ) : null}
+        {u.total_tokens !== undefined ? (
+          <span className="rounded bg-muted px-1.5 py-0.5">
+            {t('usageTotalTokens', { n: u.total_tokens })}
+          </span>
+        ) : null}
+        {result.finish_reason ? (
+          <span className="rounded bg-muted px-1.5 py-0.5">
+            {t('finishReason')}: {result.finish_reason}
+          </span>
+        ) : null}
+        <Button type="button" size="sm" variant="outline" className="ml-auto" onClick={copy}>
+          {t('textCopy')}
+        </Button>
+      </div>
+      {result.tool_calls && result.tool_calls.length > 0 ? (
+        <details className="text-xs">
+          <summary className="cursor-pointer text-muted-foreground hover:text-foreground">
+            {t('toolCalls', { n: result.tool_calls.length })}
+          </summary>
+          <pre className="mt-2 max-h-[240px] overflow-auto rounded-md border bg-background/60 p-3 text-[11px]">
+            <code className="font-mono">
+              {JSON.stringify(result.tool_calls, null, 2)}
+            </code>
+          </pre>
+        </details>
+      ) : null}
+    </div>
+  );
+}
+
+function EmbeddingResultView({ result }: { result: EmbeddingResult }) {
+  const t = useTranslations('playground');
+  const dim =
+    result.dimension ?? (result.embeddings[0] ? result.embeddings[0].length : 0);
+  const count = result.count ?? result.embeddings.length;
+
+  async function copyVector(vec: number[]) {
+    try {
+      await navigator.clipboard.writeText(JSON.stringify(vec));
+      toast.success(t('vectorCopied'));
+    } catch {
+      toast.error(t('errorGeneric'));
+    }
+  }
+
+  return (
+    <div className="w-full space-y-3">
+      <div className="flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
+        {result.model ? (
+          <span className="rounded bg-muted px-1.5 py-0.5 font-mono">{result.model}</span>
+        ) : null}
+        <span className="rounded bg-muted px-1.5 py-0.5">
+          {t('embedCount', { n: count })}
+        </span>
+        <span className="rounded bg-muted px-1.5 py-0.5">
+          {t('embedDim', { n: dim })}
+        </span>
+      </div>
+      <div className="max-h-[480px] overflow-auto rounded-md border bg-background/60">
+        <table className="w-full text-[11px]">
+          <thead className="sticky top-0 bg-background/90">
+            <tr className="border-b border-border/60 text-left text-muted-foreground">
+              <th className="px-2 py-1.5 font-semibold">#</th>
+              <th className="px-2 py-1.5 font-semibold">{t('embedVectorPreview')}</th>
+              <th className="px-2 py-1.5 font-semibold text-right">{t('embedActions')}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {result.embeddings.map((vec, i) => {
+              const preview = vec.slice(0, 6).map((n) => n.toFixed(4)).join(', ');
+              const rest = vec.length - 6;
+              return (
+                <tr key={i} className="border-b border-border/40 last:border-b-0">
+                  <td className="px-2 py-1.5 font-mono text-muted-foreground">{i}</td>
+                  <td className="px-2 py-1.5 font-mono">
+                    [{preview}
+                    {rest > 0 ? `, … (${t('embedDimSuffix', { n: vec.length })})` : ''}]
+                  </td>
+                  <td className="px-2 py-1.5 text-right">
+                    <button
+                      type="button"
+                      onClick={() => copyVector(vec)}
+                      className="rounded border border-border/60 bg-background px-1.5 py-0.5 text-[10px] hover:border-border"
+                    >
+                      {t('embedCopyVector')}
+                    </button>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }
