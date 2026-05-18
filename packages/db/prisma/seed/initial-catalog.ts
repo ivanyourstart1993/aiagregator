@@ -1119,9 +1119,30 @@ export const initialCatalog: ProviderSeed[] = [
     sortOrder: 30,
     models: [
       {
+        code: 'kling-v1-6',
+        publicName: 'Kling 1.6',
+        description: 'Legacy Kling 1.6 — cheapest tier, supports both std/pro and 5/10s.',
+        sortOrder: 5,
+        methods: klingMethods.map((m, i) => ({ ...m, sortOrder: (i + 1) * 10 })),
+      },
+      {
         code: 'kling-2.6',
         publicName: 'Kling 2.6',
         sortOrder: 10,
+        methods: klingMethods.map((m, i) => ({ ...m, sortOrder: (i + 1) * 10 })),
+      },
+      {
+        code: 'kling-v2-1-master',
+        publicName: 'Kling 2.1 Master',
+        description: 'Cinematic results — pro-only at 1080p.',
+        sortOrder: 15,
+        methods: klingMethods.map((m, i) => ({ ...m, sortOrder: (i + 1) * 10 })),
+      },
+      {
+        code: 'kling-v2-5-turbo',
+        publicName: 'Kling 2.5 Turbo',
+        description: 'Fast high-quality — pro-only at 1080p.',
+        sortOrder: 18,
         methods: klingMethods.map((m, i) => ({ ...m, sortOrder: (i + 1) * 10 })),
       },
       {
