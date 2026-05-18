@@ -11,9 +11,13 @@ import {
   PutBucketPolicyCommand,
   PutObjectCommand,
   DeleteObjectCommand,
+  DeleteObjectsCommand,
   HeadObjectCommand,
   GetObjectCommand,
+  ListObjectsV2Command,
   type GetObjectCommandOutput,
+  type ListObjectsV2CommandOutput,
+  type _Object as S3Object,
 } from '@aws-sdk/client-s3';
 import { randomBytes } from 'node:crypto';
 
@@ -195,6 +199,56 @@ export class StorageService implements OnModuleInit {
     await this.client.send(
       new DeleteObjectCommand({ Bucket: this.bucket, Key: key }),
     );
+  }
+
+  // Delete up to 1000 objects in one S3 round-trip. S3 hard limit is 1000
+  // per DeleteObjects request — the caller batches if it has more.
+  async deleteMany(keys: string[]): Promise<{ deleted: number; failed: number }> {
+    if (keys.length === 0) return { deleted: 0, failed: 0 };
+    if (keys.length > 1000) {
+      throw new RangeError(
+        `deleteMany accepts up to 1000 keys per call, got ${keys.length}`,
+      );
+    }
+    const res = await this.client.send(
+      new DeleteObjectsCommand({
+        Bucket: this.bucket,
+        Delete: {
+          Objects: keys.map((Key) => ({ Key })),
+          Quiet: true,
+        },
+      }),
+    );
+    const failed = res.Errors?.length ?? 0;
+    return { deleted: keys.length - failed, failed };
+  }
+
+  // Yield batches of object keys + LastModified under a prefix. Lazy so the
+  // caller can stop after the first batch that lands inside the TTL window.
+  async *listObjectsByPrefix(
+    prefix: string,
+    pageSize = 1000,
+  ): AsyncGenerator<Array<{ key: string; lastModified: Date; size: number }>> {
+    let continuationToken: string | undefined = undefined;
+    do {
+      const res: ListObjectsV2CommandOutput = await this.client.send(
+        new ListObjectsV2Command({
+          Bucket: this.bucket,
+          Prefix: prefix,
+          MaxKeys: pageSize,
+          ContinuationToken: continuationToken,
+        }),
+      );
+      const items = (res.Contents ?? [])
+        .filter((o: S3Object) => typeof o.Key === 'string' && !!o.LastModified)
+        .map((o: S3Object) => ({
+          key: o.Key as string,
+          lastModified: o.LastModified as Date,
+          size: o.Size ?? 0,
+        }));
+      if (items.length > 0) yield items;
+      continuationToken = res.IsTruncated ? res.NextContinuationToken : undefined;
+    } while (continuationToken);
   }
 
   async headObject(key: string): Promise<boolean> {

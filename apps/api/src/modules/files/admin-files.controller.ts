@@ -126,6 +126,17 @@ export class AdminFilesController {
     return this.cleanup.runOnce();
   }
 
+  // Trigger the orphan-input sweep immediately. Useful after MinIO ran low —
+  // the cron only fires at 03:00 UTC, so a manual kick clears the backlog now.
+  @Post('run-input-sweep')
+  async runInputSweep(): Promise<{
+    scanned: number;
+    deleted: number;
+    failed: number;
+  }> {
+    return this.cleanup.sweepInputUploads();
+  }
+
   @Post(':id/delete-now')
   async deleteNow(@Param('id') id: string): Promise<unknown> {
     const f = await this.prisma.resultFile.findUnique({ where: { id } });

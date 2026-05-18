@@ -11,6 +11,13 @@ import { AlertsService } from '../alerts/alerts.service';
 
 const BATCH_LIMIT = 1000;
 
+// Playground input uploads land under `playground/<userId>/...` and never get
+// a ResultFile row, so the ResultFile-driven sweep below misses them. Most
+// orphan storage on prod is this prefix — users re-upload the same source
+// image dozens of times during a session. 1-day matches the result TTL.
+const INPUT_PREFIX = 'playground/';
+const INPUT_TTL_MS = 24 * 60 * 60 * 1000;
+
 @Injectable()
 export class FileCleanupCron {
   private readonly logger = new Logger(FileCleanupCron.name);
@@ -29,6 +36,7 @@ export class FileCleanupCron {
     this.running = true;
     try {
       await this.runOnce();
+      await this.sweepInputUploads();
     } catch (err) {
       this.logger.warn(
         `file-cleanup tick failed: ${
@@ -38,6 +46,41 @@ export class FileCleanupCron {
     } finally {
       this.running = false;
     }
+  }
+
+  // Sweep orphan input uploads under `playground/*` — no DB record, so we
+  // walk S3 directly by prefix and delete anything older than INPUT_TTL_MS.
+  // S3 DeleteObjects caps at 1000 keys per request; we batch accordingly.
+  async sweepInputUploads(): Promise<{ scanned: number; deleted: number; failed: number }> {
+    const cutoff = new Date(Date.now() - INPUT_TTL_MS);
+    let scanned = 0;
+    let deleted = 0;
+    let failed = 0;
+    for await (const batch of this.storage.listObjectsByPrefix(INPUT_PREFIX)) {
+      scanned += batch.length;
+      const stale = batch
+        .filter((o) => o.lastModified < cutoff)
+        .map((o) => o.key);
+      if (stale.length === 0) continue;
+      // S3 DeleteObjects accepts up to 1000 per call; listObjectsByPrefix
+      // already caps page size at 1000, so a single call per page is safe.
+      try {
+        const res = await this.storage.deleteMany(stale);
+        deleted += res.deleted;
+        failed += res.failed;
+      } catch (err) {
+        failed += stale.length;
+        this.logger.warn(
+          `input-sweep batch delete failed (${stale.length} keys): ${
+            err instanceof Error ? err.message : String(err)
+          }`,
+        );
+      }
+    }
+    this.logger.log(
+      `Input-sweep ${INPUT_PREFIX}: scanned ${scanned}, deleted ${deleted}, failed ${failed}`,
+    );
+    return { scanned, deleted, failed };
   }
 
   async runOnce(): Promise<{ tried: number; deleted: number; failed: number }> {
