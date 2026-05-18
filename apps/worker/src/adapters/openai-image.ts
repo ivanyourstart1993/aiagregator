@@ -9,9 +9,16 @@ import {
 } from './types';
 import type { WorkerStorage } from '../storage/storage';
 
-const SUPPORTED_MODELS = new Set(['gpt-image-1', 'dall-e-3', 'dall-e-2']);
-const EDITABLE_MODELS = new Set(['gpt-image-1', 'dall-e-2']);
+const SUPPORTED_MODELS = new Set(['gpt-image-2', 'gpt-image-1', 'dall-e-3', 'dall-e-2']);
+const EDITABLE_MODELS = new Set(['gpt-image-2', 'gpt-image-1', 'dall-e-2']);
 const SUPPORTED_METHODS = new Set(['text_to_image', 'image_edit']);
+
+// gpt-image-1 and gpt-image-2 share the same request envelope (native b64
+// response, quality enum, background flag). Worth treating them as one
+// "native" family so we don't sprinkle two-model conditionals everywhere.
+function isNativeGptImage(modelCode: string): boolean {
+  return modelCode === 'gpt-image-1' || modelCode === 'gpt-image-2';
+}
 
 const OPENAI_BASE = 'https://api.openai.com/v1';
 
@@ -45,6 +52,21 @@ function isValidSize(modelCode: string, size: string): boolean {
   if (modelCode === 'gpt-image-1') {
     return ['auto', '1024x1024', '1024x1536', '1536x1024'].includes(size);
   }
+  if (modelCode === 'gpt-image-2') {
+    // gpt-image-2 takes any size up to 3840px on the long edge, multiples of
+    // 16, max 3:1 aspect ratio. We expose the canonical buckets that match
+    // our bundle-price matrix; arbitrary sizes outside this list are
+    // rejected here so a typo doesn't silently land in a no-price bundle.
+    return [
+      'auto',
+      '1024x1024',
+      '1024x1536',
+      '1536x1024',
+      '2048x2048',
+      '3840x2160',
+      '2160x3840',
+    ].includes(size);
+  }
   if (modelCode === 'dall-e-3') {
     return ['1024x1024', '1024x1792', '1792x1024'].includes(size);
   }
@@ -55,13 +77,13 @@ function isValidSize(modelCode: string, size: string): boolean {
 }
 
 function defaultQuality(modelCode: string): string | null {
-  if (modelCode === 'gpt-image-1') return 'medium';
+  if (isNativeGptImage(modelCode)) return 'medium';
   if (modelCode === 'dall-e-3') return 'standard';
   return null;
 }
 
 function isValidQuality(modelCode: string, quality: string): boolean {
-  if (modelCode === 'gpt-image-1') {
+  if (isNativeGptImage(modelCode)) {
     return ['auto', 'low', 'medium', 'high'].includes(quality);
   }
   if (modelCode === 'dall-e-3') {
@@ -194,13 +216,13 @@ export class OpenAiImageAdapter implements ProviderAdapter {
       size,
     };
     if (quality) body.quality = quality;
-    if (model.code !== 'gpt-image-1') body.response_format = 'b64_json';
+    if (!isNativeGptImage(model.code)) body.response_format = 'b64_json';
 
     if (model.code === 'dall-e-3') {
       const style = pickString(params, 'style');
       if (style === 'vivid' || style === 'natural') body.style = style;
     }
-    if (model.code === 'gpt-image-1') {
+    if (isNativeGptImage(model.code)) {
       const bg = pickString(params, 'background');
       if (bg === 'auto' || bg === 'transparent' || bg === 'opaque') {
         body.background = bg;
@@ -252,8 +274,8 @@ export class OpenAiImageAdapter implements ProviderAdapter {
     fd.append('prompt', prompt);
     fd.append('n', String(n));
     fd.append('size', size);
-    if (quality && model.code === 'gpt-image-1') fd.append('quality', quality);
-    if (model.code !== 'gpt-image-1') fd.append('response_format', 'b64_json');
+    if (quality && isNativeGptImage(model.code)) fd.append('quality', quality);
+    if (!isNativeGptImage(model.code)) fd.append('response_format', 'b64_json');
 
     for (let i = 0; i < sourceUrls.length; i++) {
       const decoded = await decodeInputImage(sourceUrls[i]!);

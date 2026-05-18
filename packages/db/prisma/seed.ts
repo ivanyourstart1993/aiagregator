@@ -1041,7 +1041,48 @@ interface OpenAIImageBundleSpec {
   priceCents: number;
 }
 
+// gpt-image-2 raw OpenAI per-image cost (Apr 2026), 1024×1024 baseline:
+//   low $0.006 · medium $0.053 · high $0.211
+// Larger sizes scale ~linearly with output_tokens, which scale with pixel
+// count. Margin: ~15% on top of raw cost (matches gpt-image-1 markup).
+const GPT_IMAGE_2_PRICES: OpenAIImageBundleSpec[] = [
+  // 1024×1024 baseline
+  { modelSlug: 'gpt-image-2', methodCode: 'text_to_image', mode: 'low',    resolution: '1024x1024', priceCents: 0.69 },
+  { modelSlug: 'gpt-image-2', methodCode: 'text_to_image', mode: 'medium', resolution: '1024x1024', priceCents: 6.1 },
+  { modelSlug: 'gpt-image-2', methodCode: 'text_to_image', mode: 'high',   resolution: '1024x1024', priceCents: 24.3 },
+  { modelSlug: 'gpt-image-2', methodCode: 'text_to_image', mode: 'auto',   resolution: '1024x1024', priceCents: 6.1 },
+  // 1.5x area (portrait / landscape)
+  { modelSlug: 'gpt-image-2', methodCode: 'text_to_image', mode: 'low',    resolution: '1024x1536', priceCents: 1.04 },
+  { modelSlug: 'gpt-image-2', methodCode: 'text_to_image', mode: 'low',    resolution: '1536x1024', priceCents: 1.04 },
+  { modelSlug: 'gpt-image-2', methodCode: 'text_to_image', mode: 'medium', resolution: '1024x1536', priceCents: 9.15 },
+  { modelSlug: 'gpt-image-2', methodCode: 'text_to_image', mode: 'medium', resolution: '1536x1024', priceCents: 9.15 },
+  { modelSlug: 'gpt-image-2', methodCode: 'text_to_image', mode: 'high',   resolution: '1024x1536', priceCents: 36.4 },
+  { modelSlug: 'gpt-image-2', methodCode: 'text_to_image', mode: 'high',   resolution: '1536x1024', priceCents: 36.4 },
+  { modelSlug: 'gpt-image-2', methodCode: 'text_to_image', mode: 'auto',   resolution: '1024x1536', priceCents: 9.15 },
+  { modelSlug: 'gpt-image-2', methodCode: 'text_to_image', mode: 'auto',   resolution: '1536x1024', priceCents: 9.15 },
+  // 4x area (2K square)
+  { modelSlug: 'gpt-image-2', methodCode: 'text_to_image', mode: 'low',    resolution: '2048x2048', priceCents: 2.76 },
+  { modelSlug: 'gpt-image-2', methodCode: 'text_to_image', mode: 'medium', resolution: '2048x2048', priceCents: 24.4 },
+  { modelSlug: 'gpt-image-2', methodCode: 'text_to_image', mode: 'high',   resolution: '2048x2048', priceCents: 97.0 },
+  { modelSlug: 'gpt-image-2', methodCode: 'text_to_image', mode: 'auto',   resolution: '2048x2048', priceCents: 24.4 },
+  // ~8x area (4K UHD)
+  { modelSlug: 'gpt-image-2', methodCode: 'text_to_image', mode: 'low',    resolution: '3840x2160', priceCents: 5.8 },
+  { modelSlug: 'gpt-image-2', methodCode: 'text_to_image', mode: 'low',    resolution: '2160x3840', priceCents: 5.8 },
+  { modelSlug: 'gpt-image-2', methodCode: 'text_to_image', mode: 'medium', resolution: '3840x2160', priceCents: 51.2 },
+  { modelSlug: 'gpt-image-2', methodCode: 'text_to_image', mode: 'medium', resolution: '2160x3840', priceCents: 51.2 },
+  { modelSlug: 'gpt-image-2', methodCode: 'text_to_image', mode: 'high',   resolution: '3840x2160', priceCents: 204 },
+  { modelSlug: 'gpt-image-2', methodCode: 'text_to_image', mode: 'high',   resolution: '2160x3840', priceCents: 204 },
+  { modelSlug: 'gpt-image-2', methodCode: 'text_to_image', mode: 'auto',   resolution: '3840x2160', priceCents: 51.2 },
+  { modelSlug: 'gpt-image-2', methodCode: 'text_to_image', mode: 'auto',   resolution: '2160x3840', priceCents: 51.2 },
+];
+
+const GPT_IMAGE_2_EDIT_PRICES: OpenAIImageBundleSpec[] = GPT_IMAGE_2_PRICES.map(
+  (p) => ({ ...p, methodCode: 'image_edit' }),
+);
+
 const OPENAI_IMAGE_PRICES: OpenAIImageBundleSpec[] = [
+  ...GPT_IMAGE_2_PRICES,
+  ...GPT_IMAGE_2_EDIT_PRICES,
   // gpt-image-1 t2i — quality × size
   { modelSlug: 'gpt-image-1', methodCode: 'text_to_image', mode: 'low',    resolution: '1024x1024', priceCents: 1.27 },
   { modelSlug: 'gpt-image-1', methodCode: 'text_to_image', mode: 'low',    resolution: '1024x1536', priceCents: 1.84 },

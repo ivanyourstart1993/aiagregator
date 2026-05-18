@@ -71,9 +71,15 @@ type TaskType =
   | 'text_to_image_gptimage_low_1k'
   | 'text_to_image_gptimage_med_1k'
   | 'text_to_image_gptimage_high_1k'
+  | 'text_to_image_gptimage2_low_1k'
+  | 'text_to_image_gptimage2_med_1k'
+  | 'text_to_image_gptimage2_high_1k'
+  | 'text_to_image_gptimage2_med_2k'
+  | 'text_to_image_gptimage2_high_4k'
   | 'text_to_image_dalle3_std'
   | 'text_to_image_dalle3_hd'
   | 'image_edit_gptimage_med_1k'
+  | 'image_edit_gptimage2_med_1k'
   | 'text_to_video_fast_1080p'
   | 'text_to_video_quality_1080p'
   | 'text_to_video_kling_std'
@@ -119,6 +125,9 @@ interface PresetSpec {
   mode?: string;
   needsImage?: boolean;
   needsVideo?: true;
+  // Override for the input-image cap. Defaults to MAX_INPUT_IMAGES (6); set
+  // higher for models that accept more (gpt-image-2 takes up to 16).
+  maxInputImages?: number;
   // Display price — UX-only estimate, the real cost is decided
   // server-side at admit time.
   approxUsd: number;
@@ -217,6 +226,60 @@ const PRESETS: Record<TaskType, PresetSpec> = {
     mode: 'medium',
     needsImage: true,
     approxUsd: 0.0483,
+  },
+  // gpt-image-2 — flagship OpenAI image model (Apr 2026). Reasoning-based
+  // composition, multilingual text rendering, up to 3840px long edge, up
+  // to 16 input images for composite edits. Prices match seeded
+  // OPENAI_IMAGE_PRICES (raw OpenAI cost + ~15% margin).
+  text_to_image_gptimage2_low_1k: {
+    provider: 'openai_image',
+    model: 'gpt-image-2',
+    method: 'text_to_image',
+    resolution: '1024x1024',
+    mode: 'low',
+    approxUsd: 0.0069,
+  },
+  text_to_image_gptimage2_med_1k: {
+    provider: 'openai_image',
+    model: 'gpt-image-2',
+    method: 'text_to_image',
+    resolution: '1024x1024',
+    mode: 'medium',
+    approxUsd: 0.061,
+  },
+  text_to_image_gptimage2_high_1k: {
+    provider: 'openai_image',
+    model: 'gpt-image-2',
+    method: 'text_to_image',
+    resolution: '1024x1024',
+    mode: 'high',
+    approxUsd: 0.243,
+  },
+  text_to_image_gptimage2_med_2k: {
+    provider: 'openai_image',
+    model: 'gpt-image-2',
+    method: 'text_to_image',
+    resolution: '2048x2048',
+    mode: 'medium',
+    approxUsd: 0.244,
+  },
+  text_to_image_gptimage2_high_4k: {
+    provider: 'openai_image',
+    model: 'gpt-image-2',
+    method: 'text_to_image',
+    resolution: '3840x2160',
+    mode: 'high',
+    approxUsd: 2.04,
+  },
+  image_edit_gptimage2_med_1k: {
+    provider: 'openai_image',
+    model: 'gpt-image-2',
+    method: 'image_edit',
+    resolution: '1024x1024',
+    mode: 'medium',
+    needsImage: true,
+    maxInputImages: 16,
+    approxUsd: 0.061,
   },
   text_to_video_fast_1080p: {
     provider: 'google_veo',
@@ -459,6 +522,16 @@ const TASK_GROUPS: Array<{ labelKey: string; types: TaskType[] }> = [
     types: ['text_to_image_flash_1k', 'text_to_image_flash_2k', 'text_to_image_pro_2k'],
   },
   {
+    labelKey: 'groupImageGptImage2',
+    types: [
+      'text_to_image_gptimage2_low_1k',
+      'text_to_image_gptimage2_med_1k',
+      'text_to_image_gptimage2_high_1k',
+      'text_to_image_gptimage2_med_2k',
+      'text_to_image_gptimage2_high_4k',
+    ],
+  },
+  {
     labelKey: 'groupImageOpenAI',
     types: [
       'text_to_image_gptimage_low_1k',
@@ -470,7 +543,12 @@ const TASK_GROUPS: Array<{ labelKey: string; types: TaskType[] }> = [
   },
   {
     labelKey: 'groupImageEdit',
-    types: ['image_edit_flash_1k', 'image_edit_pro_2k', 'image_edit_gptimage_med_1k'],
+    types: [
+      'image_edit_flash_1k',
+      'image_edit_pro_2k',
+      'image_edit_gptimage_med_1k',
+      'image_edit_gptimage2_med_1k',
+    ],
   },
   {
     labelKey: 'groupVideoVeo',
@@ -776,7 +854,9 @@ export function PlaygroundClient({ balance }: Props) {
     isMediaPreset && (preset.needsImage || (preset.needsVideo && !!preset.imageMethod));
   // Veo's image_to_video takes a single first-frame image; Banana's
   // image_edit accepts up to MAX_INPUT_IMAGES. Cap at runtime.
-  const imageCap = preset.needsImage ? MAX_INPUT_IMAGES : 1;
+  const imageCap = preset.needsImage
+    ? preset.maxInputImages ?? MAX_INPUT_IMAGES
+    : 1;
 
   // Reset duration when switching presets so we never carry "10s" into
   // a model that doesn't support it. `durationOptions[0]` is the canonical

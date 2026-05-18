@@ -776,7 +776,7 @@ const openaiImageBaseProps = (extra: Record<string, unknown> = {}) => ({
     enum: ['auto', 'low', 'medium', 'high', 'standard', 'hd'],
     'x-bundle-dim': true,
     description:
-      'Quality tier. gpt-image-1: low | medium | high | auto. dall-e-3: standard | hd. dall-e-2: ignored.',
+      'Quality tier. gpt-image-2 and gpt-image-1: low | medium | high | auto. dall-e-3: standard | hd. dall-e-2: ignored.',
   },
   resolution: {
     type: 'string',
@@ -789,10 +789,13 @@ const openaiImageBaseProps = (extra: Record<string, unknown> = {}) => ({
       '1536x1024',
       '1024x1792',
       '1792x1024',
+      '2048x2048',
+      '3840x2160',
+      '2160x3840',
     ],
     'x-bundle-dim': true,
     description:
-      'Output size. gpt-image-1: 1024x1024 | 1024x1536 | 1536x1024 | auto. dall-e-3: 1024x1024 | 1024x1792 | 1792x1024. dall-e-2: 256x256 | 512x512 | 1024x1024.',
+      'Output size. gpt-image-2: 1024x1024 | 1024x1536 | 1536x1024 | 2048x2048 | 3840x2160 | 2160x3840 | auto. gpt-image-1: 1024x1024 | 1024x1536 | 1536x1024 | auto. dall-e-3: 1024x1024 | 1024x1792 | 1792x1024. dall-e-2: 256x256 | 512x512 | 1024x1024.',
   },
   images_count: {
     type: 'integer',
@@ -829,11 +832,11 @@ const openaiImageMethods: MethodSeed[] = [
           enum: ['vivid', 'natural'],
           description: 'dall-e-3 only: rendering style.',
         },
-        // gpt-image-1 only
+        // Native GPT-Image family (gpt-image-1, gpt-image-2)
         background: {
           type: 'string',
           enum: ['auto', 'transparent', 'opaque'],
-          description: 'gpt-image-1 only: background handling.',
+          description: 'gpt-image-1 / gpt-image-2 only: background handling.',
         },
       }),
       required: ['prompt'],
@@ -858,10 +861,10 @@ const openaiImageMethods: MethodSeed[] = [
         input_images: {
           type: 'array',
           minItems: 1,
-          maxItems: 4,
+          maxItems: 16,
           items: { type: 'string', format: 'uri' },
           description:
-            'Source images. dall-e-2 accepts exactly one PNG; gpt-image-1 supports composite edits across multiple inputs.',
+            'Source images. dall-e-2 accepts exactly one PNG; gpt-image-1 supports up to 6 inputs for composite edits; gpt-image-2 raises the cap to 16.',
         },
         mask: {
           type: 'string',
@@ -1194,9 +1197,17 @@ export const initialCatalog: ProviderSeed[] = [
     code: 'openai_image',
     publicName: 'OpenAI Images',
     description:
-      'OpenAI image generation — gpt-image-1 (native multimodal), dall-e-3 (legacy), dall-e-2 (legacy).',
+      'OpenAI image generation — gpt-image-2 (flagship, reasoning-based), gpt-image-1 (native multimodal), dall-e-3 (legacy), dall-e-2 (legacy).',
     sortOrder: 50,
     models: [
+      {
+        code: 'gpt-image-2',
+        publicName: 'GPT Image 2',
+        description:
+          'Flagship OpenAI image model (Apr 2026) — reasoning-based composition, near-perfect multilingual text rendering (CJK, Arabic, Devanagari), supports up to 3840px on the long edge, accepts up to 16 input images for composite edits.',
+        sortOrder: 5,
+        methods: openaiImageMethods.map((m, i) => ({ ...m, sortOrder: (i + 1) * 10 })),
+      },
       {
         code: 'gpt-image-1',
         publicName: 'GPT Image 1',
