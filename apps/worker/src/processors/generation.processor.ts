@@ -225,10 +225,17 @@ async function pickAccount(
           }
         : {}),
     },
-    // LRU: least-recently-used first. NULL lastUsedAt sorts first by Postgres
-    // default; that's intended (newly added accounts get first pick — but
-    // their warmup factor caps them low so they ramp gradually).
-    orderBy: [{ lastUsedAt: 'asc' }, { createdAt: 'asc' }],
+    // LRU: least-recently-used first. EXPLICIT `nulls: 'first'` because the
+    // Postgres default for ASC is NULLS LAST — without this, brand-new
+    // accounts (lastUsedAt=null) fell to the BACK of the queue and never got
+    // any traffic, even though their warmup factor was ready to throttle
+    // them. The original comment claimed NULLS FIRST was the default; it
+    // wasn't. Discovered via "Google Acount 12" sitting idle for hours
+    // behind 22 older active accounts.
+    orderBy: [
+      { lastUsedAt: { sort: 'asc', nulls: 'first' } },
+      { createdAt: 'asc' },
+    ],
   });
 
   for (const a of candidates) {
