@@ -2,7 +2,7 @@
 
 import { useFormatter, useTranslations } from 'next-intl';
 import type { ApiRequestDetailView } from '@/lib/server-api';
-import { formatNanoUSDWithSign } from '@/lib/money';
+import { formatNanoUSDSmart } from '@/lib/money';
 import { ApiRequestStatusBadge } from './ApiRequestStatusBadge';
 import { TaskStatusBadge } from './TaskStatusBadge';
 
@@ -56,12 +56,12 @@ export function ApiRequestDetail({ detail }: Props) {
         <h3 className="mb-2 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
           {t('pricing')}
         </h3>
-        <Row label={t('clientPrice')} value={formatNanoUSDWithSign(detail.clientPriceUnits)} />
+        <Row label={t('clientPrice')} value={formatNanoUSDSmart(detail.clientPriceUnits)} />
         {detail.basePriceUnits ? (
-          <Row label={t('basePrice')} value={formatNanoUSDWithSign(detail.basePriceUnits)} />
+          <Row label={t('basePrice')} value={formatNanoUSDSmart(detail.basePriceUnits)} />
         ) : null}
         {detail.discountUnits ? (
-          <Row label={t('discount')} value={formatNanoUSDWithSign(detail.discountUnits)} />
+          <Row label={t('discount')} value={formatNanoUSDSmart(detail.discountUnits)} />
         ) : null}
         {detail.pricingSnapshotId ? (
           <Row label={t('pricingSnapshot')} value={<span className="text-xs">{detail.pricingSnapshotId}</span>} />

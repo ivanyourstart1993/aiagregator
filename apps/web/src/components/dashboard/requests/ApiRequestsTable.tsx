@@ -15,7 +15,7 @@ import {
 } from '@/components/ui/table';
 import { Link } from '@/i18n/navigation';
 import { type ApiRequestsPage } from '@/lib/server-api';
-import { formatNanoUSDWithSign } from '@/lib/money';
+import { formatNanoUSDSmart } from '@/lib/money';
 import { ApiRequestStatusBadge } from './ApiRequestStatusBadge';
 import { TaskStatusBadge } from './TaskStatusBadge';
 import { fetchApiRequestsAction } from '@/app/[locale]/(dashboard)/requests/actions';
@@ -80,7 +80,7 @@ export function ApiRequestsTable({ initialPage }: Props) {
                     <ApiRequestStatusBadge status={r.status} />
                   </TableCell>
                   <TableCell className="text-right font-mono">
-                    {formatNanoUSDWithSign(r.clientPriceUnits)}
+                    {formatNanoUSDSmart(r.clientPriceUnits)}
                   </TableCell>
                   <TableCell>
                     {r.taskStatus ? <TaskStatusBadge status={r.taskStatus} /> : '—'}

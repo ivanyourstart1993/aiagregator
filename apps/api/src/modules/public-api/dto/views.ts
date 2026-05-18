@@ -85,6 +85,12 @@ export interface ApiRequestView {
   id: string;
   status: ApiRequestStatus;
   method_id: string;
+  // Resolved triple — the frontend needs the human-readable codes to render
+  // "<provider> / <model> / <method>" rather than a raw cuid. Cheap join on
+  // read; the catalog is small and Method is indexed by id.
+  provider_code: string;
+  model_code: string;
+  method_code: string;
   bundle_key: string;
   base_price_units: bigint;
   discount_units: bigint;

@@ -44,8 +44,9 @@ export class InternalApiRequestsController {
       }),
       this.prisma.apiRequest.count({ where }),
     ]);
+    const codes = await this.resolveMethodCodes(rows.map((r) => r.methodId));
     return {
-      items: rows.map(toView),
+      items: rows.map((r) => toView(r, codes.get(r.methodId))),
       total,
       page: p,
       pageSize: ps,
@@ -61,11 +62,41 @@ export class InternalApiRequestsController {
       where: { id, userId: user.id },
     });
     if (!row) throw new NotFoundException('ApiRequest not found');
-    return toView(row);
+    const codes = await this.resolveMethodCodes([row.methodId]);
+    return toView(row, codes.get(row.methodId));
+  }
+
+  // Resolve methodId → { provider.code, model.code, method.code } in one query.
+  // ApiRequest doesn't have a Prisma relation to Method, so we batch-fetch the
+  // few distinct methodIds in the current page and build a map. Catalog is
+  // small (~hundreds of methods), so a single roundtrip is cheap.
+  private async resolveMethodCodes(
+    methodIds: string[],
+  ): Promise<Map<string, { provider: string; model: string; method: string }>> {
+    const unique = Array.from(new Set(methodIds));
+    if (unique.length === 0) return new Map();
+    const methods = await this.prisma.method.findMany({
+      where: { id: { in: unique } },
+      select: {
+        id: true,
+        code: true,
+        model: { select: { code: true } },
+        provider: { select: { code: true } },
+      },
+    });
+    const out = new Map<string, { provider: string; model: string; method: string }>();
+    for (const m of methods) {
+      out.set(m.id, {
+        provider: m.provider.code,
+        model: m.model.code,
+        method: m.code,
+      });
+    }
+    return out;
   }
 }
 
-function toView(r: {
+interface ApiRequestRow {
   id: string;
   status: import('@aiagg/db').ApiRequestStatus;
   methodId: string;
@@ -80,11 +111,19 @@ function toView(r: {
   errorMessage: string | null;
   createdAt: Date;
   finalizedAt: Date | null;
-}): ApiRequestView {
+}
+
+function toView(
+  r: ApiRequestRow,
+  codes: { provider: string; model: string; method: string } | undefined,
+): ApiRequestView {
   return {
     id: r.id,
     status: r.status,
     method_id: r.methodId,
+    provider_code: codes?.provider ?? '',
+    model_code: codes?.model ?? '',
+    method_code: codes?.method ?? '',
     bundle_key: r.bundleKey,
     base_price_units: r.basePriceUnits,
     discount_units: r.discountUnits,

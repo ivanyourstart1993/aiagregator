@@ -119,3 +119,22 @@ export function formatNanoUSDWithSign(
   if (formatted.startsWith('-')) return `-$${formatted.slice(1)}`;
   return `$${formatted}`;
 }
+
+/**
+ * Smart formatter for amounts that may be sub-cent. Picks fractionDigits
+ * dynamically so $0.002 doesn't collapse to "$0.00":
+ *   0                → "$0"
+ *   |x| < $0.01      → "$0.0023" (4 decimals)
+ *   |x| < $1         → "$0.025"  (3 decimals)
+ *   |x| ≥ $1         → "$1.12"   (2 decimals)
+ * Used in transaction/request tables where text/embedding charges
+ * routinely land below a cent.
+ */
+export function formatNanoUSDSmart(nanoStr: string | null | undefined): string {
+  const units = parseNano(nanoStr);
+  if (units === 0n) return '$0';
+  const abs = units < 0n ? -units : units;
+  // abs is in nano-USD-cents (1e8 per dollar). Compare against 1 cent = 1e6.
+  const digits = abs < NANO_PER_CENT ? 4 : abs < NANO_PER_DOLLAR ? 3 : 2;
+  return formatNanoUSDWithSign(nanoStr, digits);
+}
