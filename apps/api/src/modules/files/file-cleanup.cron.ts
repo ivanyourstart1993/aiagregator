@@ -9,7 +9,14 @@ import { PrismaService } from '../../common/prisma/prisma.service';
 import { StorageService } from '../../common/storage/storage.service';
 import { AlertsService } from '../alerts/alerts.service';
 
-const BATCH_LIMIT = 1000;
+// Per-tick cap. Cron runs once daily, so even with peak ~1k uploads/hour we
+// need headroom — 1000 was the original Stage 15 guess and proved tight in
+// May 2026 when 9k expired files piled up and the cron took 9+ days to
+// drain. Raised to 5000; the inner loop runs one S3 DeleteObjects per
+// 500-batch (DeleteObjects caps at 1000 per call but smaller batches keep
+// per-iteration latency low).
+const BATCH_LIMIT = 5000;
+const DELETE_CHUNK = 500;
 
 // Playground input uploads land under `playground/<userId>/...` and never get
 // a ResultFile row, so the ResultFile-driven sweep below misses them. Most
@@ -94,48 +101,75 @@ export class FileCleanupCron {
       orderBy: { expiresAt: 'asc' },
       select: { id: true, storageKey: true },
     });
+    if (due.length === 0) {
+      this.logger.log('Cleanup: nothing to do');
+      return { tried: 0, deleted: 0, failed: 0 };
+    }
     let deleted = 0;
     let failed = 0;
-    for (const f of due) {
+    // Chunked bulk delete. Original per-file path made N S3 + N DB round-trips,
+    // which capped throughput at ~10/sec and let backlogs stretch over days.
+    // DeleteObjects + updateMany cuts that to 2 round-trips per chunk.
+    for (let i = 0; i < due.length; i += DELETE_CHUNK) {
+      const chunk = due.slice(i, i + DELETE_CHUNK);
       try {
-        await this.storage.delete(f.storageKey);
-        await this.prisma.resultFile.update({
-          where: { id: f.id },
-          data: {
-            status: ResultFileStatus.DELETED,
-            deletedAt: new Date(),
-          },
-        });
-        deleted += 1;
+        const res = await this.storage.deleteMany(chunk.map((f) => f.storageKey));
+        // S3 DeleteObjects in Quiet mode only echoes errors. We don't have a
+        // per-key mapping here, so on partial failure mark the whole chunk as
+        // DELETION_FAILED — the next tick will retry. In practice S3 either
+        // succeeds for all keys or returns a global error.
+        if (res.failed === 0) {
+          await this.prisma.resultFile.updateMany({
+            where: { id: { in: chunk.map((f) => f.id) } },
+            data: { status: ResultFileStatus.DELETED, deletedAt: new Date() },
+          });
+          deleted += chunk.length;
+        } else {
+          await this.prisma.resultFile.updateMany({
+            where: { id: { in: chunk.map((f) => f.id) } },
+            data: { status: ResultFileStatus.DELETION_FAILED },
+          });
+          failed += chunk.length;
+          await this.raiseChunkAlert(chunk, `${res.failed} of ${chunk.length} keys failed`);
+        }
       } catch (err) {
-        failed += 1;
         const message = err instanceof Error ? err.message : String(err);
         this.logger.warn(
-          `failed to delete result file ${f.id} (${f.storageKey}): ${message}`,
+          `chunk delete failed (${chunk.length} files): ${message}`,
         );
+        failed += chunk.length;
         await this.prisma.resultFile
-          .update({
-            where: { id: f.id },
+          .updateMany({
+            where: { id: { in: chunk.map((f) => f.id) } },
             data: { status: ResultFileStatus.DELETION_FAILED },
           })
           .catch(() => undefined);
-        await this.alerts
-          .raise({
-            category: AlertCategory.STORAGE_FULL,
-            severity: AlertSeverity.WARNING,
-            title: `Failed to delete expired result file`,
-            message: `ResultFile ${f.id} (${f.storageKey}) deletion failed: ${message}`,
-            targetType: 'result_file',
-            targetId: f.id,
-            dedupeKey: `file_deletion_failed:${f.id}`,
-            metadata: { storageKey: f.storageKey, error: message },
-          })
-          .catch(() => undefined);
+        await this.raiseChunkAlert(chunk, message);
       }
     }
     this.logger.log(
       `Cleanup: tried ${due.length}, deleted ${deleted}, failed ${failed}`,
     );
     return { tried: due.length, deleted, failed };
+  }
+
+  private async raiseChunkAlert(
+    chunk: Array<{ id: string; storageKey: string }>,
+    message: string,
+  ): Promise<void> {
+    const sample = chunk[0];
+    if (!sample) return;
+    await this.alerts
+      .raise({
+        category: AlertCategory.STORAGE_FULL,
+        severity: AlertSeverity.WARNING,
+        title: `Failed to delete expired result files (batch)`,
+        message: `Batch of ${chunk.length} files starting at ${sample.id} (${sample.storageKey}) failed: ${message}`,
+        targetType: 'result_file',
+        targetId: sample.id,
+        dedupeKey: `file_deletion_failed:batch:${sample.id}`,
+        metadata: { sampleKey: sample.storageKey, batchSize: chunk.length, error: message },
+      })
+      .catch(() => undefined);
   }
 }
