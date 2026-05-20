@@ -277,11 +277,19 @@ export class OpenAiImageAdapter implements ProviderAdapter {
     if (quality && isNativeGptImage(model.code)) fd.append('quality', quality);
     if (!isNativeGptImage(model.code)) fd.append('response_format', 'b64_json');
 
+    // OpenAI's /images/edits rejects multiple multipart parts named `image`
+    // with "Duplicate parameter: 'image'. […] use the array syntax instead
+    // e.g. 'image[]=<value>'". Switch to `image[]` for multi-input edits on
+    // the native GPT Image family (gpt-image-1, gpt-image-2). dall-e-2 is
+    // single-image only and threw above; single-image gpt-image keeps the
+    // legacy `image` field name (OpenAI accepts either form for n=1).
+    const imageFieldName =
+      sourceUrls.length > 1 && isNativeGptImage(model.code) ? 'image[]' : 'image';
     for (let i = 0; i < sourceUrls.length; i++) {
       const decoded = await decodeInputImage(sourceUrls[i]!);
       const ext = mimeToExt(decoded.mimeType);
       const blob = new Blob([new Uint8Array(decoded.body)], { type: decoded.mimeType });
-      fd.append('image', blob, `input_${i}.${ext}`);
+      fd.append(imageFieldName, blob, `input_${i}.${ext}`);
     }
 
     const maskUrl = pickString(params, 'mask', 'mask_url');
