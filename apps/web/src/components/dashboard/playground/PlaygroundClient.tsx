@@ -1835,6 +1835,7 @@ export function PlaygroundClient({ balance }: Props) {
                         muted
                         playsInline
                         preload="metadata"
+                        crossOrigin="anonymous"
                       />
                     ) : (
                       // eslint-disable-next-line @next/next/no-img-element
@@ -1842,6 +1843,7 @@ export function PlaygroundClient({ balance }: Props) {
                         src={first.url}
                         alt={t(`type_${r.preset}`)}
                         className="h-full w-full object-cover"
+                        crossOrigin="anonymous"
                       />
                     )
                   ) : null}
@@ -2016,11 +2018,17 @@ function ResultPreview({ file }: { file: ResultFile }) {
           muted
           playsInline
           preload="metadata"
+          crossOrigin="anonymous"
           className="w-full rounded-md bg-black"
         />
       ) : (
         // eslint-disable-next-line @next/next/no-img-element
-        <img src={file.url} alt="" className="w-full rounded-md" />
+        <img
+          src={file.url}
+          alt=""
+          className="w-full rounded-md"
+          crossOrigin="anonymous"
+        />
       )}
       <Button asChild size="sm" variant="outline" className="gap-2">
         <a href={file.url} download target="_blank" rel="noopener noreferrer">
