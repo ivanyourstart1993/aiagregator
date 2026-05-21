@@ -250,9 +250,17 @@ const KLING_PRICES: KlingBundleSpec[] = [
   { modelSlug: 'kling-2.6', methodCode: 'text_to_video', mode: 'standard', durationSeconds: 10, resolution: '720p',  priceCents: 180 },
   { modelSlug: 'kling-2.6', methodCode: 'text_to_video', mode: 'pro',      durationSeconds: 5,  resolution: '1080p', priceCents: 250 },
   { modelSlug: 'kling-2.6', methodCode: 'text_to_video', mode: 'pro',      durationSeconds: 10, resolution: '1080p', priceCents: 450 },
-  { modelSlug: 'kling-v3',  methodCode: 'text_to_video', mode: 'standard', durationSeconds: 5,  resolution: '720p',  priceCents: 140 },
-  { modelSlug: 'kling-v3',  methodCode: 'text_to_video', mode: 'pro',      durationSeconds: 5,  resolution: '1080p', priceCents: 300 },
-  { modelSlug: 'kling-v3',  methodCode: 'text_to_video', mode: 'pro',      durationSeconds: 10, resolution: '1080p', priceCents: 550 },
+  // kling-v3 (Kling V3) — full grid: std/720p + pro/1080p, t2v + i2v, 5s+10s.
+  // i2v prices mirror t2v (same convention as kling-v1-6 / kling-v2-1-master).
+  // 10s = 5s × 1.8 (kling-2.6 / kling-v1-6 ratio).
+  { modelSlug: 'kling-v3',  methodCode: 'text_to_video',  mode: 'standard', durationSeconds: 5,  resolution: '720p',  priceCents: 140 },
+  { modelSlug: 'kling-v3',  methodCode: 'text_to_video',  mode: 'standard', durationSeconds: 10, resolution: '720p',  priceCents: 252 },
+  { modelSlug: 'kling-v3',  methodCode: 'text_to_video',  mode: 'pro',      durationSeconds: 5,  resolution: '1080p', priceCents: 300 },
+  { modelSlug: 'kling-v3',  methodCode: 'text_to_video',  mode: 'pro',      durationSeconds: 10, resolution: '1080p', priceCents: 550 },
+  { modelSlug: 'kling-v3',  methodCode: 'image_to_video', mode: 'standard', durationSeconds: 5,  resolution: '720p',  priceCents: 140 },
+  { modelSlug: 'kling-v3',  methodCode: 'image_to_video', mode: 'standard', durationSeconds: 10, resolution: '720p',  priceCents: 252 },
+  { modelSlug: 'kling-v3',  methodCode: 'image_to_video', mode: 'pro',      durationSeconds: 5,  resolution: '1080p', priceCents: 300 },
+  { modelSlug: 'kling-v3',  methodCode: 'image_to_video', mode: 'pro',      durationSeconds: 10, resolution: '1080p', priceCents: 550 },
   { modelSlug: 'kling-o1',  methodCode: 'image_to_video', mode: 'pro',     durationSeconds: 5,  resolution: '1080p', priceCents: 300 },
   { modelSlug: 'kling-o1',  methodCode: 'image_to_video', mode: 'pro',     durationSeconds: 10, resolution: '1080p', priceCents: 550 },
   // kling-v1-6 (Kling 1.6) — std/pro, 5s and 10s
@@ -269,11 +277,19 @@ const KLING_PRICES: KlingBundleSpec[] = [
   { modelSlug: 'kling-v2-1-master', methodCode: 'text_to_video',  mode: 'pro', durationSeconds: 10, resolution: '1080p', priceCents: 126 },
   { modelSlug: 'kling-v2-1-master', methodCode: 'image_to_video', mode: 'pro', durationSeconds: 5,  resolution: '1080p', priceCents: 70 },
   { modelSlug: 'kling-v2-1-master', methodCode: 'image_to_video', mode: 'pro', durationSeconds: 10, resolution: '1080p', priceCents: 126 },
-  // kling-v2-5-turbo (Kling 2.5 Turbo) — pro only
-  { modelSlug: 'kling-v2-5-turbo', methodCode: 'text_to_video',  mode: 'pro', durationSeconds: 5,  resolution: '1080p', priceCents: 50 },
-  { modelSlug: 'kling-v2-5-turbo', methodCode: 'text_to_video',  mode: 'pro', durationSeconds: 10, resolution: '1080p', priceCents: 90 },
-  { modelSlug: 'kling-v2-5-turbo', methodCode: 'image_to_video', mode: 'pro', durationSeconds: 5,  resolution: '1080p', priceCents: 50 },
-  { modelSlug: 'kling-v2-5-turbo', methodCode: 'image_to_video', mode: 'pro', durationSeconds: 10, resolution: '1080p', priceCents: 90 },
+  // kling-v2-5-turbo (Kling 2.5 Turbo) — full grid: std/720p + pro/1080p.
+  // The schema (klingMethods in initial-catalog.ts) exposes BOTH std and pro
+  // modes; missing std rows surfaced as price_not_configured for clients on
+  // the standard tier. std prices derived from the pro/1080p tier at ×0.4
+  // (matches kling-2.6: std=100 vs pro=250 → 0.4), 10s = 5s × 1.8.
+  { modelSlug: 'kling-v2-5-turbo', methodCode: 'text_to_video',  mode: 'standard', durationSeconds: 5,  resolution: '720p',  priceCents: 20 },
+  { modelSlug: 'kling-v2-5-turbo', methodCode: 'text_to_video',  mode: 'standard', durationSeconds: 10, resolution: '720p',  priceCents: 36 },
+  { modelSlug: 'kling-v2-5-turbo', methodCode: 'text_to_video',  mode: 'pro',      durationSeconds: 5,  resolution: '1080p', priceCents: 50 },
+  { modelSlug: 'kling-v2-5-turbo', methodCode: 'text_to_video',  mode: 'pro',      durationSeconds: 10, resolution: '1080p', priceCents: 90 },
+  { modelSlug: 'kling-v2-5-turbo', methodCode: 'image_to_video', mode: 'standard', durationSeconds: 5,  resolution: '720p',  priceCents: 20 },
+  { modelSlug: 'kling-v2-5-turbo', methodCode: 'image_to_video', mode: 'standard', durationSeconds: 10, resolution: '720p',  priceCents: 36 },
+  { modelSlug: 'kling-v2-5-turbo', methodCode: 'image_to_video', mode: 'pro',      durationSeconds: 5,  resolution: '1080p', priceCents: 50 },
+  { modelSlug: 'kling-v2-5-turbo', methodCode: 'image_to_video', mode: 'pro',      durationSeconds: 10, resolution: '1080p', priceCents: 90 },
 ];
 
 function buildBundleKey(spec: {
