@@ -54,6 +54,13 @@ export const envSchema = z
       .string()
       .optional()
       .or(z.literal('').transform(() => undefined)),
+    // Optional: forward a copy of every matched inbound reply to this address
+    // (e.g. personal Gmail) so the operator can read/respond outside the admin
+    // panel. Empty/unset → no forwarding.
+    INBOUND_FORWARD_TO: z
+      .string()
+      .optional()
+      .or(z.literal('').transform(() => undefined)),
     // Pepper for HMAC-SHA256 signing of unsubscribe tokens. Reuse a 32+ char
     // secret; rotating invalidates all existing unsubscribe links (so don't).
     UNSUBSCRIBE_TOKEN_SECRET: z

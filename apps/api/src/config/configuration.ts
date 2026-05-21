@@ -26,6 +26,10 @@ export interface OutreachMailConfig {
   replyTo?: string;
   webhookSecret?: string;
   inboundWebhookSecret?: string;
+  // Optional: when an inbound reply is matched to a lead, also forward a copy
+  // of the email body to this address (e.g. ops@... or a personal Gmail).
+  // Replies are still recorded in Conversation/Message regardless.
+  inboundForwardTo?: string;
 }
 
 export interface RedisConfig {
@@ -73,6 +77,7 @@ export function buildConfig(env: AppEnv): AppConfig {
       replyTo: env.RESEND_OUTREACH_REPLY_TO,
       webhookSecret: env.RESEND_OUTREACH_WEBHOOK_SECRET,
       inboundWebhookSecret: env.RESEND_INBOUND_WEBHOOK_SECRET,
+      inboundForwardTo: env.INBOUND_FORWARD_TO,
     },
     unsubscribeTokenSecret: env.UNSUBSCRIBE_TOKEN_SECRET,
   };

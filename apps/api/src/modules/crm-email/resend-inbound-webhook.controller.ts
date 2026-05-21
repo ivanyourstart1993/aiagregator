@@ -14,6 +14,7 @@ import { LeadStatus } from '@aiagg/db';
 import { Public } from '../../common/decorators/public.decorator';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import type { OutreachMailConfig } from '../../config/configuration';
+import { OutreachMailService } from './outreach-mail.service';
 import { verifyResendWebhook } from './svix-verify';
 
 // Resend Inbound payload shape (subset we care about). Full shape in their docs:
@@ -70,13 +71,16 @@ function trimQuotedReply(text: string): string {
 export class ResendInboundWebhookController {
   private readonly logger = new Logger(ResendInboundWebhookController.name);
   private readonly secret?: string;
+  private readonly forwardTo?: string;
 
   constructor(
     private readonly prisma: PrismaService,
+    private readonly mail: OutreachMailService,
     config: ConfigService,
   ) {
     const cfg = config.get<OutreachMailConfig>('outreachMail');
     this.secret = cfg?.inboundWebhookSecret;
+    this.forwardTo = cfg?.inboundForwardTo;
   }
 
   @Post()
@@ -246,6 +250,24 @@ export class ResendInboundWebhookController {
         });
       }
     });
+
+    if (this.forwardTo && this.mail.isConfigured()) {
+      try {
+        await this.mail.send({
+          to: this.forwardTo,
+          subject: `[Lead reply] ${subject}`,
+          text:
+            `Reply from: ${data.from?.name ? `${data.from.name} <${fromEmail}>` : fromEmail}\n` +
+            `Sent to:    ${delivery.toEmail}\n` +
+            `Lead:       https://panel.aigenway.com/crm/leads/${delivery.leadId}\n` +
+            `\n---\n\n${cleanedBody}\n`,
+        });
+      } catch (err) {
+        this.logger.warn(
+          `Inbound forward to ${this.forwardTo} failed: ${err instanceof Error ? err.message : String(err)}`,
+        );
+      }
+    }
 
     return { ok: true, matched: true, leadId: delivery.leadId };
   }
