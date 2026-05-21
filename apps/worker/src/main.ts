@@ -7,6 +7,7 @@ import { createCallbackWorker } from './processors/callback.processor';
 import { createExportsWorker } from './processors/exports.processor';
 import { createCrmDiscoveryWorker } from './processors/crm-discovery.processor';
 import { createCrmEmailWorker } from './processors/crm-email.processor';
+import { startReplyDigest } from './processors/reply-digest';
 import { WorkerAdapterRegistry } from './adapters/registry';
 import { WorkerStorage } from './storage/storage';
 
@@ -76,6 +77,23 @@ async function main(): Promise<void> {
     );
   }
 
+  // Daily reply digest — opt-in via INBOUND_FORWARD_TO (same address that
+  // receives forwarded per-reply copies from the inbound webhook). Skipped
+  // when either Resend or the digest recipient is missing.
+  const digestRecipient = process.env.INBOUND_FORWARD_TO ?? '';
+  let replyDigestHandle: { close: () => Promise<void> } | null = null;
+  if (outreachApiKey && outreachFrom && digestRecipient) {
+    replyDigestHandle = startReplyDigest({
+      prisma,
+      resendApiKey: outreachApiKey,
+      fromAddress: outreachFrom,
+      digestRecipient,
+    });
+    console.log(`[worker] reply-digest scheduler started → ${digestRecipient}`);
+  } else {
+    console.log('[worker] reply-digest SKIPPED — set INBOUND_FORWARD_TO to enable');
+  }
+
   const shutdown = async (): Promise<void> => {
     console.log('[worker] shutting down...');
     try {
@@ -101,6 +119,13 @@ async function main(): Promise<void> {
     if (crmEmailHandle) {
       try {
         await crmEmailHandle.close();
+      } catch {
+        /* swallow */
+      }
+    }
+    if (replyDigestHandle) {
+      try {
+        await replyDigestHandle.close();
       } catch {
         /* swallow */
       }
