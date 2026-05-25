@@ -232,10 +232,10 @@ export class AdminUsersController {
       // numbers next to overrides.
       defaults: {
         rateLimitPerMin: Number(process.env.RATE_LIMIT_PER_MIN ?? 60),
-        rateLimitPerDay: Number(process.env.RATE_LIMIT_PER_DAY ?? 1000),
+        rateLimitPerDay: Number(process.env.RATE_LIMIT_PER_DAY ?? 50000),
         maxConcurrentTasks: Number(process.env.MAX_CONCURRENT_PER_USER ?? 10),
         maxRequestsPerDayPerUser: Number(
-          process.env.MAX_REQUESTS_PER_DAY_PER_USER ?? 10000,
+          process.env.MAX_REQUESTS_PER_DAY_PER_USER ?? 50000,
         ),
       },
     };

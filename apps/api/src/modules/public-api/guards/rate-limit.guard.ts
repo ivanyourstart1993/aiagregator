@@ -35,7 +35,7 @@ export class RateLimitGuard implements CanActivate {
     this.dayLimit = Number(
       config.get<string>('RATE_LIMIT_PER_DAY') ??
         process.env.RATE_LIMIT_PER_DAY ??
-        1000,
+        50000,
     );
   }
 

@@ -94,7 +94,7 @@ export class GenerationsService {
     }
 
     // 3) Daily request cap, tracked in Redis (per UTC day).
-    const dailyEnv = Number(process.env.MAX_REQUESTS_PER_DAY_PER_USER ?? 10000);
+    const dailyEnv = Number(process.env.MAX_REQUESTS_PER_DAY_PER_USER ?? 50000);
     const dailyLimit = Math.max(
       1,
       typeof user.maxRequestsPerDayPerUser === 'number' && user.maxRequestsPerDayPerUser > 0
