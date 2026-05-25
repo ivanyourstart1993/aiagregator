@@ -27,7 +27,10 @@ function signJwtRS256(header: object, payload: object, privateKey: string): stri
   return `${data}.${sig}`;
 }
 
-async function getSAAccessToken(sa: ServiceAccountKey): Promise<string> {
+async function getSAAccessToken(
+  sa: ServiceAccountKey,
+  agent: HttpsProxyAgent<string>,
+): Promise<string> {
   const cached = saTokenCache.get(sa.client_email);
   const now = Math.floor(Date.now() / 1000);
   if (cached && cached.expiresAt - 120 > now) return cached.token;
@@ -48,11 +51,17 @@ async function getSAAccessToken(sa: ServiceAccountKey): Promise<string> {
     grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer',
     assertion: jwt,
   });
-  const res = await fetch(tokenUri, {
+  // Token exchange MUST go through the same proxy as the subsequent Vertex
+  // call. Otherwise Google sees the SA token request from our datacenter
+  // egress IP and the API call from the proxy — trivial correlation by
+  // (client_email, timestamp, project_id) burns the whole pool.
+  const init: RequestInit & { agent: unknown } = {
     method: 'POST',
     headers: { 'content-type': 'application/x-www-form-urlencoded' },
     body: body.toString(),
-  });
+    agent,
+  };
+  const res = await fetch(tokenUri, init);
   if (!res.ok) {
     const t = await res.text();
     throw new AdapterError(
@@ -560,7 +569,10 @@ export class GoogleBananaAdapter implements ProviderAdapter {
       throw new AdapterError('validation', 'prompt is required');
     }
 
-    const access = await getSAAccessToken(sa);
+    // Build proxy FIRST — throws if missing, so we skip the SA token
+    // exchange entirely (no direct-IP touch of oauth2.googleapis.com).
+    const agent = this.buildProxyAgent(ctx);
+    const access = await getSAAccessToken(sa, agent);
     // Imagen catalog codes are already valid Vertex publisher model names
     // (`imagen-4.0-generate-001` etc.) — no mapping needed.
     const url = `https://${VERTEX_LOCATION}-aiplatform.googleapis.com/v1/projects/${sa.project_id}/locations/${VERTEX_LOCATION}/publishers/google/models/${encodeURIComponent(model.code)}:predict`;
@@ -573,16 +585,15 @@ export class GoogleBananaAdapter implements ProviderAdapter {
 
     let res: Response;
     try {
-      const init: RequestInit & { agent?: unknown } = {
+      const init: RequestInit & { agent: unknown } = {
         method: 'POST',
         headers: {
           'content-type': 'application/json',
           authorization: `Bearer ${access}`,
         },
         body: JSON.stringify({ instances, parameters }),
+        agent,
       };
-      const agent = this.buildProxyAgent(ctx);
-      if (agent) init.agent = agent;
       res = await fetch(url, init);
     } catch (err) {
       throw new AdapterError(
@@ -695,10 +706,10 @@ export class GoogleBananaAdapter implements ProviderAdapter {
     const aspect = pickAspect(params);
     if (aspect) generationConfig.imageConfig = { aspectRatio: aspect };
 
-    const access = await getSAAccessToken(sa);
+    const agent = this.buildProxyAgent(ctx);
+    const access = await getSAAccessToken(sa, agent);
     const vertexModel = vertexGeminiModelFor(model.code);
     const url = `https://${VERTEX_LOCATION}-aiplatform.googleapis.com/v1/projects/${sa.project_id}/locations/${VERTEX_LOCATION}/publishers/google/models/${encodeURIComponent(vertexModel)}:generateContent`;
-    const agent = this.buildProxyAgent(ctx);
     const count = pickImagesCount(params);
     const files: AdapterFile[] = [];
 
@@ -752,10 +763,20 @@ export class GoogleBananaAdapter implements ProviderAdapter {
     return typeof v === 'string' && v.length > 0 ? v : null;
   }
 
-  private buildProxyAgent(
-    ctx: AdapterContext,
-  ): HttpsProxyAgent<string> | undefined {
-    if (!ctx.proxy) return undefined;
+  // Fail-secure: this provider must NEVER hit Google directly. Selector
+  // (pickAccount) already filters out accounts without an active proxy via
+  // ALWAYS_PROXY_REQUIRED_PROVIDERS, but defence-in-depth here ensures a
+  // direct connection cannot leak even if the selector contract is violated
+  // (e.g. someone passes a hand-rolled ctx in tests, or future refactor
+  // bypasses the gate). Throws AdapterError → failAccount=true so the
+  // account moves to INVALID_CREDENTIALS and health-cron retries later.
+  private buildProxyAgent(ctx: AdapterContext): HttpsProxyAgent<string> {
+    if (!ctx.proxy) {
+      throw new AdapterError(
+        'invalid_credentials',
+        'google_banana requires an active proxy; account has none attached',
+      );
+    }
     const { protocol, host, port, login, password } = ctx.proxy;
     const scheme =
       protocol === 'SOCKS5'
@@ -769,8 +790,11 @@ export class GoogleBananaAdapter implements ProviderAdapter {
         : '';
     try {
       return new HttpsProxyAgent(`${scheme}://${auth}${host}:${port}`);
-    } catch {
-      return undefined;
+    } catch (err) {
+      throw new AdapterError(
+        'invalid_credentials',
+        `failed to build proxy agent for google_banana: ${err instanceof Error ? err.message : String(err)}`,
+      );
     }
   }
 
@@ -778,21 +802,25 @@ export class GoogleBananaAdapter implements ProviderAdapter {
    * Low-level POST → JSON. Maps Google HTTP errors → AdapterError but does
    * NOT inspect candidate content (no SAFETY/promptFeedback checks). Shared
    * by image (via callApi), text completion, and embeddings.
+   *
+   * `agent` is REQUIRED — google_banana must never hit Google directly.
+   * buildProxyAgent() throws if no proxy is configured, so this signature
+   * also documents the invariant at the type level.
    */
   private async callRawApi(
     url: string,
     body: unknown,
-    agent: HttpsProxyAgent<string> | undefined,
+    agent: HttpsProxyAgent<string>,
     extraHeaders?: Record<string, string>,
   ): Promise<Record<string, unknown>> {
     let res: Response;
     try {
-      const init: RequestInit & { agent?: unknown } = {
+      const init: RequestInit & { agent: unknown } = {
         method: 'POST',
         headers: { 'content-type': 'application/json', ...extraHeaders },
         body: JSON.stringify(body),
+        agent,
       };
-      if (agent) init.agent = agent;
       res = await fetch(url, init);
     } catch (err) {
       throw new AdapterError(
@@ -855,7 +883,7 @@ export class GoogleBananaAdapter implements ProviderAdapter {
   private async callApi(
     url: string,
     body: unknown,
-    agent: HttpsProxyAgent<string> | undefined,
+    agent: HttpsProxyAgent<string>,
     extraHeaders?: Record<string, string>,
   ): Promise<GeminiResponse> {
     const parsed = (await this.callRawApi(
@@ -969,9 +997,9 @@ export class GoogleBananaAdapter implements ProviderAdapter {
     const body = this.buildTextGenerationBody(params);
     // Vertex requires `role: "user"` on each content; AI Studio is lenient.
     // The contents already come with roles set from buildGeminiContents.
-    const access = await getSAAccessToken(sa);
-    const url = `https://${VERTEX_LOCATION}-aiplatform.googleapis.com/v1/projects/${sa.project_id}/locations/${VERTEX_LOCATION}/publishers/google/models/${encodeURIComponent(model.code)}:generateContent`;
     const agent = this.buildProxyAgent(ctx);
+    const access = await getSAAccessToken(sa, agent);
+    const url = `https://${VERTEX_LOCATION}-aiplatform.googleapis.com/v1/projects/${sa.project_id}/locations/${VERTEX_LOCATION}/publishers/google/models/${encodeURIComponent(model.code)}:generateContent`;
     const response = (await this.callRawApi(url, body, agent, {
       authorization: `Bearer ${access}`,
     })) as GeminiResponse;
@@ -1061,9 +1089,9 @@ export class GoogleBananaAdapter implements ProviderAdapter {
     const body: Record<string, unknown> = { instances };
     if (Object.keys(parameters).length > 0) body.parameters = parameters;
 
-    const access = await getSAAccessToken(sa);
-    const url = `https://${VERTEX_LOCATION}-aiplatform.googleapis.com/v1/projects/${sa.project_id}/locations/${VERTEX_LOCATION}/publishers/google/models/${encodeURIComponent(model.code)}:predict`;
     const agent = this.buildProxyAgent(ctx);
+    const access = await getSAAccessToken(sa, agent);
+    const url = `https://${VERTEX_LOCATION}-aiplatform.googleapis.com/v1/projects/${sa.project_id}/locations/${VERTEX_LOCATION}/publishers/google/models/${encodeURIComponent(model.code)}:predict`;
     const resp = (await this.callRawApi(url, body, agent, {
       authorization: `Bearer ${access}`,
     })) as {

@@ -166,6 +166,14 @@ const PROXY_OPTIONAL_PROVIDERS = new Set(
     .filter(Boolean),
 );
 
+// ALWAYS_PROXY_REQUIRED_PROVIDERS — providers where proxy is mandatory
+// regardless of env overrides. Putting these in PROXY_OPTIONAL_PROVIDERS
+// or setting BALANCER_PROXY_REQUIRED=false WILL NOT bypass the gate.
+// Currently: google_banana — Google Vertex/AI Studio anti-abuse correlates
+// SA project_id + caller_ip across the entire pool, so a single direct-IP
+// request burns the whole cluster.
+const ALWAYS_PROXY_REQUIRED_PROVIDERS = new Set(['google_banana']);
+
 function warmupFactor(warmupStartedAt: Date | null): number {
   if (!warmupStartedAt) return 1;
   const days = (Date.now() - warmupStartedAt.getTime()) / (24 * 60 * 60 * 1000);
@@ -194,10 +202,12 @@ async function pickAccount(
     where: { id: providerId },
     select: { code: true },
   });
-  const proxyOptionalForThisProvider = provider
-    ? PROXY_OPTIONAL_PROVIDERS.has(provider.code)
-    : false;
-  const enforceProxy = PROXY_REQUIRED && !proxyOptionalForThisProvider;
+  const providerCode = provider?.code ?? '';
+  const alwaysRequireProxy = ALWAYS_PROXY_REQUIRED_PROVIDERS.has(providerCode);
+  const proxyOptionalForThisProvider =
+    !alwaysRequireProxy && PROXY_OPTIONAL_PROVIDERS.has(providerCode);
+  const enforceProxy =
+    alwaysRequireProxy || (PROXY_REQUIRED && !proxyOptionalForThisProvider);
 
   // Selector predicate:
   // - status ACTIVE, OR status COOLDOWN with cooldown expired → eligible
