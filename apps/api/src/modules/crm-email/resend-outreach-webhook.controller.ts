@@ -111,6 +111,10 @@ export class ResendOutreachWebhookController {
     const leadStatusEvent: { toStatus: 'BLOCKED' | null } = { toStatus: null };
     let suppressionEmail: string | null = null;
     let suppressionReason: EmailSuppressionReason | null = null;
+    // True only when this webhook is the *first* opened event for the row —
+    // used to decide whether to bump campaign.totalOpened (idempotent across
+    // duplicate webhook deliveries / multiple opens of the same email).
+    let firstOpen = false;
 
     switch (evt.type) {
       case 'email.delivered':
@@ -118,7 +122,10 @@ export class ResendOutreachWebhookController {
         update.deliveredAt = new Date();
         break;
       case 'email.opened':
-        update.openedAt = update.openedAt ?? new Date();
+        if (!delivery.openedAt) {
+          update.openedAt = new Date();
+          firstOpen = true;
+        }
         // Don't change status (already SENT/DELIVERED)
         break;
       case 'email.bounced':
@@ -156,6 +163,7 @@ export class ResendOutreachWebhookController {
         if (update.status === EmailDeliveryStatus.DELIVERED) inc.totalDelivered = { increment: 1 };
         if (update.status === EmailDeliveryStatus.BOUNCED) inc.totalBounced = { increment: 1 };
         if (update.status === EmailDeliveryStatus.COMPLAINED) inc.totalComplained = { increment: 1 };
+        if (firstOpen) inc.totalOpened = { increment: 1 };
         if (Object.keys(inc).length > 0) {
           await tx.emailCampaign.update({
             where: { id: delivery.campaignId },

@@ -85,6 +85,7 @@ export default async function CrmCampaignsPage() {
                 <th className="px-4 py-2 text-right">Аудитория</th>
                 <th className="px-4 py-2 text-right">Sent</th>
                 <th className="px-4 py-2 text-right">Delivered</th>
+                <th className="px-4 py-2 text-right">Opened</th>
                 <th className="px-4 py-2 text-right">Bounced</th>
                 <th className="px-4 py-2 text-right">Replied</th>
                 <th className="px-4 py-2 text-left">Cap/h</th>
@@ -96,7 +97,7 @@ export default async function CrmCampaignsPage() {
               {items.length === 0 ? (
                 <tr>
                   <td
-                    colSpan={10}
+                    colSpan={11}
                     className="px-4 py-8 text-center text-sm text-muted-foreground"
                   >
                     Кампаний нет — создай ниже.
@@ -127,6 +128,21 @@ export default async function CrmCampaignsPage() {
                     </td>
                     <td className="px-4 py-2.5 text-right tabular-nums text-emerald-600">
                       {c.totalDelivered}
+                    </td>
+                    <td
+                      className="px-4 py-2.5 text-right tabular-nums text-sky-500"
+                      title={
+                        c.totalDelivered > 0
+                          ? `${Math.round((c.totalOpened / c.totalDelivered) * 100)}% от delivered`
+                          : undefined
+                      }
+                    >
+                      {c.totalOpened}
+                      {c.totalDelivered > 0 ? (
+                        <span className="ml-1 text-[10px] text-muted-foreground">
+                          ({Math.round((c.totalOpened / c.totalDelivered) * 100)}%)
+                        </span>
+                      ) : null}
                     </td>
                     <td className="px-4 py-2.5 text-right tabular-nums text-rose-500">
                       {c.totalBounced + c.totalComplained}

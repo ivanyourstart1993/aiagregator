@@ -57,10 +57,20 @@ export default async function CampaignDetailPage({ params }: Props) {
         <EmailCampaignRowActions id={campaign.id} status={campaign.status} />
       </header>
 
-      <section className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+      <section className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-7">
         <Stat label="Аудитория" value={campaign.totalAudience} />
         <Stat label="Sent" value={campaign.totalSent} />
         <Stat label="Delivered" value={campaign.totalDelivered} color="text-emerald-600" />
+        <Stat
+          label="Opened"
+          value={campaign.totalOpened}
+          color="text-sky-500"
+          hint={
+            campaign.totalDelivered > 0
+              ? `${Math.round((campaign.totalOpened / campaign.totalDelivered) * 100)}% от delivered`
+              : 'инферится Resend, без пикселя'
+          }
+        />
         <Stat label="Bounced" value={campaign.totalBounced} color="text-rose-500" />
         <Stat label="Complained" value={campaign.totalComplained} color="text-red-600" />
         <Stat label="Replied" value={campaign.totalReplied} color="text-primary" />
@@ -90,6 +100,7 @@ export default async function CampaignDetailPage({ params }: Props) {
                   <th className="px-3 py-2 text-left">Subject</th>
                   <th className="px-3 py-2 text-left">Sent</th>
                   <th className="px-3 py-2 text-left">Delivered</th>
+                  <th className="px-3 py-2 text-left">Opened</th>
                   <th className="px-3 py-2 text-left">Reply</th>
                   <th className="px-3 py-2 text-left">Status</th>
                 </tr>
@@ -101,6 +112,7 @@ export default async function CampaignDetailPage({ params }: Props) {
                     <td className="px-3 py-2 text-xs">{d.subject.slice(0, 40)}</td>
                     <td className="px-3 py-2 text-xs text-muted-foreground">{fmt(d.sentAt)}</td>
                     <td className="px-3 py-2 text-xs text-muted-foreground">{fmt(d.deliveredAt)}</td>
+                    <td className="px-3 py-2 text-xs text-muted-foreground">{fmt(d.openedAt)}</td>
                     <td className="px-3 py-2 text-xs text-muted-foreground">{fmt(d.repliedAt)}</td>
                     <td className="px-3 py-2 text-xs">
                       <span className="flex items-center gap-1.5">
@@ -128,19 +140,24 @@ function Stat({
   label,
   value,
   color,
+  hint,
 }: {
   label: string;
   value: number;
   color?: string;
+  hint?: string;
 }) {
   return (
-    <div className="rounded-md border border-border bg-card px-3 py-2.5">
+    <div className="rounded-md border border-border bg-card px-3 py-2.5" title={hint}>
       <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
         {label}
       </div>
       <div className={`mt-0.5 text-2xl font-semibold tabular-nums ${color ?? ''}`}>
         {value}
       </div>
+      {hint ? (
+        <div className="mt-0.5 text-[10px] text-muted-foreground">{hint}</div>
+      ) : null}
     </div>
   );
 }

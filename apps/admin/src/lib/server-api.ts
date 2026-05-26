@@ -1012,6 +1012,7 @@ export interface EmailCampaignView {
   totalBounced: number;
   totalReplied: number;
   totalComplained: number;
+  totalOpened: number;
   startedAt: string | null;
   finishedAt: string | null;
   createdAt: string;
@@ -1029,6 +1030,7 @@ export interface EmailDeliveryView {
   errorMessage: string | null;
   sentAt: string | null;
   deliveredAt: string | null;
+  openedAt: string | null;
   bouncedAt: string | null;
   repliedAt: string | null;
   createdAt: string;

@@ -1478,6 +1478,10 @@ model EmailCampaign {
   totalBounced  Int               @default(0)
   totalReplied  Int               @default(0)
   totalComplained Int             @default(0)
+  // Inferred opens from Resend webhook (email.opened). We do NOT inject tracking
+  // pixels — this counter only ticks when Resend infers an open (e.g. via inbound
+  // activity) or when open tracking is enabled in the Resend project settings.
+  totalOpened   Int               @default(0)
   startedAt    DateTime?
   finishedAt   DateTime?
   createdById  String?

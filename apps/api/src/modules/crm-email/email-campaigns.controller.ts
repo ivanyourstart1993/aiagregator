@@ -98,6 +98,7 @@ export class EmailCampaignsController {
         status: true,
         sentAt: true,
         deliveredAt: true,
+        openedAt: true,
         bouncedAt: true,
         repliedAt: true,
         errorMessage: true,
