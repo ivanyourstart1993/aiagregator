@@ -20,6 +20,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
 import { ProxyProtocol, ProxyStatus } from '@aiagg/db';
+import { decryptString, isEnvelope } from '@aiagg/shared';
 import { HttpsProxyAgent } from 'https-proxy-agent';
 import * as http from 'node:http';
 import * as https from 'node:https';
@@ -110,9 +111,17 @@ export class ProxyHealthCron {
     passwordHash: string | null;
     externalIp: string | null;
   }): Promise<ProbeOutcome> {
+    // passwordHash is stored encrypted ("v1:" envelope) by admin-proxy.controller
+    // — decrypt before using as the actual proxy auth password. Without this,
+    // proxy-seller / similar upstreams return 407 because the auth string is
+    // the ciphertext, not the password.
+    const password =
+      p.passwordHash && isEnvelope(p.passwordHash)
+        ? decryptString(p.passwordHash)
+        : p.passwordHash;
     const auth =
-      p.login && p.passwordHash
-        ? `${encodeURIComponent(p.login)}:${encodeURIComponent(p.passwordHash)}@`
+      p.login && password
+        ? `${encodeURIComponent(p.login)}:${encodeURIComponent(password)}@`
         : '';
     const scheme = p.protocol === ProxyProtocol.HTTPS ? 'https' : 'http';
     const proxyUrl = `${scheme}://${auth}${p.host}:${p.port}`;
@@ -227,9 +236,14 @@ export class ProxyHealthCron {
     const p = await this.prisma.proxy.findUnique({ where: { id: proxyId } });
     if (!p) return null;
     if (p.protocol === ProxyProtocol.SOCKS5) return null;
+    // Same decrypt step as probe() — passwordHash is "v1:" ciphertext at rest.
+    const password =
+      p.passwordHash && isEnvelope(p.passwordHash)
+        ? decryptString(p.passwordHash)
+        : p.passwordHash;
     const auth =
-      p.login && p.passwordHash
-        ? `${encodeURIComponent(p.login)}:${encodeURIComponent(p.passwordHash)}@`
+      p.login && password
+        ? `${encodeURIComponent(p.login)}:${encodeURIComponent(password)}@`
         : '';
     const scheme = p.protocol === ProxyProtocol.HTTPS ? 'https' : 'http';
     const proxyUrl = `${scheme}://${auth}${p.host}:${p.port}`;
