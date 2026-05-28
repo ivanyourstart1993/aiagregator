@@ -90,6 +90,10 @@ type TaskType =
   | 'text_to_video_kling25_pro'
   | 'text_to_video_klingv3_std'
   | 'text_to_video_klingv3_pro'
+  | 'motion_control_klingv3_std'
+  | 'motion_control_klingv3_pro'
+  | 'motion_control_kling26_std'
+  | 'motion_control_kling26_pro'
   | 'text_to_video_seedance_lite_720p'
   | 'text_to_video_seedance_pro_720p'
   | 'text_to_video_seedance_pro_1080p'
@@ -125,6 +129,10 @@ interface PresetSpec {
   mode?: string;
   needsImage?: boolean;
   needsVideo?: true;
+  // Motion Control needs a reference motion video (URL) in addition to the
+  // character image. Shows a reference-video URL field and sends
+  // params.reference_video.
+  needsReferenceVideo?: true;
   // Override for the input-image cap. Defaults to MAX_INPUT_IMAGES (6); set
   // higher for models that accept more (gpt-image-2 takes up to 16).
   maxInputImages?: number;
@@ -402,6 +410,67 @@ const PRESETS: Record<TaskType, PresetSpec> = {
     needsVideo: true,
     approxUsd: 0.56,
   },
+  // Kling Motion Control — transfers motion from a reference video onto a
+  // character image. Needs BOTH a character image (input_image) and a
+  // reference video (reference_video URL). Billed PER_SECOND; approxUsd is the
+  // 5s reference cost (std $0.097/s, pro $0.129/s). `mode` carries std/pro so
+  // the bundle key matches the seeded PER_SECOND prices.
+  motion_control_klingv3_std: {
+    provider: 'kling_ai',
+    model: 'kling-v3',
+    kind: 'video',
+    method: 'motion_control',
+    durationOptions: [5, 10],
+    durationBase: 5,
+    mode: 'standard',
+    needsImage: true,
+    maxInputImages: 1,
+    needsVideo: true,
+    needsReferenceVideo: true,
+    approxUsd: 0.485,
+  },
+  motion_control_klingv3_pro: {
+    provider: 'kling_ai',
+    model: 'kling-v3',
+    kind: 'video',
+    method: 'motion_control',
+    durationOptions: [5, 10],
+    durationBase: 5,
+    mode: 'pro',
+    needsImage: true,
+    maxInputImages: 1,
+    needsVideo: true,
+    needsReferenceVideo: true,
+    approxUsd: 0.645,
+  },
+  motion_control_kling26_std: {
+    provider: 'kling_ai',
+    model: 'kling-2.6',
+    kind: 'video',
+    method: 'motion_control',
+    durationOptions: [5, 10],
+    durationBase: 5,
+    mode: 'standard',
+    needsImage: true,
+    maxInputImages: 1,
+    needsVideo: true,
+    needsReferenceVideo: true,
+    approxUsd: 0.485,
+  },
+  motion_control_kling26_pro: {
+    provider: 'kling_ai',
+    model: 'kling-2.6',
+    kind: 'video',
+    method: 'motion_control',
+    durationOptions: [5, 10],
+    durationBase: 5,
+    mode: 'pro',
+    needsImage: true,
+    maxInputImages: 1,
+    needsVideo: true,
+    needsReferenceVideo: true,
+    approxUsd: 0.645,
+  },
   // Seedance. params.mode is overridden to the methodCode at submit time
   // (same convention as Veo) so the bundle key distinguishes t2v from i2v.
   text_to_video_seedance_lite_720p: {
@@ -565,6 +634,10 @@ const TASK_GROUPS: Array<{ labelKey: string; types: TaskType[] }> = [
       'text_to_video_klingv3_pro',
       'text_to_video_kling21m_pro',
       'text_to_video_kling25_pro',
+      'motion_control_klingv3_std',
+      'motion_control_klingv3_pro',
+      'motion_control_kling26_std',
+      'motion_control_kling26_pro',
     ],
   },
   // Direct Seedance (BytePlus) is intentionally not exposed here: BytePlus
@@ -714,6 +787,9 @@ export function PlaygroundClient({ balance }: Props) {
   const [prompt, setPrompt] = useState('');
   const [aspect, setAspect] = useState<'1:1' | '16:9' | '9:16' | '4:3' | '3:4'>('1:1');
   const [duration, setDuration] = useState<number>(8);
+  // Motion Control reference video — a hosted URL (mp4/mov). File upload is not
+  // used here: reference clips routinely exceed the 15MB image-upload cap.
+  const [referenceVideo, setReferenceVideo] = useState('');
 
   // Gemini text generation controls.
   const [systemInstruction, setSystemInstruction] = useState('');
@@ -846,6 +922,7 @@ export function PlaygroundClient({ balance }: Props) {
   const isTextPreset = presetKind === 'text';
   const isEmbeddingPreset = presetKind === 'embedding';
   const isMediaPreset = !isTextPreset && !isEmbeddingPreset;
+  const isMotionControl = preset.method === 'motion_control';
 
   // The upload zone is shown when an image is required (image_edit) or
   // optional (video → image_to_video). Text/embedding presets never accept
@@ -926,7 +1003,9 @@ export function PlaygroundClient({ balance }: Props) {
         return;
       }
     } else {
-      if (!prompt.trim()) {
+      // Motion Control's prompt is optional (the motion comes from the
+      // reference video); every other media/text preset requires a prompt.
+      if (!prompt.trim() && !isMotionControl) {
         toast.error(t('promptRequired'));
         return;
       }
@@ -937,6 +1016,17 @@ export function PlaygroundClient({ balance }: Props) {
       if (preset.needsImage && readyImageUrls.length === 0) {
         toast.error(t('imageRequired'));
         return;
+      }
+      if (isMotionControl) {
+        const rv = referenceVideo.trim();
+        if (!rv) {
+          toast.error(t('refVideoRequired'));
+          return;
+        }
+        if (!/^https?:\/\//i.test(rv)) {
+          toast.error(t('refVideoBadUrl'));
+          return;
+        }
       }
     }
 
@@ -985,60 +1075,75 @@ export function PlaygroundClient({ balance }: Props) {
       if (typeof outputDimensionality === 'number' && outputDimensionality > 0) {
         params.output_dimensionality = outputDimensionality;
       }
+    } else if (isMotionControl) {
+      // Motion Control prompt is optional — only send when non-empty.
+      if (prompt.trim()) params.prompt = prompt.trim();
     } else {
       params.prompt = prompt.trim();
     }
 
-    if (isMediaPreset && !preset.needsVideo) params.aspect_ratio = aspect;
-    if (isMediaPreset && preset.resolution) params.resolution = preset.resolution;
-
-    // Method routing:
-    //   image_edit: bound by preset (needsImage = true)
-    //   video: text_to_video by default; switch to image_to_video when
-    //     the user attached an image (preset.imageMethod must be set).
     let methodCode = preset.method;
-    if (preset.needsImage) {
-      params.input_images = readyImageUrls;
-    } else if (preset.needsVideo) {
+
+    if (isMotionControl) {
+      // Motion Control: character image + reference motion video. The schema
+      // uses additionalProperties:false, so do NOT send resolution/aspect_ratio
+      // (mode implies resolution; duration follows the reference video).
+      params.input_image = readyImageUrls[0];
+      params.reference_video = referenceVideo.trim();
+      params.character_orientation = 'video';
       params.duration_seconds = duration;
       if (preset.mode) params.mode = preset.mode;
-      if (readyImageUrls.length > 0 && preset.imageMethod) {
-        methodCode = preset.imageMethod;
-        // Each provider's `image_to_video` schema declares its own field
-        // name. Schemas use `additionalProperties: false`, so we must
-        // send exactly the right key — wrong one fails catalog validation
-        // with "Request parameters failed validation".
-        //   Veo:      input_image_url: string
-        //   Kling:    input_images: string[]  (1-2 URLs)
-        //   Seedance: image: string
-        if (preset.provider === 'kling_ai') {
-          params.input_images = readyImageUrls.slice(0, 2);
-        } else if (preset.provider === 'seedance') {
-          // Both Seedance code paths (BytePlus-direct doubao-* and
-          // OpenRouter-routed openrouter-seedance-*) use `image` — the
-          // OpenRouter adapter wraps it into `frame_images[0].image_url.url`
-          // server-side; the public schema just needs a single URL string.
-          params.image = readyImageUrls[0];
-        } else {
-          params.input_image_url = readyImageUrls[0];
+    } else {
+      if (isMediaPreset && !preset.needsVideo) params.aspect_ratio = aspect;
+      if (isMediaPreset && preset.resolution) params.resolution = preset.resolution;
+
+      // Method routing:
+      //   image_edit: bound by preset (needsImage = true)
+      //   video: text_to_video by default; switch to image_to_video when
+      //     the user attached an image (preset.imageMethod must be set).
+      if (preset.needsImage) {
+        params.input_images = readyImageUrls;
+      } else if (preset.needsVideo) {
+        params.duration_seconds = duration;
+        if (preset.mode) params.mode = preset.mode;
+        if (readyImageUrls.length > 0 && preset.imageMethod) {
+          methodCode = preset.imageMethod;
+          // Each provider's `image_to_video` schema declares its own field
+          // name. Schemas use `additionalProperties: false`, so we must
+          // send exactly the right key — wrong one fails catalog validation
+          // with "Request parameters failed validation".
+          //   Veo:      input_image_url: string
+          //   Kling:    input_images: string[]  (1-2 URLs)
+          //   Seedance: image: string
+          if (preset.provider === 'kling_ai') {
+            params.input_images = readyImageUrls.slice(0, 2);
+          } else if (preset.provider === 'seedance') {
+            // Both Seedance code paths (BytePlus-direct doubao-* and
+            // OpenRouter-routed openrouter-seedance-*) use `image` — the
+            // OpenRouter adapter wraps it into `frame_images[0].image_url.url`
+            // server-side; the public schema just needs a single URL string.
+            params.image = readyImageUrls[0];
+          } else {
+            params.input_image_url = readyImageUrls[0];
+          }
         }
       }
-    }
 
-    // Veo and Seedance bundles are keyed by `mode = methodCode` (text_to_video
-    // vs image_to_video) so the seed price for the chosen task type lines up.
-    // For Kling the `mode` slot already carries 'standard' / 'pro' from the
-    // preset (set in the needsVideo block above).
-    if (preset.provider === 'google_veo' || preset.provider === 'seedance') {
-      params.mode = methodCode;
-    }
-    // For non-video presets (OpenAI Image gpt-image-1 low/medium/high,
-    // dall-e-3 standard/hd) — forward the preset's quality tier as
-    // params.mode if it isn't already set. The bundle key is hashed with
-    // mode as a dimension, so without this the admit lookup falls into a
-    // null-mode bundle with no price → "Pricing is not configured".
-    if (preset.mode && params.mode === undefined) {
-      params.mode = preset.mode;
+      // Veo and Seedance bundles are keyed by `mode = methodCode` (text_to_video
+      // vs image_to_video) so the seed price for the chosen task type lines up.
+      // For Kling the `mode` slot already carries 'standard' / 'pro' from the
+      // preset (set in the needsVideo block above).
+      if (preset.provider === 'google_veo' || preset.provider === 'seedance') {
+        params.mode = methodCode;
+      }
+      // For non-video presets (OpenAI Image gpt-image-1 low/medium/high,
+      // dall-e-3 standard/hd) — forward the preset's quality tier as
+      // params.mode if it isn't already set. The bundle key is hashed with
+      // mode as a dimension, so without this the admit lookup falls into a
+      // null-mode bundle with no price → "Pricing is not configured".
+      if (preset.mode && params.mode === undefined) {
+        params.mode = preset.mode;
+      }
     }
 
     const res = await submitGenerationAction({
@@ -1568,6 +1673,20 @@ export function PlaygroundClient({ balance }: Props) {
                 </Button>
               </div>
             </details>
+          </div>
+        ) : null}
+
+        {preset.needsReferenceVideo ? (
+          <div className="space-y-2 rounded-lg border bg-card/40 p-5">
+            <Label htmlFor="referenceVideo">{t('refVideoLabel')}</Label>
+            <Input
+              id="referenceVideo"
+              type="url"
+              placeholder="https://...mp4"
+              value={referenceVideo}
+              onChange={(e) => setReferenceVideo(e.target.value)}
+            />
+            <p className="text-xs text-muted-foreground">{t('refVideoHint')}</p>
           </div>
         ) : null}
 
