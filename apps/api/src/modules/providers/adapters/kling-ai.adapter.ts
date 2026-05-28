@@ -21,7 +21,11 @@ const SUPPORTED_MODELS = new Set([
   'kling-v2-5-turbo',
   'kling-v2-6',
 ]);
-const SUPPORTED_METHODS = new Set(['text_to_video', 'image_to_video']);
+const SUPPORTED_METHODS = new Set([
+  'text_to_video',
+  'image_to_video',
+  'motion_control',
+]);
 
 const KLING_BASE = 'https://api-singapore.klingai.com';
 
@@ -179,6 +183,11 @@ export class KlingAiAdapter implements ProviderAdapter {
     const agent = this.buildProxyAgent(ctx);
 
     const { method, model, params } = ctx;
+
+    if (method.code === 'motion_control') {
+      return this.executeMotionControl(ctx, token, agent);
+    }
+
     const endpoint =
       method.code === 'image_to_video'
         ? `${KLING_BASE}/v1/videos/image2video`
@@ -239,6 +248,66 @@ export class KlingAiAdapter implements ProviderAdapter {
     return { pending: true, providerJobId: taskId };
   }
 
+  private async executeMotionControl(
+    ctx: AdapterContext,
+    token: string,
+    agent: HttpsProxyAgent<string> | undefined,
+  ): Promise<AdapterResult> {
+    const { model, params } = ctx;
+
+    const rawImage = pickString(
+      params,
+      'input_image',
+      'image_url',
+      'image',
+      'source_image',
+    );
+    if (!rawImage) {
+      throw new AdapterError(
+        'validation',
+        'motion_control requires "input_image" (character image URL or base64)',
+      );
+    }
+    const video = pickString(params, 'reference_video', 'video_url', 'video');
+    if (!video) {
+      throw new AdapterError(
+        'validation',
+        'motion_control requires "reference_video" (motion source video URL)',
+      );
+    }
+
+    const orientation =
+      pickString(params, 'character_orientation') === 'image'
+        ? 'image'
+        : 'video';
+    // keep_original_sound defaults to true; Kling expects the string yes|no.
+    const keepSound = params['keep_original_sound'] === false ? 'no' : 'yes';
+
+    const body: Record<string, unknown> = {
+      model_name: realModelName(model.code),
+      mode: pickMode(params),
+      image_url: rawImage.startsWith('data:')
+        ? rawImage.replace(/^data:[^;]+;base64,/, '')
+        : rawImage,
+      video_url: video,
+      character_orientation: orientation,
+      keep_original_sound: keepSound,
+    };
+    const prompt = pickString(params, 'prompt');
+    if (prompt) body.prompt = prompt;
+
+    const endpoint = `${KLING_BASE}/v1/videos/motion-control`;
+    const parsed = await this.callApi('POST', endpoint, token, body, agent);
+    const taskId = parsed.data?.task_id;
+    if (!taskId) {
+      throw new AdapterError(
+        'unknown',
+        `kling motion-control submit returned no task_id: ${JSON.stringify(parsed).slice(0, 300)}`,
+      );
+    }
+    return { pending: true, providerJobId: taskId };
+  }
+
   async pollOperation(
     ctx: AdapterContext,
     providerJobId: string,
@@ -247,8 +316,12 @@ export class KlingAiAdapter implements ProviderAdapter {
     const token = signKlingJwt(creds.accessKey, creds.secretKey);
     const agent = this.buildProxyAgent(ctx);
 
-    const isImage2Video = ctx.method.code === 'image_to_video';
-    const path = isImage2Video ? 'image2video' : 'text2video';
+    const path =
+      ctx.method.code === 'motion_control'
+        ? 'motion-control'
+        : ctx.method.code === 'image_to_video'
+          ? 'image2video'
+          : 'text2video';
     const url = `${KLING_BASE}/v1/videos/${path}/${encodeURIComponent(providerJobId)}`;
 
     const parsed = await this.callApi('GET', url, token, undefined, agent);

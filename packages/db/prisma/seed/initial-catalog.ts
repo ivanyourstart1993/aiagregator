@@ -671,12 +671,90 @@ const klingMethods: MethodSeed[] = [
   // NOTE: Kling AI exposes many other endpoints upstream (image_generation,
   // video_effect, video_extend, virtual_try_on, lip_sync, tts) — those used
   // to be listed here too, but the worker adapter only implements
-  // text_to_video / image_to_video (SUPPORTED_METHODS in apps/worker/.../
-  // kling-ai.ts). Listing the others in the catalog leaks them into /docs
-  // and /api-explorer as if they were callable, then admit fails with
-  // provider_not_implemented when a client actually tries. Restore them
-  // here only when the adapter learns the corresponding endpoint.
+  // text_to_video / image_to_video / motion_control (SUPPORTED_METHODS in
+  // apps/worker/.../kling-ai.ts). Listing the others in the catalog leaks
+  // them into /docs and /api-explorer as if they were callable, then admit
+  // fails with provider_not_implemented when a client actually tries.
+  // Restore them here only when the adapter learns the corresponding endpoint.
 ];
+
+// Motion Control — transfers motion (gestures, body movement, expressions)
+// from a reference video onto a character image (POST /v1/videos/motion-control).
+// Output duration follows the reference video, so this is billed PER_SECOND
+// (like Veo/Seedance) rather than the fixed 5/10s tiers of text/image-to-video.
+// The single bundle dimension is `mode` (std → 720p, pro → 1080p); resolution
+// is fully implied by mode so it is NOT a separate dimension. `duration_seconds`
+// is the per-second billing multiplier (it equals the reference video length;
+// Kling derives the real duration from the video, so it is not forwarded).
+const klingMotionControlMethod: MethodSeed = {
+  code: 'motion_control',
+  publicName: 'Motion control',
+  description:
+    'Transfer motion from a reference video onto a character image. The character keeps its appearance while performing the movement, gestures and expressions from the reference video.',
+  supportsAsync: true,
+  parametersSchema: {
+    $schema: 'http://json-schema.org/draft-07/schema#',
+    type: 'object',
+    'x-bundle-unit': 'PER_SECOND',
+    properties: {
+      input_image: {
+        type: 'string',
+        description:
+          'Character image to animate — HTTPS URL or base64 (no data: prefix). .jpg/.jpeg/.png, ≤10MB, aspect ratio between 1:2.5 and 2.5:1.',
+      },
+      reference_video: {
+        type: 'string',
+        description:
+          'Reference motion video — HTTPS URL. .mp4/.mov, ≤100MB. 3–10s when character_orientation=image, 3–30s when character_orientation=video.',
+      },
+      prompt: {
+        type: 'string',
+        maxLength: 2500,
+        description: 'Optional text guidance for background / timing.',
+      },
+      mode: {
+        type: 'string',
+        enum: ['standard', 'pro'],
+        'x-bundle-dim': true,
+        description: 'Quality tier — standard (720p) or pro (1080p).',
+      },
+      character_orientation: {
+        type: 'string',
+        enum: ['image', 'video'],
+        default: 'video',
+        description:
+          'image: portrait + camera movement, max 10s. video: full-body performance, up to 30s.',
+      },
+      duration_seconds: {
+        type: 'integer',
+        minimum: 3,
+        maximum: 30,
+        description:
+          'Output duration in seconds — must equal the reference video length. Pricing is PER_SECOND, so this is the billing multiplier, NOT part of the bundle key.',
+      },
+      keep_original_sound: {
+        type: 'boolean',
+        default: true,
+        description: 'Keep the audio track from the reference video.',
+      },
+      callback_url: callbackUrlProp,
+    },
+    required: ['input_image', 'reference_video', 'mode', 'duration_seconds'],
+    additionalProperties: false,
+  },
+  exampleRequest: {
+    input_image: 'https://example.com/character.jpg',
+    reference_video: 'https://example.com/dance-reference.mp4',
+    prompt: 'Studio lighting, plain background',
+    mode: 'pro',
+    character_orientation: 'video',
+    duration_seconds: 5,
+  },
+  exampleResponse: {
+    task_id: 'tsk_01H...',
+    status: 'queued',
+  },
+};
 
 // --------------------------------------------------------------------------
 // Seedance (Bytedance Volcano Engine) methods
@@ -1129,7 +1207,10 @@ export const initialCatalog: ProviderSeed[] = [
         code: 'kling-2.6',
         publicName: 'Kling 2.6',
         sortOrder: 10,
-        methods: klingMethods.map((m, i) => ({ ...m, sortOrder: (i + 1) * 10 })),
+        methods: [
+          ...klingMethods.map((m, i) => ({ ...m, sortOrder: (i + 1) * 10 })),
+          { ...klingMotionControlMethod, sortOrder: 30 },
+        ],
       },
       {
         code: 'kling-v2-1-master',
@@ -1149,7 +1230,10 @@ export const initialCatalog: ProviderSeed[] = [
         code: 'kling-v3',
         publicName: 'Kling V3',
         sortOrder: 20,
-        methods: klingMethods.map((m, i) => ({ ...m, sortOrder: (i + 1) * 10 })),
+        methods: [
+          ...klingMethods.map((m, i) => ({ ...m, sortOrder: (i + 1) * 10 })),
+          { ...klingMotionControlMethod, sortOrder: 30 },
+        ],
       },
       // kling-o1 used to be listed here, but the worker adapter doesn't
       // include it in SUPPORTED_MODELS — leaving it in the catalog only

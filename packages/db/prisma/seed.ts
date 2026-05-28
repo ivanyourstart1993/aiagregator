@@ -224,7 +224,11 @@ function methodCodeToBundleMethod(code: string): BundleMethod {
   ) {
     return BundleMethod.IMAGE_EDIT;
   }
-  if (code === 'text_to_video' || code === 'image_to_video') {
+  if (
+    code === 'text_to_video' ||
+    code === 'image_to_video' ||
+    code === 'motion_control'
+  ) {
     return BundleMethod.VIDEO_GENERATION;
   }
   if (code === 'text_generation') return BundleMethod.TEXT_GENERATION;
@@ -619,6 +623,61 @@ async function seedKlingPrices(tariffId: string): Promise<void> {
     count++;
   }
   console.log(`[seed] kling tariff prices upserted: ${count}`);
+}
+
+// Kling Motion Control — PER_SECOND (output duration follows the reference
+// video, 3–30s, so it cannot use the fixed 5/10s PER_REQUEST tiers above).
+// The only bundle dimension is `mode` (std → 720p, pro → 1080p); resolution is
+// implied by mode and kept null in the key. Upstream cost matches Kling V3
+// video: 6 credits/s @720p (std) ≈ $0.084/s, 8 credits/s @1080p (pro) ≈
+// $0.112/s (consistent with fal.ai's published rates). Retail = ×1.15 margin.
+interface KlingMotionControlSpec {
+  modelSlug: string;
+  mode: 'standard' | 'pro';
+  pricePerSecondUsd: number;
+}
+
+const KLING_MOTION_CONTROL_PRICES: KlingMotionControlSpec[] = [
+  { modelSlug: 'kling-v3',  mode: 'standard', pricePerSecondUsd: 0.097 },
+  { modelSlug: 'kling-v3',  mode: 'pro',      pricePerSecondUsd: 0.129 },
+  { modelSlug: 'kling-2.6', mode: 'standard', pricePerSecondUsd: 0.097 },
+  { modelSlug: 'kling-2.6', mode: 'pro',      pricePerSecondUsd: 0.129 },
+];
+
+async function seedKlingMotionControlPrices(tariffId: string): Promise<void> {
+  let count = 0;
+  for (const spec of KLING_MOTION_CONTROL_PRICES) {
+    const bundleKey = buildBundleKey({
+      providerSlug: 'kling_ai',
+      modelSlug: spec.modelSlug,
+      method: BundleMethod.VIDEO_GENERATION,
+      mode: spec.mode,
+      resolution: null,
+      durationSeconds: null,
+      aspectRatio: null,
+    });
+    const bundle = await prisma.bundle.upsert({
+      where: { bundleKey },
+      create: {
+        bundleKey,
+        providerSlug: 'kling_ai',
+        modelSlug: spec.modelSlug,
+        method: BundleMethod.VIDEO_GENERATION,
+        mode: spec.mode,
+        unit: BundleUnit.PER_SECOND,
+        isActive: true,
+      },
+      update: { unit: BundleUnit.PER_SECOND },
+    });
+    const perSecondUnits = dollarsPerSecondToUnits(spec.pricePerSecondUsd);
+    await prisma.tariffBundlePrice.upsert({
+      where: { tariffId_bundleId: { tariffId, bundleId: bundle.id } },
+      create: { tariffId, bundleId: bundle.id, perSecondUnits },
+      update: { perSecondUnits, basePriceUnits: null },
+    });
+    count++;
+  }
+  console.log(`[seed] kling motion-control prices upserted: ${count}`);
 }
 
 async function seedKlingProviderAccount(): Promise<void> {
@@ -1233,6 +1292,7 @@ async function main(): Promise<void> {
   await seedVeoPrices(tariffId);
   await seedVeoProviderAccount();
   await seedKlingPrices(tariffId);
+  await seedKlingMotionControlPrices(tariffId);
   await seedKlingProviderAccount();
   await seedSeedancePrices(tariffId);
   await seedSeedanceProviderAccount();

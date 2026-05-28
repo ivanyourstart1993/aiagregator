@@ -16,6 +16,7 @@ export function methodCodeToBundleMethod(code: string): BundleMethod {
       return BundleMethod.IMAGE_EDIT;
     case 'text_to_video':
     case 'image_to_video':
+    case 'motion_control':
     case 'video_extend':
     case 'first_last_frame_to_video':
     case 'video_to_video':
