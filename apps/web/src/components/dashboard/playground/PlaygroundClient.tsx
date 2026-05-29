@@ -68,6 +68,7 @@ type TaskType =
   | 'text_to_image_pro_2k'
   | 'image_edit_flash_1k'
   | 'image_edit_pro_2k'
+  | 'multi_reference_pro_2k'
   | 'text_to_image_gptimage_low_1k'
   | 'text_to_image_gptimage_med_1k'
   | 'text_to_image_gptimage_high_1k'
@@ -173,12 +174,28 @@ const PRESETS: Record<TaskType, PresetSpec> = {
     method: 'image_edit',
     resolution: '1K',
     needsImage: true,
+    // image_edit schema is input_images maxItems:1 — accept a single source
+    // image, else the request fails catalog validation. Combining several
+    // images is a separate method (multi_reference_image) below.
+    maxInputImages: 1,
     approxUsd: 0.024,
   },
   image_edit_pro_2k: {
     provider: 'google_banana',
     model: 'gemini-3-pro-image-preview',
     method: 'image_edit',
+    resolution: '2K',
+    needsImage: true,
+    maxInputImages: 1,
+    approxUsd: 0.0594,
+  },
+  // Nano Banana Pro multi-reference: combine 2–6 source images into one,
+  // guided by a prompt (e.g. put the subject from photo 1 into the scene of
+  // photo 2). Distinct from image_edit, whose schema caps input_images at 1.
+  multi_reference_pro_2k: {
+    provider: 'google_banana',
+    model: 'gemini-3-pro-image-preview',
+    method: 'multi_reference_image',
     resolution: '2K',
     needsImage: true,
     approxUsd: 0.0594,
@@ -615,6 +632,7 @@ const TASK_GROUPS: Array<{ labelKey: string; types: TaskType[] }> = [
     types: [
       'image_edit_flash_1k',
       'image_edit_pro_2k',
+      'multi_reference_pro_2k',
       'image_edit_gptimage_med_1k',
       'image_edit_gptimage2_med_1k',
     ],
