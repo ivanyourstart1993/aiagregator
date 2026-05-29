@@ -16,15 +16,20 @@
     "test": "turbo run test",
     "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,md,yaml,yml}\"",
     "format:check": "prettier --check \"**/*.{ts,tsx,js,jsx,json,md,yaml,yml}\"",
+    "check:catalog": "node scripts/check-catalog-presets.mjs",
+    "check:i18n": "node -e \"for (const f of ['en','ru']) JSON.parse(require('fs').readFileSync('apps/web/src/i18n/messages/'+f+'.json','utf8')); console.log('\\u2713 i18n JSON valid')\"",
+    "check:push": "pnpm check:i18n && pnpm check:catalog && pnpm typecheck && pnpm test",
     "clean": "turbo run clean && rm -rf node_modules .turbo",
     "db:generate": "pnpm --filter @aiagg/db prisma:generate",
     "db:migrate": "pnpm --filter @aiagg/db prisma:migrate:dev",
     "db:migrate:deploy": "pnpm --filter @aiagg/db prisma:migrate:deploy",
     "db:seed": "pnpm --filter @aiagg/db seed",
-    "db:studio": "pnpm --filter @aiagg/db prisma:studio"
+    "db:studio": "pnpm --filter @aiagg/db prisma:studio",
+    "prepare": "git config core.hooksPath .husky 2>/dev/null || true"
   },
   "devDependencies": {
     "@types/node": "^20.11.30",
+    "husky": "^9.1.7",
     "prettier": "^3.4.2",
     "prettier-plugin-tailwindcss": "^0.6.9",
     "turbo": "^2.3.3",

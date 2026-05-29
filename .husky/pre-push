@@ -1,0 +1,15 @@
+#!/usr/bin/env sh
+# Pre-push gate. Blocks `git push` if the API surface is out of sync or the
+# build is broken. Mirrors the manual checklist in
+# memory/reference_push_workflow.md so drift can't reach main (which
+# auto-deploys via Northflank).
+#
+# Runs, in order (fast -> slow), stopping at the first failure:
+#   1. i18n JSON validity (en/ru)
+#   2. catalog <-> playground-preset consistency (scripts/check-catalog-presets.mjs)
+#   3. typecheck across the monorepo (turbo-cached)
+#   4. unit tests (turbo-cached)
+#
+# Escape hatch for emergencies: git push --no-verify
+echo "pre-push: validating API/preset consistency and build..."
+pnpm check:push
