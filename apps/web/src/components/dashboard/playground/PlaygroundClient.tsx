@@ -787,9 +787,12 @@ export function PlaygroundClient({ balance }: Props) {
   const [prompt, setPrompt] = useState('');
   const [aspect, setAspect] = useState<'1:1' | '16:9' | '9:16' | '4:3' | '3:4'>('1:1');
   const [duration, setDuration] = useState<number>(8);
-  // Motion Control reference video — a hosted URL (mp4/mov). File upload is not
-  // used here: reference clips routinely exceed the 15MB image-upload cap.
+  // Motion Control reference video — a hosted URL (mp4/mov) OR an uploaded
+  // file. Upload streams through /api/playground/upload-video (no buffering),
+  // so clips up to 200MB are fine — users no longer need to paste a Drive
+  // link (which providers like Kling can't download).
   const [referenceVideo, setReferenceVideo] = useState('');
+  const [uploadingVideo, setUploadingVideo] = useState(false);
 
   // Gemini text generation controls.
   const [systemInstruction, setSystemInstruction] = useState('');
@@ -826,6 +829,7 @@ export function PlaygroundClient({ balance }: Props) {
   const [images, setImages] = useState<InputImage[]>([]);
   const [urlDraft, setUrlDraft] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const videoInputRef = useRef<HTMLInputElement>(null);
   const [dragOver, setDragOver] = useState(false);
 
   const uploading = images.some((i) => i.uploading);
@@ -908,6 +912,42 @@ export function PlaygroundClient({ balance }: Props) {
       if (m && m.previewUrl.startsWith('blob:')) URL.revokeObjectURL(m.previewUrl);
       return prev.filter((i) => i.id !== id);
     });
+  }
+
+  async function uploadReferenceVideo(file: File) {
+    if (!file.type.startsWith('video/')) {
+      toast.error(t('refVideoInvalidType'));
+      return;
+    }
+    // 200MB ceiling matches the API stream guard.
+    if (file.size > 200 * 1024 * 1024) {
+      toast.error(t('refVideoTooLarge'));
+      return;
+    }
+    setUploadingVideo(true);
+    try {
+      // Stream the raw file straight to the Next route handler (which proxies
+      // to the API → MinIO). No FormData: the body IS the bytes.
+      const res = await fetch('/api/playground/upload-video', {
+        method: 'POST',
+        headers: { 'content-type': file.type },
+        body: file,
+      });
+      const data = (await res.json().catch(() => ({}))) as {
+        url?: string;
+        error?: { message?: string };
+      };
+      if (!res.ok || !data.url) {
+        toast.error(data.error?.message ?? t('refVideoUploadFailed'));
+        return;
+      }
+      setReferenceVideo(data.url);
+      toast.success(t('refVideoUploaded'));
+    } catch {
+      toast.error(t('refVideoUploadFailed'));
+    } finally {
+      setUploadingVideo(false);
+    }
   }
 
   const preset = PRESETS[taskType];
@@ -1679,13 +1719,35 @@ export function PlaygroundClient({ balance }: Props) {
         {preset.needsReferenceVideo ? (
           <div className="space-y-2 rounded-lg border bg-card/40 p-5">
             <Label htmlFor="referenceVideo">{t('refVideoLabel')}</Label>
-            <Input
-              id="referenceVideo"
-              type="url"
-              placeholder="https://...mp4"
-              value={referenceVideo}
-              onChange={(e) => setReferenceVideo(e.target.value)}
-            />
+            <div className="flex gap-2">
+              <Input
+                id="referenceVideo"
+                type="url"
+                placeholder="https://...mp4"
+                value={referenceVideo}
+                onChange={(e) => setReferenceVideo(e.target.value)}
+                disabled={uploadingVideo}
+              />
+              <Button
+                type="button"
+                variant="outline"
+                disabled={uploadingVideo}
+                onClick={() => videoInputRef.current?.click()}
+              >
+                {uploadingVideo ? t('refVideoUploading') : t('refVideoUploadBtn')}
+              </Button>
+              <input
+                ref={videoInputRef}
+                type="file"
+                accept="video/mp4,video/quicktime,video/webm"
+                className="hidden"
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  if (f) void uploadReferenceVideo(f);
+                  e.target.value = '';
+                }}
+              />
+            </div>
             <p className="text-xs text-muted-foreground">{t('refVideoHint')}</p>
           </div>
         ) : null}

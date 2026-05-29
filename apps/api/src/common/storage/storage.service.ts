@@ -19,7 +19,17 @@ import {
   type ListObjectsV2CommandOutput,
   type _Object as S3Object,
 } from '@aws-sdk/client-s3';
+import { Upload } from '@aws-sdk/lib-storage';
 import { randomBytes } from 'node:crypto';
+import { Transform, type Readable } from 'node:stream';
+
+/** Thrown by uploadStream when the incoming body exceeds the byte cap. */
+export class UploadTooLargeError extends Error {
+  constructor(public readonly maxBytes: number) {
+    super(`upload exceeds max size of ${maxBytes} bytes`);
+    this.name = 'UploadTooLargeError';
+  }
+}
 
 export interface UploadInput {
   key: string;
@@ -165,6 +175,60 @@ export class StorageService implements OnModuleInit {
       bucket: this.bucket,
       key: input.key,
       size,
+      url: this.getObjectUrl(input.key),
+    };
+  }
+
+  /**
+   * Stream an object into MinIO without buffering the whole body in memory.
+   * Uses lib-storage's multipart Upload so arbitrarily large bodies (e.g.
+   * reference videos) flow through in 5MB parts. A size-counting Transform
+   * aborts the upload as soon as the cumulative bytes exceed `maxBytes`, so
+   * a malicious client can't exhaust memory or disk by lying about length.
+   *
+   * Rejects with UploadTooLargeError on overflow; the partial multipart
+   * upload is aborted by lib-storage automatically when the Body stream
+   * errors.
+   */
+  async uploadStream(input: {
+    key: string;
+    body: Readable;
+    contentType: string;
+    maxBytes: number;
+  }): Promise<UploadResult> {
+    await this.ensureBucket().catch(() => undefined);
+    let total = 0;
+    const guard = new Transform({
+      transform(chunk: Buffer, _enc, cb): void {
+        total += chunk.length;
+        if (total > input.maxBytes) {
+          cb(new UploadTooLargeError(input.maxBytes));
+          return;
+        }
+        cb(null, chunk);
+      },
+    });
+    // Propagate source errors (client abort, socket reset) into the guard so
+    // the Upload below rejects instead of hanging.
+    input.body.on('error', (err) => guard.destroy(err));
+    const piped = input.body.pipe(guard);
+
+    const upload = new Upload({
+      client: this.client,
+      params: {
+        Bucket: this.bucket,
+        Key: input.key,
+        Body: piped,
+        ContentType: input.contentType,
+      },
+      queueSize: 4,
+      partSize: 5 * 1024 * 1024,
+    });
+    await upload.done();
+    return {
+      bucket: this.bucket,
+      key: input.key,
+      size: total,
       url: this.getObjectUrl(input.key),
     };
   }

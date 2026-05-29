@@ -61,7 +61,7 @@ async function buildHeaders(opts: FetchOptions, anonymous: boolean): Promise<Hea
  * NextAuth v5 stores the encoded JWT in an httpOnly cookie and there's no
  * direct accessor for it from RSC.
  */
-async function getServerJwt(): Promise<string | null> {
+export async function getServerJwt(): Promise<string | null> {
   const session = await auth();
   if (!session?.user) return null;
 
