@@ -77,22 +77,31 @@ function classifyError(err: unknown): {
     // Reporting 'invalid_parameter' here would mislead the caller into thinking
     // their input was malformed when really our adapter sent an unsupported
     // model_name/mode/etc. to the upstream provider.
+    //
+    // 'invalid_input' is the opposite: the CALLER's media/params are the
+    // problem (e.g. reference video too short). It maps to `invalid_parameter`,
+    // which sanitizeTaskError() passes through VERBATIM — so the caller sees
+    // the actionable message ("Reference video must be 3–30 seconds long")
+    // instead of a generic `service_unavailable`/`provider_rejected` that
+    // tempts them to retry an input that will never succeed.
     const publicCode =
       err.kind === 'validation'
         ? 'validation'
-        : err.kind === 'content_rejected'
-          ? 'content_rejected'
-          : err.kind === 'rate_limit'
-            ? 'provider_rate_limited'
-            : err.kind === 'quota'
-              ? 'provider_quota_exhausted'
-              : err.kind === 'invalid_credentials'
-                ? 'provider_invalid_credentials'
-                : err.kind === 'billing'
-                  ? 'provider_billing_error'
-                  : err.kind === 'temporary'
-                    ? 'provider_temporary_error'
-                    : 'provider_error';
+        : err.kind === 'invalid_input'
+          ? 'invalid_parameter'
+          : err.kind === 'content_rejected'
+            ? 'content_rejected'
+            : err.kind === 'rate_limit'
+              ? 'provider_rate_limited'
+              : err.kind === 'quota'
+                ? 'provider_quota_exhausted'
+                : err.kind === 'invalid_credentials'
+                  ? 'provider_invalid_credentials'
+                  : err.kind === 'billing'
+                    ? 'provider_billing_error'
+                    : err.kind === 'temporary'
+                      ? 'provider_temporary_error'
+                      : 'provider_error';
     return {
       isAdapter: true,
       kind: err.kind,
@@ -126,6 +135,8 @@ function reasonFromKind(kind: AdapterError['kind']): string {
       return 'temporary_error';
     case 'validation':
       return 'validation';
+    case 'invalid_input':
+      return 'invalid_input';
     case 'content_rejected':
       return 'content_rejected';
     default:

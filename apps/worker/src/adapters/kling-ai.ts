@@ -97,6 +97,45 @@ function pickMode(p: Record<string, unknown>): 'std' | 'pro' {
   return v === 'pro' ? 'pro' : 'std';
 }
 
+/**
+ * Recognise Kling rejections caused by the caller's reference video /
+ * character image not meeting the API's limits, and return a clear,
+ * customer-facing message. Returns null if `msg` is not a media-limit
+ * rejection (so the caller falls through to the next classifier).
+ *
+ * Kling's terse strings ("Video duration can not less than 3s") are
+ * rewritten into actionable guidance that also states the full constraint,
+ * so the user knows the valid range — not just that they're outside it.
+ */
+function describeKlingMediaError(msg: string): string | null {
+  const m = msg.toLowerCase();
+  // Duration — too short
+  if (/duration.*(less than|can ?not.*less|too short|below)/.test(m)) {
+    return 'Reference video is too short. It must be 3–30 seconds long (3–10 seconds when character orientation is "image").';
+  }
+  // Duration — too long
+  if (/duration.*(more than|can ?not.*more|exceed|too long|longer than|above)/.test(m)) {
+    return 'Reference video is too long. It must be 3–30 seconds long (3–10 seconds when character orientation is "image").';
+  }
+  // Generic duration complaint we couldn't bucket as short/long
+  if (/duration/.test(m) && /video|reference|clip/.test(m)) {
+    return 'Reference video duration is out of range. It must be 3–30 seconds long (3–10 seconds when character orientation is "image").';
+  }
+  // File too large
+  if (/(file )?size|too large|exceeds.*(\d+\s*mb|limit)|\d+\s*mb/.test(m) && /video|file|upload/.test(m)) {
+    return 'Reference video file is too large. The maximum size is 100MB.';
+  }
+  // Unsupported format / codec
+  if (/(format|codec|file type).*(not |un)support|unsupported.*(format|codec|video)|invalid.*format/.test(m)) {
+    return 'Reference video format is not supported. Please upload an .mp4 or .mov file.';
+  }
+  // Resolution / dimensions of the character image or video
+  if (/resolution|width|height|dimension|pixel|too small|too large/.test(m) && /image|video/.test(m)) {
+    return 'Your image or video resolution is not supported by motion control. Please use a clearer source file.';
+  }
+  return null;
+}
+
 function classifyKlingError(
   status: number,
   body: KlingResponse,
@@ -113,6 +152,19 @@ function classifyKlingError(
   if (status >= 500) return new AdapterError('temporary', msg);
   if (/quota/i.test(msg)) return new AdapterError('quota', msg);
   if (/credit|balance|billing/i.test(msg)) return new AdapterError('billing', msg);
+  // Caller's media doesn't meet Kling's requirements for the reference
+  // video / character image. These are USER-fixable — the customer must
+  // upload a different file — so we surface 'invalid_input' (→ public
+  // `invalid_parameter`, message passed through verbatim) with a clear,
+  // actionable string. Critically these are NOT retried: the old generic
+  // `service_unavailable` told users to "retry shortly", so they hammered
+  // the same too-short clip dozens of times. Kling's documented limits:
+  // reference video 3–30s (3–10s in image-orientation mode), .mp4/.mov,
+  // max 100MB.
+  const mediaError = describeKlingMediaError(msg);
+  if (mediaError) {
+    return new AdapterError('invalid_input', mediaError);
+  }
   // Param-level rejections from Kling have the shape:
   //   "model_name value 'kling-v3-0' is invalid"
   //   "mode value 'standard' is invalid"
@@ -295,6 +347,10 @@ export class KlingAiAdapter implements ProviderAdapter {
         throw new AdapterError('billing', msg);
       }
       if (/quota/i.test(msg)) throw new AdapterError('quota', msg);
+      const pollMediaError = describeKlingMediaError(msg);
+      if (pollMediaError) {
+        throw new AdapterError('invalid_input', pollMediaError);
+      }
       if (/value\s+'[^']*'\s+is\s+invalid/i.test(msg)) {
         throw new AdapterError('validation', msg);
       }

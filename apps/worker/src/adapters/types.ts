@@ -48,6 +48,13 @@ export type AdapterErrorKind =
   | 'rate_limit'
   | 'temporary'
   | 'validation'
+  // The CALLER's input is invalid in a way they can fix (e.g. reference
+  // video too short/long/large, unsupported format). Distinct from
+  // 'validation' (which means OUR request translation disagrees with the
+  // provider contract — not the user's fault). Surfaced to the caller as
+  // `invalid_parameter` with a clear, actionable message; never retried;
+  // never blamed on the provider account.
+  | 'invalid_input'
   | 'content_rejected'
   | 'unknown';
 
