@@ -756,6 +756,89 @@ const klingMotionControlMethod: MethodSeed = {
   },
 };
 
+// Lip Sync — drives the mouth of a person in a source video to match speech
+// (POST /v1/videos/lip-sync). Two modes:
+//   text2video  — Kling's TTS speaks `text` in the chosen `voice_id`
+//   audio2video — lip-sync to a supplied audio clip (`audio_url`)
+// The source video is the SUBJECT (a prior Kling video via `video_id`, or any
+// hosted .mp4/.mov 2–10s via `input_video`). Lip-sync has no std/pro tier and
+// is not model-specific, so it is priced PER_REQUEST flat (no bundle
+// dimensions). Output duration follows the source clip (≤10s).
+const klingLipSyncMethod: MethodSeed = {
+  code: 'lip_sync',
+  publicName: 'Lip sync',
+  description:
+    'Make a person in a video speak — either text (Kling TTS voices) or a supplied audio clip. The mouth is re-animated to match the speech while the rest of the video is preserved.',
+  supportsAsync: true,
+  parametersSchema: {
+    $schema: 'http://json-schema.org/draft-07/schema#',
+    type: 'object',
+    properties: {
+      input_video: {
+        type: 'string',
+        format: 'uri',
+        description:
+          'Source video URL (.mp4/.mov, 2–10s, 720p/1080p, ≤100MB). Provide this OR `video_id`.',
+      },
+      video_id: {
+        type: 'string',
+        description:
+          'ID of a Kling-generated video (5s/10s, within the last 30 days) to lip-sync. Alternative to `input_video`.',
+      },
+      mode: {
+        type: 'string',
+        enum: ['text2video', 'audio2video'],
+        description:
+          'text2video: synthesize speech from `text` with `voice_id`. audio2video: lip-sync to `audio_url`.',
+      },
+      text: {
+        type: 'string',
+        maxLength: 120,
+        description: 'Spoken text (text2video only). Max 120 characters.',
+      },
+      voice_id: {
+        type: 'string',
+        description:
+          'TTS voice identifier (text2video only). E.g. oversea_male1, uk_boy1, uk_man2, genshin_vindi2.',
+      },
+      voice_language: {
+        type: 'string',
+        enum: ['zh', 'en'],
+        default: 'en',
+        description: 'Voice language for text2video (default en).',
+      },
+      voice_speed: {
+        type: 'number',
+        minimum: 0.8,
+        maximum: 2.0,
+        default: 1.0,
+        description: 'Speech rate for text2video, 0.8–2.0.',
+      },
+      audio_url: {
+        type: 'string',
+        format: 'uri',
+        description:
+          'Audio clip URL for audio2video (.mp3/.wav/.m4a/.aac, ≤5MB, 2–60s).',
+      },
+      callback_url: callbackUrlProp,
+    },
+    required: ['mode'],
+    additionalProperties: false,
+  },
+  exampleRequest: {
+    input_video: 'https://example.com/talking-head.mp4',
+    mode: 'text2video',
+    text: 'Hello! Welcome to our product demo.',
+    voice_id: 'oversea_male1',
+    voice_language: 'en',
+    voice_speed: 1.0,
+  },
+  exampleResponse: {
+    task_id: 'tsk_01H...',
+    status: 'queued',
+  },
+};
+
 // --------------------------------------------------------------------------
 // Seedance (Bytedance Volcano Engine) methods
 // --------------------------------------------------------------------------
@@ -1233,6 +1316,7 @@ export const initialCatalog: ProviderSeed[] = [
         methods: [
           ...klingMethods.map((m, i) => ({ ...m, sortOrder: (i + 1) * 10 })),
           { ...klingMotionControlMethod, sortOrder: 30 },
+          { ...klingLipSyncMethod, sortOrder: 40 },
         ],
       },
       // kling-o1 used to be listed here, but the worker adapter doesn't

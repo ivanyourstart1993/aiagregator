@@ -227,7 +227,8 @@ function methodCodeToBundleMethod(code: string): BundleMethod {
   if (
     code === 'text_to_video' ||
     code === 'image_to_video' ||
-    code === 'motion_control'
+    code === 'motion_control' ||
+    code === 'lip_sync'
   ) {
     return BundleMethod.VIDEO_GENERATION;
   }
@@ -678,6 +679,50 @@ async function seedKlingMotionControlPrices(tariffId: string): Promise<void> {
     count++;
   }
   console.log(`[seed] kling motion-control prices upserted: ${count}`);
+}
+
+// Kling Lip Sync — flat PER_REQUEST price. Lip-sync has no std/pro tier, no
+// resolution dimension, and is not model-specific, so a single flat price
+// covers a clip (source video capped at ≤10s on the simple endpoint). Exposed
+// only on kling-v3. Upstream lip-sync cost is low (~$0.02/s ≈ $0.20/10s at
+// reseller rates); flat $0.20 keeps a healthy margin and avoids a PER_SECOND
+// $0 charge when no duration is supplied. The bundle carries no dimensions
+// (mode/resolution/duration all null) so its key is distinct from the
+// motion_control (mode=std/pro) and t2v/i2v (mode+res+dur) kling bundles.
+const KLING_LIP_SYNC_PRICE_CENTS = 20; // $0.20 flat per request
+
+async function seedKlingLipSyncPrices(tariffId: string): Promise<void> {
+  const modelSlug = 'kling-v3';
+  const bundleKey = buildBundleKey({
+    providerSlug: 'kling_ai',
+    modelSlug,
+    method: BundleMethod.VIDEO_GENERATION,
+    mode: null,
+    resolution: null,
+    durationSeconds: null,
+    aspectRatio: null,
+  });
+  const bundle = await prisma.bundle.upsert({
+    where: { bundleKey },
+    create: {
+      bundleKey,
+      providerSlug: 'kling_ai',
+      modelSlug,
+      method: BundleMethod.VIDEO_GENERATION,
+      unit: BundleUnit.PER_REQUEST,
+      isActive: true,
+    },
+    update: { unit: BundleUnit.PER_REQUEST },
+  });
+  const priceUnits = BigInt(
+    Math.round(KLING_LIP_SYNC_PRICE_CENTS * Number(CENTS_TO_NANO)),
+  );
+  await prisma.tariffBundlePrice.upsert({
+    where: { tariffId_bundleId: { tariffId, bundleId: bundle.id } },
+    create: { tariffId, bundleId: bundle.id, basePriceUnits: priceUnits },
+    update: { basePriceUnits: priceUnits },
+  });
+  console.log('[seed] kling lip-sync price upserted: 1');
 }
 
 async function seedKlingProviderAccount(): Promise<void> {
@@ -1293,6 +1338,7 @@ async function main(): Promise<void> {
   await seedVeoProviderAccount();
   await seedKlingPrices(tariffId);
   await seedKlingMotionControlPrices(tariffId);
+  await seedKlingLipSyncPrices(tariffId);
   await seedKlingProviderAccount();
   await seedSeedancePrices(tariffId);
   await seedSeedanceProviderAccount();

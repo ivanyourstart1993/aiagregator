@@ -24,6 +24,7 @@ const SUPPORTED_METHODS = new Set([
   'text_to_video',
   'image_to_video',
   'motion_control',
+  'lip_sync',
 ]);
 const KLING_BASE = 'https://api-singapore.klingai.com';
 
@@ -199,6 +200,9 @@ export class KlingAiAdapter implements ProviderAdapter {
     if (method.code === 'motion_control') {
       return this.executeMotionControl(ctx, token, agent);
     }
+    if (method.code === 'lip_sync') {
+      return this.executeLipSync(ctx, token, agent);
+    }
 
     const endpoint =
       method.code === 'image_to_video'
@@ -320,6 +324,95 @@ export class KlingAiAdapter implements ProviderAdapter {
     return { pending: true, providerJobId: taskId };
   }
 
+  private async executeLipSync(
+    ctx: AdapterContext,
+    token: string,
+    agent: HttpsProxyAgent<string> | undefined,
+  ): Promise<AdapterResult> {
+    const { params } = ctx;
+
+    const rawMode = pickString(params, 'mode');
+    const mode =
+      rawMode === 'audio2video'
+        ? 'audio2video'
+        : rawMode === 'text2video'
+          ? 'text2video'
+          : undefined;
+    if (!mode) {
+      throw new AdapterError(
+        'validation',
+        'lip_sync requires "mode" = "text2video" or "audio2video"',
+      );
+    }
+
+    // Kling wraps lip-sync params in an `input` object (unlike the flat
+    // body of text2video/image2video/motion-control).
+    const input: Record<string, unknown> = { mode };
+
+    // Source video: a prior Kling video id, or any hosted clip URL.
+    const videoId = pickString(params, 'video_id');
+    const videoUrl = pickString(params, 'input_video', 'video_url', 'video');
+    if (videoId) {
+      input.video_id = videoId;
+    } else if (videoUrl) {
+      input.video_url = videoUrl;
+    } else {
+      throw new AdapterError(
+        'validation',
+        'lip_sync requires "input_video" (source video URL) or "video_id"',
+      );
+    }
+
+    if (mode === 'text2video') {
+      const text = pickString(params, 'text');
+      if (!text) {
+        throw new AdapterError(
+          'validation',
+          'lip_sync text2video requires "text"',
+        );
+      }
+      const voiceId = pickString(params, 'voice_id');
+      if (!voiceId) {
+        throw new AdapterError(
+          'validation',
+          'lip_sync text2video requires "voice_id"',
+        );
+      }
+      input.text = text;
+      input.voice_id = voiceId;
+      input.voice_language =
+        pickString(params, 'voice_language') === 'zh' ? 'zh' : 'en';
+      const speed = Number(params['voice_speed']);
+      input.voice_speed =
+        Number.isFinite(speed) && speed >= 0.8 && speed <= 2 ? speed : 1.0;
+    } else {
+      const audioUrl = pickString(params, 'audio_url', 'audio');
+      if (!audioUrl) {
+        throw new AdapterError(
+          'validation',
+          'lip_sync audio2video requires "audio_url"',
+        );
+      }
+      input.audio_type = 'url';
+      input.audio_url = audioUrl;
+    }
+
+    const body: Record<string, unknown> = { input };
+    const callback = pickString(params, 'callback_url');
+    if (callback) body.callback_url = callback;
+
+    const endpoint = `${KLING_BASE}/v1/videos/lip-sync`;
+    const parsed = await this.callApi('POST', endpoint, token, body, agent);
+    const taskId = parsed.data?.task_id;
+    if (!taskId) {
+      throw new AdapterError(
+        'unknown',
+        `kling lip-sync submit returned no task_id: ${JSON.stringify(parsed).slice(0, 300)}`,
+      );
+    }
+    return { pending: true, providerJobId: taskId };
+  }
+
   async pollOperation(
     ctx: AdapterContext,
     providerJobId: string,
@@ -331,9 +424,11 @@ export class KlingAiAdapter implements ProviderAdapter {
     const path =
       ctx.method.code === 'motion_control'
         ? 'motion-control'
-        : ctx.method.code === 'image_to_video'
-          ? 'image2video'
-          : 'text2video';
+        : ctx.method.code === 'lip_sync'
+          ? 'lip-sync'
+          : ctx.method.code === 'image_to_video'
+            ? 'image2video'
+            : 'text2video';
     const url = `${KLING_BASE}/v1/videos/${path}/${encodeURIComponent(providerJobId)}`;
 
     const parsed = await this.callApi('GET', url, token, undefined, agent);
