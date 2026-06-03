@@ -36,6 +36,7 @@ export type TaskType =
   | 'motion_control_klingv3_pro'
   | 'motion_control_kling26_std'
   | 'motion_control_kling26_pro'
+  | 'lip_sync_klingv3'
   | 'text_to_video_seedance_lite_720p'
   | 'text_to_video_seedance_pro_720p'
   | 'text_to_video_seedance_pro_1080p'
@@ -429,6 +430,18 @@ export const PRESETS: Record<TaskType, PresetSpec> = {
     needsReferenceVideo: true,
     approxUsd: 0.645,
   },
+  // Lip Sync — re-animates the mouth of a person in a source video to speak.
+  // The playground exposes the text2video mode: source video + spoken text
+  // (reuses the prompt box) + a TTS voice. audio2video is API-only. Flat
+  // PER_REQUEST price, so no duration/mode dimensions here.
+  lip_sync_klingv3: {
+    provider: 'kling_ai',
+    model: 'kling-v3',
+    kind: 'video',
+    method: 'lip_sync',
+    needsReferenceVideo: true,
+    approxUsd: 0.2,
+  },
   // Seedance. params.mode is overridden to the methodCode at submit time
   // (same convention as Veo) so the bundle key distinguishes t2v from i2v.
   text_to_video_seedance_lite_720p: {
@@ -597,6 +610,7 @@ export const TASK_GROUPS: Array<{ labelKey: string; types: TaskType[] }> = [
       'motion_control_klingv3_pro',
       'motion_control_kling26_std',
       'motion_control_kling26_pro',
+      'lip_sync_klingv3',
     ],
   },
   // Direct Seedance (BytePlus) is intentionally not exposed here: BytePlus

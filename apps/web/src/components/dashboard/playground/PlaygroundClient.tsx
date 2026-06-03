@@ -190,6 +190,8 @@ export function PlaygroundClient({ balance }: Props) {
   // so clips up to 200MB are fine — users no longer need to paste a Drive
   // link (which providers like Kling can't download).
   const [referenceVideo, setReferenceVideo] = useState('');
+  // Lip Sync (text2video): TTS voice for the spoken text.
+  const [lipVoiceId, setLipVoiceId] = useState('oversea_male1');
   const [uploadingVideo, setUploadingVideo] = useState(false);
 
   // Gemini text generation controls.
@@ -361,6 +363,7 @@ export function PlaygroundClient({ balance }: Props) {
   const isEmbeddingPreset = presetKind === 'embedding';
   const isMediaPreset = !isTextPreset && !isEmbeddingPreset;
   const isMotionControl = preset.method === 'motion_control';
+  const isLipSync = preset.method === 'lip_sync';
 
   // The upload zone is shown when an image is required (image_edit) or
   // optional (video → image_to_video). Text/embedding presets never accept
@@ -455,16 +458,20 @@ export function PlaygroundClient({ balance }: Props) {
         toast.error(t('imageRequired'));
         return;
       }
-      if (isMotionControl) {
+      if (isMotionControl || isLipSync) {
         const rv = referenceVideo.trim();
         if (!rv) {
-          toast.error(t('refVideoRequired'));
+          toast.error(isLipSync ? t('lipSourceVideoRequired') : t('refVideoRequired'));
           return;
         }
         if (!/^https?:\/\//i.test(rv)) {
-          toast.error(t('refVideoBadUrl'));
+          toast.error(isLipSync ? t('lipSourceVideoBadUrl') : t('refVideoBadUrl'));
           return;
         }
+      }
+      if (isLipSync && !lipVoiceId) {
+        toast.error(t('lipVoiceRequired'));
+        return;
       }
     }
 
@@ -516,6 +523,9 @@ export function PlaygroundClient({ balance }: Props) {
     } else if (isMotionControl) {
       // Motion Control prompt is optional — only send when non-empty.
       if (prompt.trim()) params.prompt = prompt.trim();
+    } else if (isLipSync) {
+      // Lip Sync has no `prompt` field (the spoken text goes in `text`,
+      // set in the lip-sync block below). Schema is additionalProperties:false.
     } else {
       params.prompt = prompt.trim();
     }
@@ -531,6 +541,16 @@ export function PlaygroundClient({ balance }: Props) {
       params.character_orientation = 'video';
       params.duration_seconds = duration;
       if (preset.mode) params.mode = preset.mode;
+    } else if (isLipSync) {
+      // Lip Sync (text2video mode in the playground): re-animate the mouth of
+      // the source video to speak `text` in the chosen TTS voice. Schema is
+      // additionalProperties:false — send only the lip-sync fields.
+      params.input_video = referenceVideo.trim();
+      params.mode = 'text2video';
+      params.text = prompt.trim();
+      params.voice_id = lipVoiceId;
+      params.voice_language = 'en';
+      params.voice_speed = 1.0;
     } else {
       if (isMediaPreset && !preset.needsVideo) params.aspect_ratio = aspect;
       if (isMediaPreset && preset.resolution) params.resolution = preset.resolution;
@@ -861,15 +881,20 @@ export function PlaygroundClient({ balance }: Props) {
 
         {!isEmbeddingPreset ? (
           <div className="space-y-2 rounded-lg border bg-card/40 p-5">
-            <Label htmlFor="prompt">{t('promptLabel')}</Label>
+            <Label htmlFor="prompt">
+              {isLipSync ? t('lipTextLabel') : t('promptLabel')}
+            </Label>
             <Textarea
               id="prompt"
               value={prompt}
               onChange={(e) => setPrompt(e.target.value)}
-              rows={4}
-              placeholder={t('promptPlaceholder')}
+              rows={isLipSync ? 3 : 4}
+              maxLength={isLipSync ? 120 : undefined}
+              placeholder={isLipSync ? t('lipTextPlaceholder') : t('promptPlaceholder')}
             />
-            <p className="text-xs text-muted-foreground">{t('promptHint')}</p>
+            <p className="text-xs text-muted-foreground">
+              {isLipSync ? t('lipTextHint') : t('promptHint')}
+            </p>
           </div>
         ) : null}
 
@@ -1116,7 +1141,9 @@ export function PlaygroundClient({ balance }: Props) {
 
         {preset.needsReferenceVideo ? (
           <div className="space-y-2 rounded-lg border bg-card/40 p-5">
-            <Label htmlFor="referenceVideo">{t('refVideoLabel')}</Label>
+            <Label htmlFor="referenceVideo">
+              {isLipSync ? t('lipSourceVideoLabel') : t('refVideoLabel')}
+            </Label>
             <div className="flex gap-2">
               <Input
                 id="referenceVideo"
@@ -1146,11 +1173,32 @@ export function PlaygroundClient({ balance }: Props) {
                 }}
               />
             </div>
-            <p className="text-xs text-muted-foreground">{t('refVideoHint')}</p>
+            <p className="text-xs text-muted-foreground">
+              {isLipSync ? t('lipSourceVideoHint') : t('refVideoHint')}
+            </p>
           </div>
         ) : null}
 
-        {isMediaPreset && !preset.needsVideo ? (
+        {isLipSync ? (
+          <div className="space-y-2 rounded-lg border bg-card/40 p-5">
+            <Label htmlFor="lipVoice">{t('lipVoiceLabel')}</Label>
+            <select
+              id="lipVoice"
+              value={lipVoiceId}
+              onChange={(e) => setLipVoiceId(e.target.value)}
+              className="h-9 w-full rounded-md border border-border/60 bg-background px-2 text-sm"
+            >
+              <option value="oversea_male1">English · Male (oversea_male1)</option>
+              <option value="commercial_lady_en">English · Female (commercial_lady_en)</option>
+              <option value="uk_boy1">English · UK boy (uk_boy1)</option>
+              <option value="uk_man2">English · UK man (uk_man2)</option>
+              <option value="genshin_vindi2">English · Bright (genshin_vindi2)</option>
+            </select>
+            <p className="text-xs text-muted-foreground">{t('lipVoiceHint')}</p>
+          </div>
+        ) : null}
+
+        {isMediaPreset && !preset.needsVideo && !isLipSync ? (
           <div className="space-y-2 rounded-lg border bg-card/40 p-5">
             <Label className="text-xs uppercase tracking-wider text-muted-foreground">
               {t('aspectRatio')}
