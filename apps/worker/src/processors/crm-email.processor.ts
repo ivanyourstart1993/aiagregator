@@ -12,11 +12,17 @@
 // All outbound emails get the same auto-injected footer with one-click
 // unsubscribe link (RFC 8058 List-Unsubscribe-Post header so Gmail shows the
 // native "Unsubscribe" button).
+//
+// Auto-refill cron (5-min tick): re-checks each RUNNING campaign's audience
+// filter and queues newly-matched leads continuing the same cap-paced schedule
+// (no burst). Closes the gap where CRM discovery brings in fresh leads that
+// would otherwise sit forever in NEW status because the campaign run() is a
+// one-shot snapshot.
 
-import { Worker, type ConnectionOptions } from 'bullmq';
+import { Worker, Queue, type ConnectionOptions } from 'bullmq';
 import { randomUUID, createHmac } from 'node:crypto';
 import { Resend } from 'resend';
-import type { PrismaClient } from '@aiagg/db';
+import { LeadStatus, LeadType, type PrismaClient, type Prisma } from '@aiagg/db';
 
 const QUEUE = 'crm-email-outreach';
 
@@ -88,8 +94,37 @@ function appendFooter(body: string, unsubscribeUrl: string): string {
   return `${body.trim()}\n\n--\nReply directly to this email if interested.\nNot interested? Unsubscribe: ${unsubscribeUrl}`;
 }
 
+// Mirror of the `AudienceFilter` shape persisted by EmailCampaignsController.
+// Keep in sync with apps/api/src/modules/crm-email/email-campaigns.controller.ts.
+interface AudienceFilter {
+  type?: LeadType;
+  minScore?: number;
+  sourceId?: string;
+  status?: LeadStatus;
+}
+
+function buildLeadWhere(f: AudienceFilter): Prisma.LeadWhereInput {
+  const where: Prisma.LeadWhereInput = {
+    ownerEmail: { not: null },
+  };
+  if (f.type && (Object.values(LeadType) as string[]).includes(f.type)) {
+    where.type = f.type;
+  }
+  if (f.sourceId) where.sourceId = f.sourceId;
+  if (f.status && (Object.values(LeadStatus) as string[]).includes(f.status)) {
+    where.status = f.status;
+  }
+  if (typeof f.minScore === 'number') {
+    where.score = { gte: f.minScore };
+  }
+  return where;
+}
+
+const REFILL_TICK_MS = 5 * 60 * 1000;
+
 export interface CrmEmailHandle {
   worker: Worker;
+  refillTimer: NodeJS.Timeout;
   close: () => Promise<void>;
 }
 
@@ -104,6 +139,9 @@ export function createCrmEmailWorker(opts: {
 }): CrmEmailHandle {
   const connection = parseRedisUrl(opts.redisUrl);
   const resend = new Resend(opts.apiKey);
+  // Same queue the worker consumes from — used by the refill cron below to
+  // enqueue newly-discovered leads for RUNNING campaigns.
+  const queue = new Queue(QUEUE, { connection });
 
   const worker = new Worker(
     QUEUE,
@@ -294,12 +332,121 @@ export function createCrmEmailWorker(opts: {
     },
   );
 
+  // Auto-refill cron: every REFILL_TICK_MS, walk RUNNING campaigns and queue
+  // any newly-matching leads (e.g. ones added by `· daily` discovery sources
+  // after the campaign first ran). Idempotent via jobId=campaign:{id}:{leadId}
+  // and an explicit EmailDelivery existence check, so the same lead is never
+  // queued twice. New jobs are scheduled AFTER the previously-queued ones so
+  // the cap rhythm continues without bursts.
+  const refillTimer = setInterval(() => {
+    void (async () => {
+      try {
+        const campaigns = await opts.prisma.emailCampaign.findMany({
+          where: { status: 'RUNNING', startedAt: { not: null } },
+        });
+        for (const c of campaigns) {
+          const filter = c.audienceFilter as unknown as AudienceFilter;
+          const where = buildLeadWhere(filter);
+          const leads = await opts.prisma.lead.findMany({
+            where,
+            select: { id: true, ownerEmail: true },
+          });
+          if (leads.length === 0) continue;
+
+          const lowercaseEmails = leads
+            .map((l) => l.ownerEmail?.toLowerCase())
+            .filter((e): e is string => Boolean(e));
+          const suppressed = lowercaseEmails.length
+            ? await opts.prisma.emailSuppression.findMany({
+                where: { email: { in: lowercaseEmails } },
+                select: { email: true },
+              })
+            : [];
+          const suppressedSet = new Set(suppressed.map((s) => s.email.toLowerCase()));
+
+          // Any non-FAILED/non-SKIPPED delivery row means we already touched
+          // this lead for this campaign — skip.
+          const already = await opts.prisma.emailDelivery.findMany({
+            where: {
+              campaignId: c.id,
+              leadId: { in: leads.map((l) => l.id) },
+              status: { notIn: ['FAILED', 'SKIPPED'] },
+            },
+            select: { leadId: true },
+          });
+          const alreadySet = new Set(already.map((a) => a.leadId));
+
+          const newLeads = leads.filter(
+            (l) =>
+              l.ownerEmail &&
+              !suppressedSet.has(l.ownerEmail.toLowerCase()) &&
+              !alreadySet.has(l.id),
+          );
+          if (newLeads.length === 0) continue;
+
+          // Continue the same cap-paced schedule the controller's run() set up:
+          // the N-th delivery is expected at startedAt + N*slotMs, so the next
+          // free slot for a new lead is startedAt + totalAudience*slotMs.
+          // max(…, now) handles the case where original sends already finished.
+          const cap = c.hourlyCap;
+          const slotMs = Math.floor(3_600_000 / cap);
+          const startedMs = c.startedAt ? c.startedAt.getTime() : Date.now();
+          const nowMs = Date.now();
+          const baseDelay = Math.max(0, startedMs + c.totalAudience * slotMs - nowMs);
+
+          let queued = 0;
+          for (const lead of newLeads) {
+            if (!lead.ownerEmail) continue;
+            const delay = baseDelay + queued * slotMs;
+            await queue.add(
+              'send-campaign-email',
+              {
+                campaignId: c.id,
+                leadId: lead.id,
+                toEmail: lead.ownerEmail,
+              },
+              {
+                delay,
+                attempts: 3,
+                backoff: { type: 'exponential', delay: 60_000 },
+                removeOnComplete: 1000,
+                removeOnFail: 1000,
+                // Same dedup key as the controller's initial run() — prevents
+                // duplicates if a lead somehow ends up in both pipelines.
+                jobId: `campaign:${c.id}:${lead.id}`,
+              },
+            );
+            queued++;
+          }
+
+          if (queued > 0) {
+            await opts.prisma.emailCampaign.update({
+              where: { id: c.id },
+              data: { totalAudience: { increment: queued } },
+            });
+            console.log(
+              `[crm-email-refill] campaign=${c.id} queued ${queued} new leads (baseDelay=${Math.round(baseDelay / 60_000)}min)`,
+            );
+          }
+        }
+      } catch (e) {
+        console.error('[crm-email-refill] tick failed:', e);
+      }
+    })();
+  }, REFILL_TICK_MS);
+
   const close = async () => {
+    clearInterval(refillTimer);
     try {
       await worker.close();
     } catch {
       /* swallow */
     }
+    try {
+      await queue.close();
+    } catch {
+      /* swallow */
+    }
   };
-  return { worker, close };
+  return { worker, refillTimer, close };
 }
