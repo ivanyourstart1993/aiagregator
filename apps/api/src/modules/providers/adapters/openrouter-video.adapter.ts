@@ -17,7 +17,29 @@ const SUPPORTED_MODELS = new Set([
   'openrouter-seedance-2-0-fast',
   'openrouter-seedance-1-5-pro',
 ]);
-const SUPPORTED_METHODS = new Set(['text_to_video', 'image_to_video']);
+const SUPPORTED_METHODS = new Set([
+  'text_to_video',
+  'image_to_video',
+  'first_last_frame_to_video',
+]);
+
+// Pull exactly two frame URLs for first_last_frame_to_video: prefer the
+// `input_images` array ([0]=start, [1]=end); fall back to explicit
+// first_frame_url / last_frame_url fields.
+function pickFrameImages(
+  p: Record<string, unknown>,
+): { first?: string; last?: string } {
+  const arr = Array.isArray(p['input_images'])
+    ? (p['input_images'] as unknown[]).filter(
+        (v): v is string => typeof v === 'string' && v.length > 0,
+      )
+    : [];
+  const first =
+    arr[0] ??
+    pickString(p, 'first_frame_url', 'first_image', 'image', 'input_image');
+  const last = arr[1] ?? pickString(p, 'last_frame_url', 'last_image');
+  return { first, last };
+}
 
 // Catalog slugs are local (prefixed `openrouter-`) so multiple providers can
 // expose the same upstream model under different routing rules. Translate to
@@ -180,7 +202,8 @@ export class OpenRouterVideoAdapter implements ProviderAdapter {
     const prompt = pickString(params, 'prompt') ?? '';
 
     const isImageToVideo = method.code === 'image_to_video';
-    if (!isImageToVideo && !prompt) {
+    const isFirstLastFrame = method.code === 'first_last_frame_to_video';
+    if (!isImageToVideo && !isFirstLastFrame && !prompt) {
       throw new AdapterError(
         'validation',
         'text_to_video requires "prompt" parameter',
@@ -215,6 +238,19 @@ export class OpenRouterVideoAdapter implements ProviderAdapter {
           image_url: { url: image },
           frame_type: 'first_frame',
         },
+      ];
+    } else if (isFirstLastFrame) {
+      const { first, last } = pickFrameImages(params);
+      if (!first || !last) {
+        throw new AdapterError(
+          'validation',
+          'first_last_frame_to_video requires two images: "input_images" ' +
+            '([0]=start, [1]=end) or "first_frame_url" + "last_frame_url"',
+        );
+      }
+      body.frame_images = [
+        { type: 'image_url', image_url: { url: first }, frame_type: 'first_frame' },
+        { type: 'image_url', image_url: { url: last }, frame_type: 'last_frame' },
       ];
     }
 

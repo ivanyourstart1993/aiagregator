@@ -1130,6 +1130,57 @@ const openrouterVideoMethods: MethodSeed[] = [
       aspect_ratio: '16:9',
     },
   },
+  {
+    // First→Last frame ("video from two photos"): the model interpolates a
+    // smooth clip between a start frame and an end frame. Same PER_SECOND
+    // price as image_to_video. `mode` carries the method code (default set
+    // so API clients who omit it still hit the right bundle) so the seeded
+    // price lines up.
+    code: 'first_last_frame_to_video',
+    publicName: 'First & last frame to video',
+    description:
+      'Generate a video that interpolates between a start frame and an end frame (Seedance FLF2V). Provide exactly two images: the first is the start frame, the second is the end frame.',
+    supportsAsync: true,
+    parametersSchema: {
+      $schema: 'http://json-schema.org/draft-07/schema#',
+      type: 'object',
+      'x-bundle-unit': 'PER_SECOND',
+      properties: openrouterVideoBaseProps({
+        prompt: {
+          type: 'string',
+          maxLength: 8000,
+          description: 'Optional text guidance for the interpolated motion.',
+        },
+        mode: {
+          type: 'string',
+          enum: ['first_last_frame_to_video'],
+          default: 'first_last_frame_to_video',
+          'x-bundle-dim': true,
+          description: 'Internal task-type marker (matches the method code).',
+        },
+        input_images: {
+          type: 'array',
+          minItems: 2,
+          maxItems: 2,
+          items: { type: 'string', format: 'uri' },
+          description:
+            'Exactly two image URLs: [0] = start (first) frame, [1] = end (last) frame.',
+        },
+      }),
+      required: ['input_images'],
+      additionalProperties: false,
+    },
+    exampleRequest: {
+      input_images: [
+        'https://example.com/start-frame.jpg',
+        'https://example.com/end-frame.jpg',
+      ],
+      mode: 'first_last_frame_to_video',
+      resolution: '1080p',
+      duration_seconds: 5,
+      aspect_ratio: '16:9',
+    },
+  },
 ];
 
 // --------------------------------------------------------------------------

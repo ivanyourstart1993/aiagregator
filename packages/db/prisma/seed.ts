@@ -227,6 +227,7 @@ function methodCodeToBundleMethod(code: string): BundleMethod {
   if (
     code === 'text_to_video' ||
     code === 'image_to_video' ||
+    code === 'first_last_frame_to_video' ||
     code === 'motion_control' ||
     code === 'lip_sync'
   ) {
@@ -981,7 +982,7 @@ async function seedSeedancePrices(tariffId: string): Promise<void> {
 
 interface OpenRouterBundleSpec {
   modelSlug: string;
-  methodCode: 'text_to_video' | 'image_to_video';
+  methodCode: 'text_to_video' | 'image_to_video' | 'first_last_frame_to_video';
   resolution: string;
   pricePerSecondUsd: number;
 }
@@ -1006,6 +1007,17 @@ const OPENROUTER_PRICES: OpenRouterBundleSpec[] = [
   { modelSlug: 'openrouter-seedance-1-5-pro', methodCode: 'image_to_video', resolution: '480p',  pricePerSecondUsd: 0.035 },
   { modelSlug: 'openrouter-seedance-1-5-pro', methodCode: 'image_to_video', resolution: '720p',  pricePerSecondUsd: 0.085 },
   { modelSlug: 'openrouter-seedance-1-5-pro', methodCode: 'image_to_video', resolution: '1080p', pricePerSecondUsd: 0.17 },
+  // First→Last frame ("video from two photos") — same per-second cost as i2v
+  // for each model/resolution (it's image-conditioned generation, just two
+  // anchor frames instead of one).
+  { modelSlug: 'openrouter-seedance-2-0-fast', methodCode: 'first_last_frame_to_video', resolution: '480p',  pricePerSecondUsd: 0.081 },
+  { modelSlug: 'openrouter-seedance-2-0-fast', methodCode: 'first_last_frame_to_video', resolution: '720p',  pricePerSecondUsd: 0.17 },
+  { modelSlug: 'openrouter-seedance-2-0',      methodCode: 'first_last_frame_to_video', resolution: '480p',  pricePerSecondUsd: 0.10 },
+  { modelSlug: 'openrouter-seedance-2-0',      methodCode: 'first_last_frame_to_video', resolution: '720p',  pricePerSecondUsd: 0.21 },
+  { modelSlug: 'openrouter-seedance-2-0',      methodCode: 'first_last_frame_to_video', resolution: '1080p', pricePerSecondUsd: 0.45 },
+  { modelSlug: 'openrouter-seedance-1-5-pro',  methodCode: 'first_last_frame_to_video', resolution: '480p',  pricePerSecondUsd: 0.035 },
+  { modelSlug: 'openrouter-seedance-1-5-pro',  methodCode: 'first_last_frame_to_video', resolution: '720p',  pricePerSecondUsd: 0.085 },
+  { modelSlug: 'openrouter-seedance-1-5-pro',  methodCode: 'first_last_frame_to_video', resolution: '1080p', pricePerSecondUsd: 0.17 },
 ];
 
 async function seedOpenRouterPrices(tariffId: string): Promise<void> {
