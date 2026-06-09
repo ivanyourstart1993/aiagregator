@@ -364,6 +364,7 @@ export function PlaygroundClient({ balance }: Props) {
   const isMediaPreset = !isTextPreset && !isEmbeddingPreset;
   const isMotionControl = preset.method === 'motion_control';
   const isLipSync = preset.method === 'lip_sync';
+  const isFirstLastFrame = preset.method === 'first_last_frame_to_video';
 
   // The upload zone is shown when an image is required (image_edit) or
   // optional (video → image_to_video). Text/embedding presets never accept
@@ -444,9 +445,9 @@ export function PlaygroundClient({ balance }: Props) {
         return;
       }
     } else {
-      // Motion Control's prompt is optional (the motion comes from the
-      // reference video); every other media/text preset requires a prompt.
-      if (!prompt.trim() && !isMotionControl) {
+      // Motion Control & First→Last frame prompts are optional (the motion
+      // is driven by the images); every other media/text preset needs a prompt.
+      if (!prompt.trim() && !isMotionControl && !isFirstLastFrame) {
         toast.error(t('promptRequired'));
         return;
       }
@@ -454,7 +455,11 @@ export function PlaygroundClient({ balance }: Props) {
         toast.error(t('imageStillUploading'));
         return;
       }
-      if (preset.needsImage && readyImageUrls.length === 0) {
+      if (isFirstLastFrame && readyImageUrls.length < 2) {
+        toast.error(t('flfTwoImagesRequired'));
+        return;
+      }
+      if (preset.needsImage && !isFirstLastFrame && readyImageUrls.length === 0) {
         toast.error(t('imageRequired'));
         return;
       }
@@ -526,6 +531,9 @@ export function PlaygroundClient({ balance }: Props) {
     } else if (isLipSync) {
       // Lip Sync has no `prompt` field (the spoken text goes in `text`,
       // set in the lip-sync block below). Schema is additionalProperties:false.
+    } else if (isFirstLastFrame) {
+      // First→Last frame prompt is optional guidance — only send when non-empty.
+      if (prompt.trim()) params.prompt = prompt.trim();
     } else {
       params.prompt = prompt.trim();
     }
@@ -551,6 +559,13 @@ export function PlaygroundClient({ balance }: Props) {
       params.voice_id = lipVoiceId;
       params.voice_language = 'en';
       params.voice_speed = 1.0;
+    } else if (isFirstLastFrame) {
+      // First→Last frame: two images ([0]=start, [1]=end). `mode` carries the
+      // method code so the seedance PER_SECOND bundle key matches the seed.
+      params.input_images = readyImageUrls.slice(0, 2);
+      params.mode = 'first_last_frame_to_video';
+      params.duration_seconds = duration;
+      if (preset.resolution) params.resolution = preset.resolution;
     } else {
       if (isMediaPreset && !preset.needsVideo) params.aspect_ratio = aspect;
       if (isMediaPreset && preset.resolution) params.resolution = preset.resolution;
@@ -1035,9 +1050,11 @@ export function PlaygroundClient({ balance }: Props) {
           <div className="space-y-3 rounded-lg border bg-card/40 p-5">
             <div className="flex items-center justify-between">
               <Label>
-                {preset.needsImage
-                  ? t('imageInputLabel')
-                  : t('imageInputLabelOptional')}
+                {isFirstLastFrame
+                  ? t('flfImagesLabel')
+                  : preset.needsImage
+                    ? t('imageInputLabel')
+                    : t('imageInputLabelOptional')}
               </Label>
               <span className="text-xs text-muted-foreground">
                 {t('imageCount', { current: images.length, max: imageCap })}

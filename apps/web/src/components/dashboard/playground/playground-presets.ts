@@ -44,6 +44,7 @@ export type TaskType =
   | 'text_to_video_or_seedance2_pro_720p'
   | 'text_to_video_or_seedance2_pro_1080p'
   | 'text_to_video_or_seedance15_pro_1080p'
+  | 'first_last_frame_seedance2'
   | 'text_gen_pro'
   | 'text_gen_flash'
   | 'text_gen_flash_lite'
@@ -523,6 +524,22 @@ export const PRESETS: Record<TaskType, PresetSpec> = {
     needsVideo: true,
     approxUsd: 0.85, // $0.17/s × 5s
   },
+  // First→Last frame ("video from two photos"): interpolate a clip between a
+  // start frame and an end frame. Needs exactly 2 images (uploaded in order:
+  // 1st = start, 2nd = end). Same PER_SECOND price as Seedance 2.0 i2v 1080p.
+  first_last_frame_seedance2: {
+    provider: 'seedance',
+    model: 'openrouter-seedance-2-0',
+    kind: 'video',
+    method: 'first_last_frame_to_video',
+    resolution: '1080p',
+    durationOptions: [5, 10],
+    durationBase: 5,
+    needsImage: true,
+    maxInputImages: 2,
+    needsVideo: true,
+    approxUsd: 2.25, // $0.45/s × 5s
+  },
   // Gemini 2.5 family — text generation via Vertex AI. PER_REQUEST tier
   // for predictable playground cost; reconciliation against per-token
   // pricing happens server-side at admit time.
@@ -626,6 +643,7 @@ export const TASK_GROUPS: Array<{ labelKey: string; types: TaskType[] }> = [
       'text_to_video_or_seedance2_pro_720p',
       'text_to_video_or_seedance2_pro_1080p',
       'text_to_video_or_seedance15_pro_1080p',
+      'first_last_frame_seedance2',
     ],
   },
   {
