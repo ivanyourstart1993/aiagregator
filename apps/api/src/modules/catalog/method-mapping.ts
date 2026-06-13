@@ -32,6 +32,9 @@ export function methodCodeToBundleMethod(code: string): BundleMethod {
       return BundleMethod.EMBEDDING;
     case 'text_generation':
     case 'chat':
+    case 'image_to_text':
+      // image_to_text (vision) is billed like text generation — map to the
+      // same BundleMethod so it reuses the model's TEXT_GENERATION price.
       return BundleMethod.TEXT_GENERATION;
     default:
       return BundleMethod.OTHER;

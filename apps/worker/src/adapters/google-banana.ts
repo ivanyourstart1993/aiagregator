@@ -130,7 +130,7 @@ const SUPPORTED_IMAGE_METHODS = new Set([
   'multi_reference_image',
 ]);
 
-const SUPPORTED_TEXT_METHODS = new Set(['text_generation']);
+const SUPPORTED_TEXT_METHODS = new Set(['text_generation', 'image_to_text']);
 const SUPPORTED_EMBEDDING_METHODS = new Set(['embedding']);
 
 interface GeminiPart {
@@ -199,7 +199,7 @@ async function fetchAsBase64(
 
 interface GeminiMessageContent {
   role: 'user' | 'model';
-  parts: Array<{ text?: string }>;
+  parts: Array<{ text?: string; inlineData?: { mimeType: string; data: string } }>;
 }
 
 function buildGeminiContents(
@@ -315,29 +315,124 @@ function buildToolConfig(choice: unknown): Record<string, unknown> {
   return { functionCallingConfig: { mode: 'AUTO' } };
 }
 
+type InlineImagePart = { inlineData: { mimeType: string; data: string } };
+
+// Normalise one image input into a Gemini inlineData part. Accepts:
+//   - a data: URI string                       (data:image/jpeg;base64,…)
+//   - an https:// URL string                   (fetched to base64)
+//   - { type:"base64", media_type, data }       (raw base64 or data: URI)
+//   - { type:"url", url } / { url }             (fetched)
+//   - { image_url: { url } } / { image_url }     (OpenAI chat image part)
+async function imageToInlinePart(c: unknown): Promise<InlineImagePart | null> {
+  if (typeof c === 'string') {
+    if (c.startsWith('data:')) {
+      const m = /^data:([^;]+);base64,(.+)$/.exec(c);
+      return m ? { inlineData: { mimeType: m[1]!, data: m[2]! } } : null;
+    }
+    if (/^https?:\/\//.test(c)) return { inlineData: await fetchAsBase64(c) };
+    return null;
+  }
+  if (c && typeof c === 'object') {
+    const o = c as Record<string, unknown>;
+    const iu = o['image_url'];
+    if (typeof iu === 'string') return imageToInlinePart(iu);
+    if (iu && typeof iu === 'object' && typeof (iu as Record<string, unknown>)['url'] === 'string') {
+      return imageToInlinePart((iu as Record<string, unknown>)['url']);
+    }
+    const data = o['data'];
+    if (typeof data === 'string' && data.length > 0) {
+      if (data.startsWith('data:')) return imageToInlinePart(data);
+      const mt = o['media_type'] ?? o['mime_type'] ?? o['mimeType'];
+      return {
+        inlineData: { mimeType: typeof mt === 'string' ? mt : 'image/jpeg', data },
+      };
+    }
+    const url = o['url'];
+    if (typeof url === 'string') return imageToInlinePart(url);
+  }
+  return null;
+}
+
 async function buildInlineImages(
   params: Record<string, unknown>,
-): Promise<Array<{ inlineData: { mimeType: string; data: string } }>> {
-  const out: Array<{ inlineData: { mimeType: string; data: string } }> = [];
+): Promise<InlineImagePart[]> {
+  const out: InlineImagePart[] = [];
   const candidates: unknown[] = [];
   const single =
     params['image'] ?? params['source_image'] ?? params['input_image'];
-  if (typeof single === 'string') candidates.push(single);
+  if (single !== undefined && single !== null) candidates.push(single);
   const list =
     params['images'] ?? params['reference_images'] ?? params['input_images'];
   if (Array.isArray(list)) {
     for (const v of list) candidates.push(v);
   }
   for (const c of candidates) {
-    if (typeof c !== 'string') continue;
-    if (c.startsWith('data:')) {
-      const m = /^data:([^;]+);base64,(.+)$/.exec(c);
-      if (m) out.push({ inlineData: { mimeType: m[1]!, data: m[2]! } });
-    } else if (/^https?:\/\//.test(c)) {
-      out.push({ inlineData: await fetchAsBase64(c) });
+    const part = await imageToInlinePart(c);
+    if (part) out.push(part);
+  }
+  return out;
+}
+
+// image_url parts carried inside chat `messages[].content` arrays.
+async function imagePartsFromMessages(
+  params: Record<string, unknown>,
+): Promise<InlineImagePart[]> {
+  const messages = params['messages'];
+  if (!Array.isArray(messages)) return [];
+  const out: InlineImagePart[] = [];
+  for (const raw of messages) {
+    if (!raw || typeof raw !== 'object') continue;
+    const content = (raw as Record<string, unknown>)['content'];
+    if (!Array.isArray(content)) continue;
+    for (const item of content) {
+      if (!item || typeof item !== 'object') continue;
+      const it = item as Record<string, unknown>;
+      if (it['type'] === 'image_url' && it['image_url'] !== undefined) {
+        const part = await imageToInlinePart(it['image_url']);
+        if (part) out.push(part);
+      }
     }
   }
   return out;
+}
+
+// All input images for a vision request: top-level image params + image_url
+// parts inside messages.
+async function collectGeminiImageParts(
+  params: Record<string, unknown>,
+): Promise<InlineImagePart[]> {
+  const fromParams = await buildInlineImages(params);
+  const fromMessages = await imagePartsFromMessages(params);
+  return [...fromParams, ...fromMessages];
+}
+
+// Translate an OpenAI-style `response_format` into Gemini's generationConfig.
+// No-op if responseSchema was already set (native response_schema wins).
+//   { type:"json_schema", schema:{…} }            → responseSchema
+//   { type:"json_schema", json_schema:{ schema } } → responseSchema (OpenAI shape)
+//   { type:"json_object" }                         → responseMimeType only
+function applyResponseFormat(
+  params: Record<string, unknown>,
+  generationConfig: Record<string, unknown>,
+): void {
+  if (generationConfig['responseSchema'] !== undefined) return;
+  const rf = params['response_format'];
+  if (!rf || typeof rf !== 'object') return;
+  const o = rf as Record<string, unknown>;
+  const js = o['json_schema'];
+  const schema =
+    o['schema'] && typeof o['schema'] === 'object'
+      ? o['schema']
+      : js && typeof js === 'object' && (js as Record<string, unknown>)['schema'] &&
+          typeof (js as Record<string, unknown>)['schema'] === 'object'
+        ? (js as Record<string, unknown>)['schema']
+        : undefined;
+  if (schema) {
+    generationConfig['responseMimeType'] = 'application/json';
+    generationConfig['responseSchema'] = schema;
+  } else if (o['type'] === 'json_object' || o['type'] === 'json_schema') {
+    generationConfig['responseMimeType'] = 'application/json';
+  }
 }
 
 export class GoogleBananaAdapter implements ProviderAdapter {
@@ -912,10 +1007,21 @@ export class GoogleBananaAdapter implements ProviderAdapter {
    * Build the generateContent request body — shared by AI Studio (key auth)
    * and Vertex AI (SA bearer) paths since both use the same body shape.
    */
-  private buildTextGenerationBody(
+  private async buildTextGenerationBody(
     params: Record<string, unknown>,
-  ): Record<string, unknown> {
+  ): Promise<Record<string, unknown>> {
     const contents = buildGeminiContents(params);
+    // Vision: fold any input images (top-level `image`/`images` or image_url
+    // parts in messages) into the first user content as inlineData parts.
+    const imageParts = await collectGeminiImageParts(params);
+    if (imageParts.length > 0) {
+      let userContent = contents.find((c) => c.role === 'user');
+      if (!userContent) {
+        userContent = { role: 'user', parts: [] };
+        contents.push(userContent);
+      }
+      userContent.parts = [...imageParts, ...userContent.parts];
+    }
     const systemInstruction = buildSystemInstruction(params);
     const generationConfig: Record<string, unknown> = {};
     const temperature = params['temperature'];
@@ -938,6 +1044,7 @@ export class GoogleBananaAdapter implements ProviderAdapter {
     } else if (typeof respMime === 'string') {
       generationConfig.responseMimeType = respMime;
     }
+    applyResponseFormat(params, generationConfig);
     const body: Record<string, unknown> = { contents, generationConfig };
     if (systemInstruction) body.systemInstruction = systemInstruction;
     const tools = buildTools(params);
@@ -994,7 +1101,7 @@ export class GoogleBananaAdapter implements ProviderAdapter {
     sa: ServiceAccountKey,
   ): Promise<AdapterResult> {
     const { model, params } = ctx;
-    const body = this.buildTextGenerationBody(params);
+    const body = await this.buildTextGenerationBody(params);
     // Vertex requires `role: "user"` on each content; AI Studio is lenient.
     // The contents already come with roles set from buildGeminiContents.
     const agent = this.buildProxyAgent(ctx);
@@ -1011,7 +1118,7 @@ export class GoogleBananaAdapter implements ProviderAdapter {
     apiKey: string,
   ): Promise<AdapterResult> {
     const { model, params } = ctx;
-    const body = this.buildTextGenerationBody(params);
+    const body = await this.buildTextGenerationBody(params);
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model.code)}:generateContent?key=${encodeURIComponent(apiKey)}`;
     const agent = this.buildProxyAgent(ctx);
     const response = (await this.callRawApi(url, body, agent)) as GeminiResponse;

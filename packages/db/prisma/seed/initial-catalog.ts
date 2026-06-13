@@ -434,6 +434,124 @@ const geminiTextMethods: MethodSeed[] = [
   },
 ];
 
+// Image understanding / vision (image → text or strict JSON). The multimodal
+// Gemini 2.5 family analyses an input image and answers a prompt; with
+// response_format/response_schema the output is forced to a JSON shape. Same
+// async submit→poll flow and the SAME pricing bundle as text_generation
+// (maps to BundleMethod.TEXT_GENERATION), so no new price rows are needed.
+const geminiImageInputProp = {
+  oneOf: [
+    {
+      type: 'string',
+      description: 'Image as a data: URI (data:image/jpeg;base64,…) or an https:// URL.',
+    },
+    {
+      type: 'object',
+      description:
+        'Image object — { "type":"base64", "media_type":"image/jpeg", "data":"<BASE64>" } or { "type":"url", "url":"https://…" }.',
+      properties: {
+        type: { type: 'string', enum: ['base64', 'url', 'image'] },
+        media_type: { type: 'string' },
+        mime_type: { type: 'string' },
+        data: { type: 'string' },
+        url: { type: 'string' },
+      },
+    },
+  ],
+  description:
+    'Input image: a data-URI/URL string, or an object { type, media_type, data } / { type, url }. Formats: jpeg/png/webp.',
+} as const;
+
+const geminiImageToTextMethod: MethodSeed = {
+  code: 'image_to_text',
+  publicName: 'Image to text (vision)',
+  description:
+    'Analyse an input image and return text — or strict JSON via response_format/response_schema. Symmetric to text_to_image. Multimodal Gemini 2.5; same price as text generation.',
+  supportsSync: true,
+  supportsAsync: true,
+  parametersSchema: {
+    $schema: 'http://json-schema.org/draft-07/schema#',
+    type: 'object',
+    'x-bundle-unit': 'PER_REQUEST',
+    properties: {
+      prompt: {
+        type: 'string',
+        maxLength: 200_000,
+        description: 'Instruction / question about the image.',
+      },
+      // Alternatively a full chat history; chat content items may include
+      // image_url parts (OpenAI-style) which are forwarded to Gemini.
+      messages: {
+        type: 'array',
+        minItems: 1,
+        maxItems: 200,
+        items: chatMessageSchema,
+        description:
+          'Optional chat history (alternative to `prompt`). Content arrays may carry { type:"image_url", image_url:{ url } } parts.',
+      },
+      system_instruction: {
+        type: 'string',
+        maxLength: 32_000,
+        description: 'System-level guidance prepended to the prompt.',
+      },
+      image: geminiImageInputProp,
+      images: {
+        type: 'array',
+        minItems: 1,
+        maxItems: 8,
+        items: geminiImageInputProp,
+        description: 'Multiple input images (analysed together).',
+      },
+      response_format: {
+        type: 'object',
+        description:
+          'OpenAI-style structured output: { "type":"json_schema", "schema":{…} } (or { "type":"json_object" }). Translated to Gemini responseSchema. Equivalent to setting response_schema directly.',
+        properties: {
+          type: { type: 'string', enum: ['text', 'json_object', 'json_schema'] },
+          schema: { type: 'object' },
+          json_schema: { type: 'object' },
+        },
+      },
+      response_mime_type: {
+        type: 'string',
+        enum: ['text/plain', 'application/json'],
+        description: 'Force JSON output when set to application/json.',
+      },
+      response_schema: {
+        type: 'object',
+        description:
+          'JSON Schema the response must conform to (implies application/json). Native Gemini form; alternative to response_format.',
+      },
+      temperature: { type: 'number', minimum: 0, maximum: 2 },
+      max_output_tokens: { type: 'integer', minimum: 1, maximum: 65_535 },
+      callback_url: callbackUrlProp,
+    },
+    additionalProperties: false,
+  },
+  exampleRequest: {
+    prompt: 'Определи блюдо и ингредиенты на фото, оцени вес, калории и БЖУ.',
+    image: { type: 'base64', media_type: 'image/jpeg', data: '<BASE64>' },
+    response_format: {
+      type: 'json_schema',
+      schema: {
+        type: 'object',
+        required: ['dish', 'kcal', 'protein', 'fat', 'carbs'],
+        properties: {
+          dish: { type: 'string' },
+          kcal: { type: 'number' },
+          protein: { type: 'number' },
+          fat: { type: 'number' },
+          carbs: { type: 'number' },
+        },
+      },
+    },
+  },
+  exampleResponse: {
+    task_id: 'tsk_01H...',
+    status: 'queued',
+  },
+};
+
 // --------------------------------------------------------------------------
 // Veo methods
 // --------------------------------------------------------------------------
@@ -1256,7 +1374,10 @@ export const initialCatalog: ProviderSeed[] = [
         description:
           'Top-tier reasoning model — best for complex multi-step tasks, code, structured extraction. 1M token context, JSON & function-calling support.',
         sortOrder: 100,
-        methods: [{ ...geminiTextMethods[0]!, sortOrder: 10 }], // text_generation
+        methods: [
+          { ...geminiTextMethods[0]!, sortOrder: 10 }, // text_generation
+          { ...geminiImageToTextMethod, sortOrder: 20 },
+        ],
       },
       {
         code: 'gemini-2.5-flash',
@@ -1264,7 +1385,10 @@ export const initialCatalog: ProviderSeed[] = [
         description:
           'Fast, capable workhorse model. 1M token context. Best price/performance for chat completion, summarisation, JSON extraction at scale.',
         sortOrder: 110,
-        methods: [{ ...geminiTextMethods[0]!, sortOrder: 10 }],
+        methods: [
+          { ...geminiTextMethods[0]!, sortOrder: 10 },
+          { ...geminiImageToTextMethod, sortOrder: 20 },
+        ],
       },
       {
         code: 'gemini-2.5-flash-lite',
@@ -1272,7 +1396,10 @@ export const initialCatalog: ProviderSeed[] = [
         description:
           'Cheapest Gemini 2.5 tier — high throughput, latency-sensitive workloads. 1M token context.',
         sortOrder: 120,
-        methods: [{ ...geminiTextMethods[0]!, sortOrder: 10 }],
+        methods: [
+          { ...geminiTextMethods[0]!, sortOrder: 10 },
+          { ...geminiImageToTextMethod, sortOrder: 20 },
+        ],
       },
       {
         code: 'text-embedding-004',

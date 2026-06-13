@@ -233,7 +233,10 @@ function methodCodeToBundleMethod(code: string): BundleMethod {
   ) {
     return BundleMethod.VIDEO_GENERATION;
   }
-  if (code === 'text_generation') return BundleMethod.TEXT_GENERATION;
+  // image_to_text (vision) shares text_generation's bundle/price.
+  if (code === 'text_generation' || code === 'image_to_text') {
+    return BundleMethod.TEXT_GENERATION;
+  }
   if (code === 'embedding') return BundleMethod.EMBEDDING;
   return BundleMethod.OTHER;
 }
