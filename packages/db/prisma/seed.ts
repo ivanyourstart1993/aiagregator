@@ -1303,9 +1303,12 @@ async function seedOpenAIImagePrices(tariffId: string): Promise<void> {
 }
 
 // OpenAI vision (gpt-4o-mini image_to_text) — flat PER_REQUEST, mapped to
-// BundleMethod.TEXT_GENERATION (same as Gemini image_to_text). gpt-4o-mini
-// vision is very cheap (~$0.0004/photo); flat $0.004 keeps a wide margin.
-const OPENAI_VISION_PRICE_CENTS = 0.4; // $0.004 flat per request
+// BundleMethod.TEXT_GENERATION (same as Gemini image_to_text). NB: gpt-4o-mini
+// is NOT cheap for images — it inflates image tokens ~33.33x (one 1024px photo
+// ≈ 25.5k billed tokens ≈ $0.0038 upstream), so true COGS ≈ $0.004/req. Priced
+// at $0.008 = ~2x COGS (~50% margin). Gemini image_to_text stays the cheap
+// default (~$0.0011 COGS). Re-check if the model or OpenAI image pricing changes.
+const OPENAI_VISION_PRICE_CENTS = 0.8; // $0.008 flat per request
 
 async function seedOpenAIVisionPrice(tariffId: string): Promise<void> {
   const modelSlug = 'gpt-4o-mini';
