@@ -476,7 +476,7 @@ const geminiImageToTextMethod: MethodSeed = {
   code: 'image_to_text',
   publicName: 'Image to text (vision)',
   description:
-    'Analyse an input image and return text — or strict JSON via response_format/response_schema. Symmetric to text_to_image. Multimodal Gemini 2.5; same price as text generation.',
+    'Analyse an input image and return text — or strict JSON via response_format/response_schema. Symmetric to text_to_image. Multimodal model; priced like text generation.',
   supportsSync: true,
   supportsAsync: true,
   parametersSchema: {
@@ -1605,6 +1605,17 @@ export const initialCatalog: ProviderSeed[] = [
         description: 'Legacy DALL·E 2 — t2i + edit at 256/512/1024 squares.',
         sortOrder: 30,
         methods: openaiImageMethods.map((m, i) => ({ ...m, sortOrder: (i + 1) * 10 })),
+      },
+      {
+        // Multimodal chat model — exposed ONLY for image_to_text (vision), as
+        // a redundant alternative to Gemini for image→text/JSON. Reuses the
+        // same OpenAI account/key. Priced like text generation (PER_REQUEST).
+        code: 'gpt-4o-mini',
+        publicName: 'GPT-4o mini (vision)',
+        description:
+          'Cheap multimodal model for image understanding — image → text or strict JSON. Vision fallback to Gemini.',
+        sortOrder: 40,
+        methods: [{ ...geminiImageToTextMethod, sortOrder: 10 }],
       },
     ],
   },

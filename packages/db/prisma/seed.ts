@@ -1302,6 +1302,45 @@ async function seedOpenAIImagePrices(tariffId: string): Promise<void> {
   console.log(`[seed] openai-image tariff prices upserted: ${count}`);
 }
 
+// OpenAI vision (gpt-4o-mini image_to_text) — flat PER_REQUEST, mapped to
+// BundleMethod.TEXT_GENERATION (same as Gemini image_to_text). gpt-4o-mini
+// vision is very cheap (~$0.0004/photo); flat $0.004 keeps a wide margin.
+const OPENAI_VISION_PRICE_CENTS = 0.4; // $0.004 flat per request
+
+async function seedOpenAIVisionPrice(tariffId: string): Promise<void> {
+  const modelSlug = 'gpt-4o-mini';
+  const bundleKey = buildBundleKey({
+    providerSlug: 'openai_image',
+    modelSlug,
+    method: BundleMethod.TEXT_GENERATION,
+    mode: null,
+    resolution: null,
+    durationSeconds: null,
+    aspectRatio: null,
+  });
+  const bundle = await prisma.bundle.upsert({
+    where: { bundleKey },
+    create: {
+      bundleKey,
+      providerSlug: 'openai_image',
+      modelSlug,
+      method: BundleMethod.TEXT_GENERATION,
+      unit: BundleUnit.PER_REQUEST,
+      isActive: true,
+    },
+    update: { unit: BundleUnit.PER_REQUEST },
+  });
+  const priceUnits = BigInt(
+    Math.round(OPENAI_VISION_PRICE_CENTS * Number(CENTS_TO_NANO)),
+  );
+  await prisma.tariffBundlePrice.upsert({
+    where: { tariffId_bundleId: { tariffId, bundleId: bundle.id } },
+    create: { tariffId, bundleId: bundle.id, basePriceUnits: priceUnits },
+    update: { basePriceUnits: priceUnits },
+  });
+  console.log('[seed] openai vision (gpt-4o-mini) price upserted: 1');
+}
+
 async function seedOpenAIImageProviderAccount(): Promise<void> {
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) {
@@ -1360,6 +1399,7 @@ async function main(): Promise<void> {
   await seedOpenRouterPrices(tariffId);
   await seedOpenRouterProviderAccount();
   await seedOpenAIImagePrices(tariffId);
+  await seedOpenAIVisionPrice(tariffId);
   await seedOpenAIImageProviderAccount();
 }
 

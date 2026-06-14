@@ -13,6 +13,121 @@ const SUPPORTED_MODELS = new Set(['gpt-image-2', 'gpt-image-1', 'dall-e-3', 'dal
 const EDITABLE_MODELS = new Set(['gpt-image-2', 'gpt-image-1', 'dall-e-2']);
 const SUPPORTED_METHODS = new Set(['text_to_image', 'image_edit']);
 
+// Vision (image → text/JSON) via OpenAI chat/completions on a multimodal
+// chat model. Reuses the same OpenAI account/key as image generation.
+const VISION_MODELS = new Set(['gpt-4o-mini']);
+const VISION_METHODS = new Set(['image_to_text']);
+
+interface OpenAIChatResponse {
+  choices?: Array<{
+    message?: { content?: string | null };
+    finish_reason?: string;
+  }>;
+  usage?: {
+    prompt_tokens?: number;
+    completion_tokens?: number;
+    total_tokens?: number;
+  };
+  error?: { code?: string; type?: string; message?: string; param?: string };
+}
+
+// Convert an image input into a value OpenAI chat image_url accepts: an
+// https:// URL (OpenAI fetches it) or a data: URI. Accepts the same shapes as
+// the Gemini vision path: string, { type:base64, media_type, data },
+// { type:url, url }/{ url }, or an OpenAI image part { image_url:{ url } }.
+function imageInputToUrl(c: unknown): string | null {
+  if (typeof c === 'string') {
+    if (c.startsWith('data:') || /^https?:\/\//.test(c)) return c;
+    return null;
+  }
+  if (c && typeof c === 'object') {
+    const o = c as Record<string, unknown>;
+    const iu = o['image_url'];
+    if (typeof iu === 'string') return imageInputToUrl(iu);
+    if (iu && typeof iu === 'object' && typeof (iu as Record<string, unknown>)['url'] === 'string') {
+      return imageInputToUrl((iu as Record<string, unknown>)['url']);
+    }
+    const data = o['data'];
+    if (typeof data === 'string' && data.length > 0) {
+      if (data.startsWith('data:')) return data;
+      const mt = o['media_type'] ?? o['mime_type'] ?? o['mimeType'];
+      return `data:${typeof mt === 'string' ? mt : 'image/jpeg'};base64,${data}`;
+    }
+    const url = o['url'];
+    if (typeof url === 'string') return imageInputToUrl(url);
+  }
+  return null;
+}
+
+function collectVisionImageUrls(params: Record<string, unknown>): string[] {
+  const out: string[] = [];
+  const single = params['image'] ?? params['source_image'] ?? params['input_image'];
+  if (single !== undefined && single !== null) {
+    const u = imageInputToUrl(single);
+    if (u) out.push(u);
+  }
+  const list = params['images'] ?? params['input_images'] ?? params['reference_images'];
+  if (Array.isArray(list)) {
+    for (const v of list) {
+      const u = imageInputToUrl(v);
+      if (u) out.push(u);
+    }
+  }
+  const messages = params['messages'];
+  if (Array.isArray(messages)) {
+    for (const raw of messages) {
+      if (!raw || typeof raw !== 'object') continue;
+      const content = (raw as Record<string, unknown>)['content'];
+      if (!Array.isArray(content)) continue;
+      for (const item of content) {
+        if (!item || typeof item !== 'object') continue;
+        const it = item as Record<string, unknown>;
+        if (it['type'] === 'image_url' && it['image_url'] !== undefined) {
+          const u = imageInputToUrl(it['image_url']);
+          if (u) out.push(u);
+        }
+      }
+    }
+  }
+  return out;
+}
+
+// Build OpenAI chat `response_format` from the gateway's params. Honours both
+// the OpenAI-style `response_format` and the native `response_schema`. We use
+// strict:false so arbitrary client schemas are accepted (strict mode requires
+// additionalProperties:false on every object, which most schemas omit).
+function buildOpenAIResponseFormat(
+  params: Record<string, unknown>,
+): Record<string, unknown> | undefined {
+  let schema: unknown;
+  const rf = params['response_format'];
+  if (rf && typeof rf === 'object') {
+    const o = rf as Record<string, unknown>;
+    if (o['schema'] && typeof o['schema'] === 'object') {
+      schema = o['schema'];
+    } else if (o['json_schema'] && typeof o['json_schema'] === 'object') {
+      const js = o['json_schema'] as Record<string, unknown>;
+      schema = js['schema'] && typeof js['schema'] === 'object' ? js['schema'] : js;
+    }
+  }
+  if (!schema) {
+    const rs = params['response_schema'] ?? params['responseSchema'];
+    if (rs && typeof rs === 'object') schema = rs;
+  }
+  if (schema) {
+    return {
+      type: 'json_schema',
+      json_schema: { name: 'result', schema, strict: false },
+    };
+  }
+  const rmt = params['response_mime_type'] ?? params['responseMimeType'];
+  const rfType = rf && typeof rf === 'object' ? (rf as Record<string, unknown>)['type'] : undefined;
+  if (rmt === 'application/json' || rfType === 'json_object' || rfType === 'json_schema') {
+    return { type: 'json_object' };
+  }
+  return undefined;
+}
+
 // gpt-image-1 and gpt-image-2 share the same request envelope (native b64
 // response, quality enum, background flag). Worth treating them as one
 // "native" family so we don't sprinkle two-model conditionals everywhere.
@@ -178,6 +293,7 @@ export class OpenAiImageAdapter implements ProviderAdapter {
   constructor(private readonly storage: WorkerStorage) {}
 
   supports(modelCode: string, methodCode: string): boolean {
+    if (VISION_MODELS.has(modelCode) && VISION_METHODS.has(methodCode)) return true;
     if (!SUPPORTED_MODELS.has(modelCode)) return false;
     if (!SUPPORTED_METHODS.has(methodCode)) return false;
     if (methodCode === 'image_edit' && !EDITABLE_MODELS.has(modelCode)) return false;
@@ -188,6 +304,11 @@ export class OpenAiImageAdapter implements ProviderAdapter {
     const apiKey = this.extractApiKey(ctx);
     const agent = this.buildProxyAgent(ctx);
     const { method, params } = ctx;
+
+    if (method.code === 'image_to_text') {
+      return this.executeVision(ctx, apiKey, agent);
+    }
+
     const prompt = pickString(params, 'prompt');
     if (!prompt) {
       throw new AdapterError('validation', 'prompt is required');
@@ -196,6 +317,116 @@ export class OpenAiImageAdapter implements ProviderAdapter {
       return this.executeEdit(ctx, apiKey, prompt, agent);
     }
     return this.executeGenerate(ctx, apiKey, prompt, agent);
+  }
+
+  // Vision: image → text/JSON via OpenAI chat/completions on a multimodal
+  // chat model (gpt-4o-mini). Mirrors the Gemini image_to_text contract:
+  // prompt + image + response_format/response_schema, returns meta.text.
+  private async executeVision(
+    ctx: AdapterContext,
+    apiKey: string,
+    agent: HttpsProxyAgent<string> | undefined,
+  ): Promise<AdapterResult> {
+    const { model, params } = ctx;
+    const prompt = pickString(params, 'prompt') ?? '';
+    const imageUrls = collectVisionImageUrls(params);
+    if (imageUrls.length === 0) {
+      throw new AdapterError(
+        'validation',
+        'image_to_text requires an "image" (URL, data: URI, or { type, data })',
+      );
+    }
+    const content: unknown[] = [];
+    if (prompt) content.push({ type: 'text', text: prompt });
+    for (const url of imageUrls) {
+      content.push({ type: 'image_url', image_url: { url } });
+    }
+
+    const body: Record<string, unknown> = {
+      model: model.code,
+      messages: [{ role: 'user', content }],
+    };
+    const sys = pickString(params, 'system_instruction', 'systemInstruction');
+    if (sys) {
+      (body.messages as unknown[]).unshift({ role: 'system', content: sys });
+    }
+    const maxOut = params['max_output_tokens'] ?? params['maxOutputTokens'] ?? params['max_tokens'];
+    if (typeof maxOut === 'number' && maxOut > 0) body.max_tokens = Math.trunc(maxOut);
+    const temp = params['temperature'];
+    if (typeof temp === 'number') body.temperature = temp;
+    const respFormat = buildOpenAIResponseFormat(params);
+    if (respFormat) body.response_format = respFormat;
+
+    const parsed = await this.callChat(
+      `${OPENAI_BASE}/chat/completions`,
+      apiKey,
+      body,
+      agent,
+    );
+    const choice = parsed.choices?.[0];
+    const text = typeof choice?.message?.content === 'string' ? choice.message.content : '';
+    if (!text) {
+      throw new AdapterError(
+        'unknown',
+        `openai vision returned no text (finish_reason=${choice?.finish_reason ?? 'unknown'})`,
+      );
+    }
+    const usage = parsed.usage;
+    return {
+      meta: {
+        text,
+        finish_reason: choice?.finish_reason ?? null,
+        model: model.code,
+        usage: usage
+          ? {
+              input_tokens: usage.prompt_tokens ?? 0,
+              output_tokens: usage.completion_tokens ?? 0,
+              total_tokens: usage.total_tokens ?? 0,
+            }
+          : null,
+      },
+    };
+  }
+
+  private async callChat(
+    url: string,
+    apiKey: string,
+    body: unknown,
+    agent: HttpsProxyAgent<string> | undefined,
+  ): Promise<OpenAIChatResponse> {
+    let res: Response;
+    try {
+      const init: RequestInit & { agent?: unknown } = {
+        method: 'POST',
+        headers: {
+          authorization: `Bearer ${apiKey}`,
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify(body),
+      };
+      if (agent) init.agent = agent;
+      res = await fetch(url, init);
+    } catch (err) {
+      throw new AdapterError(
+        'temporary',
+        `network error calling openai: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
+    const text = await res.text();
+    let parsed: OpenAIChatResponse = {};
+    try {
+      parsed = text ? (JSON.parse(text) as OpenAIChatResponse) : {};
+    } catch {
+      parsed = {};
+    }
+    if (!res.ok) {
+      throw classifyOpenAIError(
+        res.status,
+        parsed as OpenAIImageResponse,
+        res.headers.get('retry-after'),
+      );
+    }
+    return parsed;
   }
 
   private async executeGenerate(
