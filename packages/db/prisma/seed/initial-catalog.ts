@@ -306,6 +306,16 @@ const geminiTextMethods: MethodSeed[] = [
           description:
             'JSON Schema (draft-07 subset) the response must conform to. Implies `response_mime_type=application/json`.',
         },
+        response_format: {
+          type: 'object',
+          description:
+            'OpenAI-style structured output: { "type":"json_schema", "schema":{…} } or { "type":"json_object" }. Translated to Gemini responseSchema — equivalent to setting response_schema directly.',
+          properties: {
+            type: { type: 'string', enum: ['text', 'json_object', 'json_schema'] },
+            schema: { type: 'object' },
+            json_schema: { type: 'object' },
+          },
+        },
         tools: {
           type: 'array',
           items: toolDefinitionSchema,
