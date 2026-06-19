@@ -102,6 +102,11 @@ function pickMode(p: Record<string, unknown>): 'std' | 'pro' {
   return v === 'pro' ? 'pro' : 'std';
 }
 
+// Caller-fixable Kling parameter errors (wrong/invalid/out-of-range request
+// fields). Includes the prompt length cap ("size must be between 0 and 2500").
+const KLING_PARAM_ERROR_RE =
+  /value\s+'[^']*'\s+is\s+invalid|must be between|size must be|too (?:long|short|large|small|many|few)|exceeds|out of range|invalid (?:length|format|value)|length must/i;
+
 function classifyKlingError(
   status: number,
   body: KlingResponse,
@@ -126,7 +131,11 @@ function classifyKlingError(
   // These are NOT content-moderation failures — they mean our request body
   // disagrees with the API contract. Surface as 'validation' so the public
   // layer sanitises to `provider_rejected`.
-  if (/value\s+'[^']*'\s+is\s+invalid/i.test(msg)) {
+  // Caller-fixable param errors (invalid/out-of-range fields, prompt length
+  // cap "size must be between 0 and 2500" = code 1201). Surface as 'validation'
+  // → public 'provider_rejected' ("check parameters"), not the generic
+  // 'service_unavailable' that tells callers to retry the same bad input.
+  if (body.code === 1201 || KLING_PARAM_ERROR_RE.test(msg)) {
     return new AdapterError('validation', msg);
   }
   if (/violation|safety|prohibit/i.test(msg)) {
@@ -429,7 +438,7 @@ export class KlingAiAdapter implements ProviderAdapter {
         throw new AdapterError('billing', msg);
       }
       if (/quota/i.test(msg)) throw new AdapterError('quota', msg);
-      if (/value\s+'[^']*'\s+is\s+invalid/i.test(msg)) {
+      if (KLING_PARAM_ERROR_RE.test(msg)) {
         throw new AdapterError('validation', msg);
       }
       if (/violation|safety|prohibit|reject/i.test(msg)) {

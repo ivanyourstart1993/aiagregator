@@ -137,6 +137,11 @@ function describeKlingMediaError(msg: string): string | null {
   return null;
 }
 
+// Caller-fixable Kling parameter errors (wrong/invalid/out-of-range request
+// fields). Includes the prompt length cap ("size must be between 0 and 2500").
+const KLING_PARAM_ERROR_RE =
+  /value\s+'[^']*'\s+is\s+invalid|must be between|size must be|too (?:long|short|large|small|many|few)|exceeds|out of range|invalid (?:length|format|value)|length must/i;
+
 function classifyKlingError(
   status: number,
   body: KlingResponse,
@@ -166,13 +171,16 @@ function classifyKlingError(
   if (mediaError) {
     return new AdapterError('invalid_input', mediaError);
   }
-  // Param-level rejections from Kling have the shape:
+  // Param-level rejections from Kling are caller-fixable, e.g.:
   //   "model_name value 'kling-v3-0' is invalid"
   //   "mode value 'standard' is invalid"
-  // These are NOT content-moderation failures — they mean our request body
-  // disagrees with the API contract. Surface as 'validation' so the public
-  // layer sanitises to `provider_rejected`.
-  if (/value\s+'[^']*'\s+is\s+invalid/i.test(msg)) {
+  //   "prompt: size must be between 0 and 2500"   (code 1201)
+  // These are NOT content-moderation failures — they mean the request body
+  // disagrees with the API contract (e.g. prompt too long). Surface as
+  // 'validation' so the public layer sanitises to `provider_rejected`
+  // ("check parameters") instead of the generic `service_unavailable`
+  // ("retry shortly") — otherwise the caller retries the same bad input forever.
+  if (body.code === 1201 || KLING_PARAM_ERROR_RE.test(msg)) {
     return new AdapterError('validation', msg);
   }
   if (/violation|safety|prohibit/i.test(msg)) {
@@ -446,7 +454,7 @@ export class KlingAiAdapter implements ProviderAdapter {
       if (pollMediaError) {
         throw new AdapterError('invalid_input', pollMediaError);
       }
-      if (/value\s+'[^']*'\s+is\s+invalid/i.test(msg)) {
+      if (KLING_PARAM_ERROR_RE.test(msg)) {
         throw new AdapterError('validation', msg);
       }
       if (/violation|safety|prohibit|reject/i.test(msg)) {
