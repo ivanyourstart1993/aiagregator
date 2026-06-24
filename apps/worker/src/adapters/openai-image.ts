@@ -15,8 +15,21 @@ const SUPPORTED_METHODS = new Set(['text_to_image', 'image_edit']);
 
 // Vision (image → text/JSON) via OpenAI chat/completions on a multimodal
 // chat model. Reuses the same OpenAI account/key as image generation.
-const VISION_MODELS = new Set(['gpt-4o-mini']);
+const VISION_MODELS = new Set([
+  'gpt-4o-mini',
+  'gpt-4o',
+  'gpt-4.1',
+  'gpt-4.1-mini',
+  'gpt-5-mini',
+]);
 const VISION_METHODS = new Set(['image_to_text']);
+
+// gpt-5 / o-series are reasoning models: chat/completions requires
+// `max_completion_tokens` (not `max_tokens`) and rejects a custom
+// `temperature` (only the default is allowed).
+function isReasoningModel(modelCode: string): boolean {
+  return /^(gpt-5|o[134])(\b|[-.])/.test(modelCode);
+}
 
 interface OpenAIChatResponse {
   choices?: Array<{
@@ -350,10 +363,14 @@ export class OpenAiImageAdapter implements ProviderAdapter {
     if (sys) {
       (body.messages as unknown[]).unshift({ role: 'system', content: sys });
     }
+    const reasoning = isReasoningModel(model.code);
     const maxOut = params['max_output_tokens'] ?? params['maxOutputTokens'] ?? params['max_tokens'];
-    if (typeof maxOut === 'number' && maxOut > 0) body.max_tokens = Math.trunc(maxOut);
+    if (typeof maxOut === 'number' && maxOut > 0) {
+      if (reasoning) body.max_completion_tokens = Math.trunc(maxOut);
+      else body.max_tokens = Math.trunc(maxOut);
+    }
     const temp = params['temperature'];
-    if (typeof temp === 'number') body.temperature = temp;
+    if (typeof temp === 'number' && !reasoning) body.temperature = temp;
     const respFormat = buildOpenAIResponseFormat(params);
     if (respFormat) body.response_format = respFormat;
 

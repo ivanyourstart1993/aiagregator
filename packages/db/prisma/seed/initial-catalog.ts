@@ -1613,8 +1613,42 @@ export const initialCatalog: ProviderSeed[] = [
         code: 'gpt-4o-mini',
         publicName: 'GPT-4o mini (vision)',
         description:
-          'Cheap multimodal model for image understanding — image → text or strict JSON. Vision fallback to Gemini.',
+          'Budget multimodal model for image understanding. NB: inflates image tokens ~33x — gpt-4.1-mini is cheaper and better for vision.',
         sortOrder: 40,
+        methods: [{ ...geminiImageToTextMethod, sortOrder: 10 }],
+      },
+      {
+        // Recommended cost-efficient OpenAI vision model — patch-based image
+        // tokenization makes it ~3-4x cheaper than gpt-4o-mini per photo.
+        code: 'gpt-4.1-mini',
+        publicName: 'GPT-4.1 mini (vision)',
+        description:
+          'Cheap, reliable multimodal model — image → text or strict JSON. Recommended OpenAI vision option.',
+        sortOrder: 45,
+        methods: [{ ...geminiImageToTextMethod, sortOrder: 10 }],
+      },
+      {
+        code: 'gpt-5-mini',
+        publicName: 'GPT-5 mini (vision)',
+        description:
+          'Lowest-cost OpenAI vision model (reasoning family) — image → text or strict JSON.',
+        sortOrder: 46,
+        methods: [{ ...geminiImageToTextMethod, sortOrder: 10 }],
+      },
+      {
+        code: 'gpt-4.1',
+        publicName: 'GPT-4.1 (vision)',
+        description:
+          'High-accuracy multimodal model — image → text or strict JSON. For accuracy-sensitive jobs.',
+        sortOrder: 47,
+        methods: [{ ...geminiImageToTextMethod, sortOrder: 10 }],
+      },
+      {
+        code: 'gpt-4o',
+        publicName: 'GPT-4o (vision)',
+        description:
+          'Flagship multimodal model — image → text or strict JSON. Highest accuracy, highest cost.',
+        sortOrder: 48,
         methods: [{ ...geminiImageToTextMethod, sortOrder: 10 }],
       },
     ],
