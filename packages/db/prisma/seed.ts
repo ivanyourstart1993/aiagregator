@@ -730,11 +730,14 @@ async function seedKlingLipSyncPrices(tariffId: string): Promise<void> {
 }
 
 async function seedKlingProviderAccount(): Promise<void> {
+  // New single API Key format (preferred; required for new Kling models) takes
+  // precedence over the legacy Access Key + Secret Key pair.
+  const apiKey = process.env.KLING_API_KEY;
   const accessKey = process.env.KLING_ACCESS_KEY;
   const secretKey = process.env.KLING_SECRET_KEY;
-  if (!accessKey || !secretKey) {
+  if (!apiKey && (!accessKey || !secretKey)) {
     console.log(
-      '[seed] KLING_ACCESS_KEY/KLING_SECRET_KEY not set — skipping Kling ProviderAccount',
+      '[seed] KLING_API_KEY (or KLING_ACCESS_KEY/KLING_SECRET_KEY) not set — skipping Kling ProviderAccount',
     );
     return;
   }
@@ -745,7 +748,9 @@ async function seedKlingProviderAccount(): Promise<void> {
     console.warn('[seed] provider kling_ai not found — skipping account');
     return;
   }
-  const credentials = { access_key: accessKey, secret_key: secretKey };
+  const credentials = apiKey
+    ? { api_key: apiKey }
+    : { access_key: accessKey, secret_key: secretKey };
   const existing = await prisma.providerAccount.findFirst({
     where: { providerId: provider.id, name: 'env-account' },
   });
@@ -765,7 +770,7 @@ async function seedKlingProviderAccount(): Promise<void> {
       providerId: provider.id,
       name: 'env-account',
       description:
-        'Auto-seeded from KLING_ACCESS_KEY / KLING_SECRET_KEY env vars',
+        'Auto-seeded from KLING_API_KEY (or legacy KLING_ACCESS_KEY/KLING_SECRET_KEY) env vars',
       credentials: credentials as Prisma.InputJsonValue,
       status: ProviderAccountStatus.ACTIVE,
       rotationEnabled: true,

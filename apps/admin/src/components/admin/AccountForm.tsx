@@ -49,6 +49,7 @@ export function AccountForm({ mode, account, providers, proxies }: Props) {
   const [name, setName] = useState(account?.name ?? '');
   const [description, setDescription] = useState(account?.description ?? '');
   const [credentials, setCredentials] = useState('{}');
+  const [klingApiKey, setKlingApiKey] = useState('');
   const [klingAccessKey, setKlingAccessKey] = useState('');
   const [klingSecretKey, setKlingSecretKey] = useState('');
   // For "1 SA, 2 Google providers" pattern. Only meaningful at create time
@@ -88,18 +89,27 @@ export function AccountForm({ mode, account, providers, proxies }: Props) {
     let creds: Record<string, unknown> = {};
     let credsTouched = false;
     if (isKling) {
+      const apiKey = klingApiKey.trim();
       const ak = klingAccessKey.trim();
       const sk = klingSecretKey.trim();
-      if (mode === 'create') {
+      if (apiKey) {
+        // New single API Key format (preferred; required for new Kling models).
+        creds = { api_key: apiKey };
+        credsTouched = true;
+      } else if (mode === 'create') {
         if (!ak || !sk) {
-          toast.error('Заполни Access Key и Secret Key');
+          toast.error(
+            'Заполни API Key (новый формат) ИЛИ Access Key + Secret Key',
+          );
           return;
         }
         creds = { access_key: ak, secret_key: sk };
         credsTouched = true;
       } else if (ak || sk) {
         if (!ak || !sk) {
-          toast.error('Чтобы сменить ключи — заполни оба поля');
+          toast.error(
+            'Чтобы сменить legacy-ключи — заполни оба поля (или укажи API Key выше)',
+          );
           return;
         }
         creds = { access_key: ak, secret_key: sk };
@@ -254,7 +264,36 @@ export function AccountForm({ mode, account, providers, proxies }: Props) {
             </a>
           </div>
           <div className="space-y-2">
-            <Label className="text-xs text-muted-foreground">Access Key</Label>
+            <Label className="text-xs text-muted-foreground">
+              API Key (новый формат)
+            </Label>
+            <Input
+              type="password"
+              value={klingApiKey}
+              onChange={(e) => setKlingApiKey(e.target.value)}
+              placeholder={
+                mode === 'edit'
+                  ? 'оставь пустым чтобы не менять'
+                  : 'новый ключ Kling (Bearer)'
+              }
+              autoComplete="off"
+              spellCheck={false}
+              className="font-mono text-xs"
+            />
+            <p className="text-[11px] text-muted-foreground">
+              Новый формат Kling — нужен для новых моделей. Если задан, сохранится
+              как{' '}
+              <code className="rounded bg-muted px-1 py-0.5 font-mono text-[11px]">
+                {'{api_key}'}
+              </code>{' '}
+              и имеет приоритет над Access/Secret Key ниже.
+            </p>
+          </div>
+          <div className="space-y-2">
+            <Label className="text-xs text-muted-foreground">
+              Access Key{' '}
+              <span className="text-muted-foreground/70">(legacy)</span>
+            </Label>
             <Input
               value={klingAccessKey}
               onChange={(e) => setKlingAccessKey(e.target.value)}
@@ -281,12 +320,12 @@ export function AccountForm({ mode, account, providers, proxies }: Props) {
             />
           </div>
           <p className="text-xs text-muted-foreground">
-            Сохранится как{' '}
+            Legacy-формат: сохранится как{' '}
             <code className="rounded bg-muted px-1 py-0.5 font-mono text-[11px]">
               {'{access_key, secret_key}'}
             </code>
-            . Адаптер подписывает HS256-JWT и шлёт в{' '}
-            <code className="font-mono text-[11px]">api-singapore.klingai.com</code>.
+            , адаптер подписывает HS256-JWT. Работает только для старых моделей.
+            Для новых моделей задай API Key выше.
           </p>
         </div>
       ) : isGoogle ? (
