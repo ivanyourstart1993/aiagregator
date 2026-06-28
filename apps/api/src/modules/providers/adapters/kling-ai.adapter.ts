@@ -75,6 +75,29 @@ function signKlingJwt(accessKey: string, secretKey: string): string {
   return `${signing}.${sig}`;
 }
 
+// Kling supports two auth formats. Prefer the NEW single API Key (required for
+// new models) — sent verbatim as `Bearer <key>`. Otherwise sign the LEGACY
+// Access Key + Secret Key into a 30-min HMAC-SHA256 JWT (existing models only).
+// Returns null when neither credential set is present.
+function klingBearerToken(creds: Record<string, unknown>): string | null {
+  const apiKey =
+    (creds['api_key'] as string | undefined) ??
+    (creds['apiKey'] as string | undefined) ??
+    (creds['kling_api_key'] as string | undefined) ??
+    (creds['klingApiKey'] as string | undefined);
+  if (typeof apiKey === 'string' && apiKey.length > 0) return apiKey;
+  const accessKey =
+    (creds['access_key'] as string | undefined) ??
+    (creds['accessKey'] as string | undefined) ??
+    (creds['ak'] as string | undefined);
+  const secretKey =
+    (creds['secret_key'] as string | undefined) ??
+    (creds['secretKey'] as string | undefined) ??
+    (creds['sk'] as string | undefined);
+  if (accessKey && secretKey) return signKlingJwt(accessKey, secretKey);
+  return null;
+}
+
 function pickString(p: Record<string, unknown>, ...keys: string[]): string | undefined {
   for (const k of keys) {
     const v = p[k];
@@ -158,17 +181,11 @@ export class KlingAiAdapter implements ProviderAdapter {
   async validateAccount(
     credentials: Record<string, unknown>,
   ): Promise<{ ok: boolean; reason?: string }> {
-    const accessKey =
-      (credentials['accessKey'] as string | undefined) ??
-      (credentials['access_key'] as string | undefined);
-    const secretKey =
-      (credentials['secretKey'] as string | undefined) ??
-      (credentials['secret_key'] as string | undefined);
-    if (!accessKey || !secretKey) {
-      return { ok: false, reason: 'missing accessKey/secretKey' };
+    const token = klingBearerToken(credentials);
+    if (!token) {
+      return { ok: false, reason: 'missing api_key or accessKey/secretKey' };
     }
     try {
-      const token = signKlingJwt(accessKey, secretKey);
       // Hit a cheap endpoint — list with pageSize=1. Kling returns 200/JSON.
       const res = await fetch(
         `${KLING_BASE}/v1/videos/text2video?pageNum=1&pageSize=1`,
@@ -188,8 +205,7 @@ export class KlingAiAdapter implements ProviderAdapter {
   }
 
   async execute(ctx: AdapterContext): Promise<AdapterResult> {
-    const creds = this.extractCreds(ctx);
-    const token = signKlingJwt(creds.accessKey, creds.secretKey);
+    const token = this.buildAuthToken(ctx);
     const agent = this.buildProxyAgent(ctx);
 
     const { method, model, params } = ctx;
@@ -413,8 +429,7 @@ export class KlingAiAdapter implements ProviderAdapter {
     ctx: AdapterContext,
     providerJobId: string,
   ): Promise<AdapterResult> {
-    const creds = this.extractCreds(ctx);
-    const token = signKlingJwt(creds.accessKey, creds.secretKey);
+    const token = this.buildAuthToken(ctx);
     const agent = this.buildProxyAgent(ctx);
 
     const path =
@@ -487,23 +502,15 @@ export class KlingAiAdapter implements ProviderAdapter {
     return { pending: true, providerJobId };
   }
 
-  private extractCreds(ctx: AdapterContext): { accessKey: string; secretKey: string } {
-    const c = ctx.account.credentials ?? {};
-    const accessKey =
-      (c['access_key'] as string | undefined) ??
-      (c['accessKey'] as string | undefined) ??
-      (c['ak'] as string | undefined);
-    const secretKey =
-      (c['secret_key'] as string | undefined) ??
-      (c['secretKey'] as string | undefined) ??
-      (c['sk'] as string | undefined);
-    if (!accessKey || !secretKey) {
+  private buildAuthToken(ctx: AdapterContext): string {
+    const token = klingBearerToken(ctx.account.credentials ?? {});
+    if (!token) {
       throw new AdapterError(
         'invalid_credentials',
-        'kling_ai account credentials missing access_key/secret_key',
+        'kling_ai account credentials missing api_key (new format) or access_key/secret_key (legacy)',
       );
     }
-    return { accessKey, secretKey };
+    return token;
   }
 
   private buildProxyAgent(

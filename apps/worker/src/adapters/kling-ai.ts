@@ -199,8 +199,7 @@ export class KlingAiAdapter implements ProviderAdapter {
   }
 
   async execute(ctx: AdapterContext): Promise<AdapterResult> {
-    const creds = this.extractCreds(ctx);
-    const token = signKlingJwt(creds.accessKey, creds.secretKey);
+    const token = this.buildAuthToken(ctx);
     const agent = this.buildProxyAgent(ctx);
 
     const { method, model, params } = ctx;
@@ -425,8 +424,7 @@ export class KlingAiAdapter implements ProviderAdapter {
     ctx: AdapterContext,
     providerJobId: string,
   ): Promise<AdapterResult> {
-    const creds = this.extractCreds(ctx);
-    const token = signKlingJwt(creds.accessKey, creds.secretKey);
+    const token = this.buildAuthToken(ctx);
     const agent = this.buildProxyAgent(ctx);
 
     const path =
@@ -503,8 +501,19 @@ export class KlingAiAdapter implements ProviderAdapter {
     return { pending: true, providerJobId };
   }
 
-  private extractCreds(ctx: AdapterContext): { accessKey: string; secretKey: string } {
+  // Kling supports two auth formats. Prefer the NEW single API Key (required
+  // for new models), sent verbatim as `Bearer <key>`; fall back to the LEGACY
+  // Access Key + Secret Key, signed into a 30-min HMAC-SHA256 JWT (works for
+  // existing models only). The Authorization header is `Bearer <token>` in
+  // both cases, so callers just use the returned string.
+  private buildAuthToken(ctx: AdapterContext): string {
     const c = ctx.account.credentials ?? {};
+    const apiKey =
+      (c['api_key'] as string | undefined) ??
+      (c['apiKey'] as string | undefined) ??
+      (c['kling_api_key'] as string | undefined) ??
+      (c['klingApiKey'] as string | undefined);
+    if (typeof apiKey === 'string' && apiKey.length > 0) return apiKey;
     const accessKey =
       (c['access_key'] as string | undefined) ??
       (c['accessKey'] as string | undefined) ??
@@ -513,13 +522,11 @@ export class KlingAiAdapter implements ProviderAdapter {
       (c['secret_key'] as string | undefined) ??
       (c['secretKey'] as string | undefined) ??
       (c['sk'] as string | undefined);
-    if (!accessKey || !secretKey) {
-      throw new AdapterError(
-        'invalid_credentials',
-        'kling_ai account credentials missing access_key/secret_key',
-      );
-    }
-    return { accessKey, secretKey };
+    if (accessKey && secretKey) return signKlingJwt(accessKey, secretKey);
+    throw new AdapterError(
+      'invalid_credentials',
+      'kling_ai account credentials missing api_key (new format) or access_key/secret_key (legacy)',
+    );
   }
 
   private buildProxyAgent(
