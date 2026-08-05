@@ -7,6 +7,13 @@ import {
   type ProviderAdapter,
 } from './types';
 import type { WorkerStorage } from '../storage/storage';
+import {
+  isOpenRouterAccount,
+  extractOpenRouterApiKey,
+  resolveOpenRouterModelId,
+  submitOpenRouterVideo,
+  pollOpenRouterVideo,
+} from './openrouter-video';
 
 const SUPPORTED_MODELS = new Set([
   'doubao-seedance-1-0-pro-250528',
@@ -104,17 +111,24 @@ function classifySeedanceError(
   if (status === 401 || status === 403) {
     return new AdapterError('invalid_credentials', msg);
   }
+  // Quota/billing are checked BEFORE the 429/rate branch: a provider can
+  // return a quota-exhausted or balance error with HTTP 429, and tagging that
+  // as a transient rate-limit would leave the account ACTIVE instead of
+  // parking it (QUOTA_EXHAUSTED / EXCLUDED_BY_BILLING) and failing over.
+  if (/quota|exhaust/i.test(code) || /quota|exhaust/i.test(msg)) {
+    return new AdapterError('quota', msg);
+  }
+  if (
+    /billing|balance|credit/i.test(code) ||
+    /billing|balance|insufficient|not enough/i.test(msg)
+  ) {
+    return new AdapterError('billing', msg);
+  }
   if (status === 429 || /rate/i.test(msg)) {
     const retryMs = retryAfter ? Number(retryAfter) * 1000 : undefined;
     return new AdapterError('rate_limit', msg, retryMs);
   }
   if (status >= 500) return new AdapterError('temporary', msg);
-  if (/quota|exhaust/i.test(code) || /quota|exhaust/i.test(msg)) {
-    return new AdapterError('quota', msg);
-  }
-  if (/billing|balance|credit/i.test(code) || /billing|balance|insufficient/i.test(msg)) {
-    return new AdapterError('billing', msg);
-  }
   if (/sensitive|content.?policy|moderation|safety|prohibit/i.test(code + ' ' + msg)) {
     return new AdapterError('content_rejected', msg);
   }
@@ -138,6 +152,23 @@ export class SeedanceAdapter implements ProviderAdapter {
   }
 
   async execute(ctx: AdapterContext): Promise<AdapterResult> {
+    // Account-level failover backend: an OpenRouter-keyed account sitting in
+    // the `seedance` pool routes through OpenRouter's unified /videos endpoint
+    // instead of BytePlus ModelArk. The model served upstream is taken from the
+    // account's `openrouterModel` credential (no silent cross-version mapping).
+    if (isOpenRouterAccount(ctx.account.credentials)) {
+      return submitOpenRouterVideo({
+        apiKey: extractOpenRouterApiKey(ctx.account.credentials),
+        agent: this.buildProxyAgent(ctx),
+        methodCode: ctx.method.code,
+        params: ctx.params,
+        openrouterModel: resolveOpenRouterModelId(
+          ctx.model.code,
+          ctx.account.credentials,
+        ),
+      });
+    }
+
     const apiKey = this.extractApiKey(ctx);
     const agent = this.buildProxyAgent(ctx);
     const { method, model, params } = ctx;
@@ -190,6 +221,16 @@ export class SeedanceAdapter implements ProviderAdapter {
     ctx: AdapterContext,
     providerJobId: string,
   ): Promise<AdapterResult> {
+    if (isOpenRouterAccount(ctx.account.credentials)) {
+      return pollOpenRouterVideo({
+        ctx,
+        providerJobId,
+        apiKey: extractOpenRouterApiKey(ctx.account.credentials),
+        agent: this.buildProxyAgent(ctx),
+        storage: this.storage,
+      });
+    }
+
     const apiKey = this.extractApiKey(ctx);
     const agent = this.buildProxyAgent(ctx);
     const baseUrl = resolveBaseUrl(ctx.account.credentials);

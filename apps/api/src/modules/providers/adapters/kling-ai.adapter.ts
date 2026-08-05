@@ -9,6 +9,14 @@ import {
   type AdapterResult,
   type ProviderAdapter,
 } from './provider-adapter.interface';
+import {
+  isOpenRouterAccount,
+  extractOpenRouterApiKey,
+  resolveOpenRouterModelId,
+  submitOpenRouterVideo,
+  pollOpenRouterVideo,
+  validateOpenRouterAccount,
+} from './openrouter-video.adapter';
 
 const SUPPORTED_MODELS = new Set([
   // Catalog "legacy" codes — kept for backward compatibility, mapped below.
@@ -139,6 +147,15 @@ function classifyKlingError(
   if (status === 401 || status === 403) {
     return new AdapterError('invalid_credentials', msg);
   }
+  // Quota/billing are matched BEFORE the 429/rate branch. Kling returns
+  // "Account balance not enough" (and quota errors) with HTTP 429; classifying
+  // that as a transient rate-limit left the out-of-balance account ACTIVE and
+  // retrying forever (surfacing as provider_outage) instead of parking it
+  // (EXCLUDED_BY_BILLING) and letting the balancer fail over to another account.
+  if (/quota/i.test(msg)) return new AdapterError('quota', msg);
+  if (/credit|balance|billing|insufficient|not enough/i.test(msg)) {
+    return new AdapterError('billing', msg);
+  }
   if (status === 429 || /rate/i.test(msg)) {
     const retryMs = retryAfter ? Number(retryAfter) * 1000 : undefined;
     return new AdapterError('rate_limit', msg, retryMs);
@@ -146,8 +163,6 @@ function classifyKlingError(
   if (status >= 500) {
     return new AdapterError('temporary', msg);
   }
-  if (/quota/i.test(msg)) return new AdapterError('quota', msg);
-  if (/credit|balance|billing/i.test(msg)) return new AdapterError('billing', msg);
   // Param-level rejections from Kling have the shape:
   //   "model_name value 'kling-v3-0' is invalid"
   //   "mode value 'standard' is invalid"
@@ -181,6 +196,9 @@ export class KlingAiAdapter implements ProviderAdapter {
   async validateAccount(
     credentials: Record<string, unknown>,
   ): Promise<{ ok: boolean; reason?: string }> {
+    if (isOpenRouterAccount(credentials)) {
+      return validateOpenRouterAccount(credentials);
+    }
     const token = klingBearerToken(credentials);
     if (!token) {
       return { ok: false, reason: 'missing api_key or accessKey/secretKey' };
@@ -205,6 +223,34 @@ export class KlingAiAdapter implements ProviderAdapter {
   }
 
   async execute(ctx: AdapterContext): Promise<AdapterResult> {
+    // Account-level failover backend: an OpenRouter-keyed account in the
+    // `kling_ai` pool routes through OpenRouter's unified /videos endpoint.
+    // OpenRouter only exposes text-to-video / image-to-video for Kling — the
+    // Kling-native motion_control / lip_sync methods have no OpenRouter route.
+    if (isOpenRouterAccount(ctx.account.credentials)) {
+      if (
+        ctx.method.code !== 'text_to_video' &&
+        ctx.method.code !== 'image_to_video'
+      ) {
+        throw new AdapterError(
+          'validation',
+          `Kling method "${ctx.method.code}" is not available via the OpenRouter ` +
+            `backend (only text_to_video / image_to_video). Scope this OpenRouter ` +
+            `account with supportedMethodIds so the balancer skips it for others.`,
+        );
+      }
+      return submitOpenRouterVideo({
+        apiKey: extractOpenRouterApiKey(ctx.account.credentials),
+        agent: this.buildProxyAgent(ctx),
+        methodCode: ctx.method.code,
+        params: ctx.params,
+        openrouterModel: resolveOpenRouterModelId(
+          ctx.model.code,
+          ctx.account.credentials,
+        ),
+      });
+    }
+
     const token = this.buildAuthToken(ctx);
     const agent = this.buildProxyAgent(ctx);
 
@@ -429,6 +475,16 @@ export class KlingAiAdapter implements ProviderAdapter {
     ctx: AdapterContext,
     providerJobId: string,
   ): Promise<AdapterResult> {
+    if (isOpenRouterAccount(ctx.account.credentials)) {
+      return pollOpenRouterVideo({
+        ctx,
+        providerJobId,
+        apiKey: extractOpenRouterApiKey(ctx.account.credentials),
+        agent: this.buildProxyAgent(ctx),
+        storage: this.storage,
+      });
+    }
+
     const token = this.buildAuthToken(ctx);
     const agent = this.buildProxyAgent(ctx);
 
@@ -449,7 +505,7 @@ export class KlingAiAdapter implements ProviderAdapter {
     }
     if (status === 'failed') {
       const msg = parsed.data?.task_status_msg ?? 'kling task failed';
-      if (/credit|balance|billing/i.test(msg)) {
+      if (/credit|balance|billing|insufficient|not enough/i.test(msg)) {
         throw new AdapterError('billing', msg);
       }
       if (/quota/i.test(msg)) throw new AdapterError('quota', msg);
