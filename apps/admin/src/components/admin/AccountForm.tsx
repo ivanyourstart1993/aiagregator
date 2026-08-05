@@ -44,7 +44,15 @@ export function AccountForm({ mode, account, providers, proxies }: Props) {
   const selectedProvider = providers.find((p) => p.id === providerId);
   const providerCode = selectedProvider?.code ?? '';
   const isKling = providerCode === 'kling_ai';
+  const isSeedance = providerCode === 'seedance';
   const isGoogle = providerCode === 'google_banana' || providerCode === 'google_veo';
+  // Kling & Seedance can be backed by an OpenRouter key (Variant B failover):
+  // the account lives in the same provider pool but routes via OpenRouter's
+  // unified /videos endpoint. The upstream model is set explicitly per account.
+  const supportsOpenRouter = isKling || isSeedance;
+  const openRouterModelHint = isKling
+    ? 'kwaivgi/kling-v3.0-std'
+    : 'bytedance/seedance-2.0';
 
   const [name, setName] = useState(account?.name ?? '');
   const [description, setDescription] = useState(account?.description ?? '');
@@ -52,6 +60,9 @@ export function AccountForm({ mode, account, providers, proxies }: Props) {
   const [klingApiKey, setKlingApiKey] = useState('');
   const [klingAccessKey, setKlingAccessKey] = useState('');
   const [klingSecretKey, setKlingSecretKey] = useState('');
+  const [useOpenRouter, setUseOpenRouter] = useState(false);
+  const [openrouterApiKey, setOpenrouterApiKey] = useState('');
+  const [openrouterModel, setOpenrouterModel] = useState('');
   // For "1 SA, 2 Google providers" pattern. Only meaningful at create time
   // and when the selected provider is google_banana or google_veo. Default
   // ON because the typical SA is configured for both.
@@ -88,7 +99,26 @@ export function AccountForm({ mode, account, providers, proxies }: Props) {
     e.preventDefault();
     let creds: Record<string, unknown> = {};
     let credsTouched = false;
-    if (isKling) {
+    if (supportsOpenRouter && useOpenRouter) {
+      const key = openrouterApiKey.trim();
+      const model = openrouterModel.trim();
+      if (!model) {
+        toast.error(
+          'Укажи OpenRouter модель (например ' + openRouterModelHint + ')',
+        );
+        return;
+      }
+      if (!key) {
+        // credentials is replace-all on the server, so we can't patch just the
+        // model without re-sending the key — require both (create and edit).
+        toast.error(
+          'Укажи OpenRouter API Key (sk-or-...) вместе с моделью',
+        );
+        return;
+      }
+      creds = { openrouterApiKey: key, openrouterModel: model };
+      credsTouched = true;
+    } else if (isKling) {
       const apiKey = klingApiKey.trim();
       const ak = klingAccessKey.trim();
       const sk = klingSecretKey.trim();
@@ -250,7 +280,77 @@ export function AccountForm({ mode, account, providers, proxies }: Props) {
         />
       </div>
 
-      {isKling ? (
+      {supportsOpenRouter && (
+        <label className="flex cursor-pointer items-start gap-3 rounded-md border border-border/60 bg-muted/20 p-3">
+          <input
+            type="checkbox"
+            checked={useOpenRouter}
+            onChange={(e) => setUseOpenRouter(e.target.checked)}
+            className="mt-0.5 h-4 w-4 cursor-pointer accent-info"
+          />
+          <span className="space-y-0.5 text-sm">
+            <span className="block font-medium text-foreground">
+              Роутить через OpenRouter (фолбэк)
+            </span>
+            <span className="block text-xs text-muted-foreground">
+              Аккаунт останется в пуле{' '}
+              <code className="font-mono text-[11px]">{providerCode}</code>, но
+              запросы пойдут через OpenRouter <code className="font-mono text-[11px]">/videos</code>.
+              Балансировщик сам уйдёт сюда, когда нативный аккаунт без баланса.
+            </span>
+          </span>
+        </label>
+      )}
+
+      {supportsOpenRouter && useOpenRouter ? (
+        <div className="space-y-3 rounded-md border border-border/60 bg-muted/20 p-3">
+          <div className="flex items-center justify-between">
+            <Label className="text-sm">OpenRouter · ключ и модель</Label>
+            <a
+              href="https://openrouter.ai/keys"
+              target="_blank"
+              rel="noreferrer"
+              className="text-xs text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
+            >
+              где взять ключ?
+            </a>
+          </div>
+          <div className="space-y-2">
+            <Label className="text-xs text-muted-foreground">API Key</Label>
+            <Input
+              type="password"
+              value={openrouterApiKey}
+              onChange={(e) => setOpenrouterApiKey(e.target.value)}
+              placeholder="sk-or-..."
+              autoComplete="off"
+              spellCheck={false}
+              className="font-mono text-xs"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label className="text-xs text-muted-foreground">
+              OpenRouter модель
+            </Label>
+            <Input
+              value={openrouterModel}
+              onChange={(e) => setOpenrouterModel(e.target.value)}
+              placeholder={openRouterModelHint}
+              autoComplete="off"
+              spellCheck={false}
+              className="font-mono text-xs"
+            />
+            <p className="text-[11px] text-muted-foreground">
+              Точный upstream-id OpenRouter (без авто-подбора версии). Сохранится
+              как{' '}
+              <code className="rounded bg-muted px-1 py-0.5 font-mono text-[11px]">
+                {'{openrouterApiKey, openrouterModel}'}
+              </code>
+              . Ограничь аккаунт через «Supported model IDs» нативной моделью,
+              которую он подстраховывает.
+            </p>
+          </div>
+        </div>
+      ) : isKling ? (
         <div className="space-y-3 rounded-md border border-border/60 bg-muted/20 p-3">
           <div className="flex items-center justify-between">
             <Label className="text-sm">Kling AI · ключи доступа</Label>
