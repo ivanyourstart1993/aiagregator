@@ -8,7 +8,7 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
-import { Prisma, UserStatus, VerificationTokenType, type User } from '@aiagg/db';
+import { Prisma, TransactionType, UserStatus, VerificationTokenType, type User } from '@aiagg/db';
 import { ErrorCode, NANO_PER_CENT } from '@aiagg/shared';
 import { verifyGoogleIdToken } from '@aiagg/shared';
 import * as argon2 from 'argon2';
@@ -75,7 +75,7 @@ export class AuthService {
   }
 
   /**
-   * Grant the one-time welcome bonus (spendable BONUS balance) the first time an
+   * Grant the one-time welcome bonus (spendable MAIN credit) the first time an
    * account reaches a verified state. Controlled by `WELCOME_BONUS_USD` (default
    * 0 = disabled). Idempotent per real inbox via the `WELCOME:<canonicalEmail>`
    * key, so calling it from every verification path — and across plus-tag / dot
@@ -87,13 +87,17 @@ export class AuthService {
     if (!Number.isFinite(usd) || usd <= 0) return;
     const amountUnits = BigInt(Math.round(usd * 100)) * NANO_PER_CENT;
     try {
+      // Credit the MAIN wallet, not the BONUS wallet: generation reserves from
+      // MAIN only (billing reserve() never touches BONUS), so a BONUS grant would
+      // be unspendable — the "$5 free credit" the CTA promises must land where it
+      // can actually be spent. MAIN has no withdrawal path, so this can only be
+      // spent on generations, not cashed out.
       // Key on the canonical email, not the userId: plus-tag / Gmail-dot aliases
       // all resolve to one real inbox, so they share one grant and can't farm it.
-      // A second alias account calling this simply replays the first grant (no
-      // new credit) via the billing idempotency layer.
-      await this.billing.grantBonus({
+      await this.billing.credit({
         userId,
         amountUnits,
+        type: TransactionType.BONUS_GRANT,
         idempotencyKey: `WELCOME:${canonicalEmail(email)}`,
         reason: 'welcome_bonus',
         description: `Welcome bonus $${usd}`,
