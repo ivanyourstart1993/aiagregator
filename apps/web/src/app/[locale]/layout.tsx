@@ -61,6 +61,9 @@ export default async function LocaleLayout({ children, params: { locale } }: Loc
             style={{ display: 'none', visibility: 'hidden' }}
           />
         </noscript>
+        <Script id="r7k12-counter" strategy="afterInteractive">
+          {`(function(w,d,k){w['r7k12']=w['r7k12']||[];var s=d.createElement('script');s.async=1;s.src='https://counter.r7k12.com/scripts/'+k+'/counter.js';s.type='application/javascript';d.head.appendChild(s);})(window,document,'0aec6b66fa3e34b560c12d1d8bcf5cc2');r7k12.push({hit:'pageview'});`}
+        </Script>
         <NextIntlClientProvider locale={locale} messages={messages}>
           {children}
           <Toaster />
