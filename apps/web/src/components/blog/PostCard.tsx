@@ -1,6 +1,7 @@
 import { Link } from '@/i18n/navigation';
 import { Badge } from '@/components/ui/badge';
-import { coverImageSrc, formatDate, type Post } from '@/lib/blog';
+import { formatDate, type Post } from '@/lib/blog';
+import { CoverImage } from './CoverImage';
 
 export function PostCard({ post }: { post: Post }) {
   const { title, description, date, tags } = post.frontmatter;
@@ -9,14 +10,8 @@ export function PostCard({ post }: { post: Post }) {
       href={`/blog/${post.slug}`}
       className="group flex h-full flex-col overflow-hidden rounded-xl border border-border/60 bg-card/60 transition-colors hover:border-border hover:bg-card"
     >
-      <div className="aspect-[16/9] overflow-hidden border-b border-border/50 bg-muted">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src={coverImageSrc(post)}
-          alt=""
-          loading="lazy"
-          className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.02]"
-        />
+      <div className="aspect-[16/9] overflow-hidden border-b border-border/50 bg-muted transition-transform duration-300 group-hover:scale-[1.02]">
+        <CoverImage post={post} />
       </div>
       <div className="flex flex-1 flex-col p-5">
       <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">

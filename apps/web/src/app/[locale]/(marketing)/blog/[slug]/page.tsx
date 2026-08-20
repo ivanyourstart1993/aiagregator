@@ -6,8 +6,9 @@ import rehypeSlug from 'rehype-slug';
 import { ArrowLeft } from 'lucide-react';
 import { Link } from '@/i18n/navigation';
 import { Badge } from '@/components/ui/badge';
-import { getAllPosts, getPostBySlug, formatDate, coverImageSrc } from '@/lib/blog';
+import { getAllPosts, getPostBySlug, formatDate } from '@/lib/blog';
 import { mdxComponents } from '@/components/blog/mdx-components';
+import { CoverImage } from '@/components/blog/CoverImage';
 import { SignupCTA } from '@/components/blog/SignupCTA';
 import { SITE_AUTHOR, SITE_NAME, SITE_URL } from '@/lib/site';
 
@@ -128,12 +129,7 @@ export default async function BlogPostPage({ params }: BlogPostParams) {
       </Link>
 
       <div className="mt-6 aspect-[16/9] w-full overflow-hidden rounded-xl border border-border/60 bg-muted">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src={coverImageSrc(post)}
-          alt={title}
-          className="h-full w-full object-cover"
-        />
+        <CoverImage post={post} priority />
       </div>
 
       <header className="mt-6">

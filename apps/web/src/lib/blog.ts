@@ -70,17 +70,6 @@ export function getAllTags(): string[] {
   return [...tags].sort();
 }
 
-/**
- * Cover image for a post. Prefers an explicit `ogImage` (a real 16:9 asset the
- * autopilot generates into /public/blog/<slug>.jpg); otherwise falls back to the
- * auto-generated branded OG card route so no post is ever imageless. Returns a
- * root-relative (same-origin) src suitable for an <img> on the prefix-less EN
- * blog.
- */
-export function coverImageSrc(post: Post): string {
-  return post.frontmatter.ogImage ?? `/blog/${post.slug}/opengraph-image`;
-}
-
 export function formatDate(iso: string): string {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return iso;
