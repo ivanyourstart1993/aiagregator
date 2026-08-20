@@ -88,24 +88,30 @@ async function main() {
   });
   const created = await createRes.json();
   if (!createRes.ok) throw new Error(`create failed ${createRes.status}: ${JSON.stringify(created)}`);
-  const taskId = created.task_id || created.id;
+  const taskId = created.task_id || created.id || created.task?.id;
   if (!taskId) throw new Error(`no task_id in response: ${JSON.stringify(created)}`);
 
-  // Poll until terminal.
+  // Poll until terminal. The API nests the task under `{ success, task: {...} }`.
   let fileUrl = null;
   const deadline = Date.now() + 5 * 60 * 1000;
   while (Date.now() < deadline) {
     await sleep(5000);
     const pr = await fetch(`${BASE}/v1/generations/${taskId}`, { headers: auth });
-    const task = await pr.json();
+    const body = await pr.json();
+    const task = body.task ?? body;
     const status = String(task.status || '').toUpperCase();
-    if (status === 'SUCCEEDED' || status === 'SUCCESS' || status === 'COMPLETED') {
-      fileUrl = task.result?.files?.[0]?.url || task.files?.[0]?.url || task.result?.url;
-      if (!fileUrl) throw new Error(`succeeded but no file url: ${JSON.stringify(task).slice(0, 400)}`);
+    if (['SUCCEEDED', 'SUCCESS', 'COMPLETED', 'DONE'].includes(status)) {
+      fileUrl =
+        task.result?.files?.[0]?.url ||
+        task.files?.[0]?.url ||
+        task.result?.url ||
+        task.output?.[0]?.url ||
+        task.outputs?.[0]?.url;
+      if (!fileUrl) throw new Error(`succeeded but no file url: ${JSON.stringify(task).slice(0, 500)}`);
       break;
     }
-    if (status === 'FAILED' || status === 'ERROR' || status === 'CANCELLED') {
-      throw new Error(`generation ${status}: ${JSON.stringify(task).slice(0, 400)}`);
+    if (['FAILED', 'ERROR', 'CANCELLED', 'CANCELED'].includes(status)) {
+      throw new Error(`generation ${status}: ${task.error_message || JSON.stringify(task).slice(0, 300)}`);
     }
     console.log(`[gen-cover] ${slug}: ${status || 'pending'}…`);
   }
