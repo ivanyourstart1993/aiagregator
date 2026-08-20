@@ -1,0 +1,115 @@
+---
+title: "Seedance API: Text-to-Video and Image-to-Video"
+description: "Call ByteDance's Seedance video model with one API key and prepaid USD billing — fast text-to-video and image-to-video, plus the async task and webhook flow."
+date: "2026-08-20"
+updated: "2026-08-20"
+tags: ["Video generation", "Seedance"]
+primaryKeyword: "Seedance API"
+funnel: "BOFU"
+author:
+  name: "Aigenway"
+relatedDocs:
+  - label: "Task lifecycle"
+    href: "/docs/task-lifecycle"
+  - label: "Webhooks"
+    href: "/docs/webhooks"
+  - label: "Getting started"
+    href: "/docs/getting-started"
+---
+
+Seedance is ByteDance's video generation model — fast render times and a low cost per clip, which makes it a good default for teams generating video at volume rather than one-off hero shots. This guide covers calling it for text-to-video and image-to-video, and the async task/webhook flow you'll actually run in production.
+
+Through the Aigenway gateway you get Seedance behind the same API key, task contract, and prepaid USD balance as every other model — no separate ByteDance account or credit pack.
+
+## What you get
+
+Seedance ships a handful of tiers trading speed against fidelity. Codes and availability shift, so confirm what's live on your account before hardcoding a model string:
+
+```bash
+curl "https://api.aigenway.com/v1/methods?provider=seedance" \
+  -H "Authorization: Bearer sk_live_..."
+```
+
+That call returns the exact `model` and `method` values to use below, plus per-tier pricing. Roughly, expect a fast/cheap tier for drafts and a higher-fidelity tier for final output — the same trade-off you see across Kling and Veo.
+
+## Text-to-video
+
+Send a prompt, get back a task. `Idempotency-Key` makes retries safe — resend the same key and you get the same task back instead of paying twice.
+
+```bash
+curl -X POST https://api.aigenway.com/v1/generations \
+  -H "Authorization: Bearer sk_live_..." \
+  -H "Idempotency-Key: $(uuidgen)" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "provider": "seedance",
+    "model": "seedance-1-pro",
+    "method": "text_to_video",
+    "params": {
+      "prompt": "a paper airplane gliding through a sunlit office, slow motion, shallow depth of field",
+      "duration": 5,
+      "aspect_ratio": "16:9"
+    }
+  }'
+```
+
+<SignupCTA
+  title="Generate your first Seedance clip"
+  description="Create a free account, get $5 in free credit, and run the request above. Prepaid USD billing means you only pay for the seconds you generate."
+/>
+
+## Image-to-video
+
+Animate a still you already control — a product shot, a character render, a frame from a previous generation. Pass the source image plus a motion prompt:
+
+```bash
+curl -X POST https://api.aigenway.com/v1/generations \
+  -H "Authorization: Bearer sk_live_..." \
+  -H "Idempotency-Key: $(uuidgen)" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "provider": "seedance",
+    "model": "seedance-1-pro",
+    "method": "image_to_video",
+    "params": {
+      "prompt": "camera slowly pulls back, product rotates gently",
+      "input_image": "https://example.com/product-shot.png",
+      "duration": 5
+    }
+  }'
+```
+
+Because the request shape is identical to text-to-video (same endpoint, same `provider`/`model`/`method`/`params` fields, just a different `method` and an added `input_image`), switching between the two is a one-line change in your integration.
+
+## The async task and webhook flow
+
+Video is never synchronous — the `POST` above returns a task in `queued` or `processing` state immediately, not a finished clip. You have two ways to get the result:
+
+1. **Poll.** `GET /v1/generations/{task_id}` until `status` moves to `succeeded` (or `failed`) and read the output URL off the response.
+2. **Webhook.** Set a `callback_url` in the request and the gateway `POST`s the finished task to your endpoint the moment it completes — no polling loop to run or rate-limit against.
+
+```bash
+curl -X POST https://api.aigenway.com/v1/generations \
+  -H "Authorization: Bearer sk_live_..." \
+  -H "Idempotency-Key: $(uuidgen)" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "provider": "seedance",
+    "model": "seedance-1-pro",
+    "method": "text_to_video",
+    "params": { "prompt": "drone shot rising over a foggy pine forest at dawn", "duration": 5 },
+    "callback_url": "https://your-app.example.com/webhooks/aigenway"
+  }'
+```
+
+The task shape — fields, status values, webhook payload and signature — is identical across every model on the gateway. Code you write against Seedance keeps working unchanged if you add Kling or Veo later. Full details are in the [task lifecycle](/docs/task-lifecycle) and [webhooks](/docs/webhooks) docs.
+
+## Why one gateway beats a ByteDance-only account
+
+- **One integration, many models.** The same request shape that calls Seedance also calls Kling, Veo and every image model — swap a string, not your SDK.
+- **Real USD billing.** Prepaid balance, no regional credit packs to buy and forecast; check spend from the API at any time.
+- **Production plumbing included.** Idempotency keys, queueing, task state and signed webhooks are already built — you don't reimplement them per provider.
+
+When ByteDance ships a new Seedance version, you point at the new model code from `/v1/methods` and keep shipping.
+
+<SignupCTA />
