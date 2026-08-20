@@ -57,15 +57,36 @@ pnpm check:blog                             # must be green
 node blog-autopilot/queue.mjs mark <slug> published
 ```
 
-## Next step — wire the runner (Shear B)
+## The runner (Shear B) — built
 
-`run.sh` is a documented skeleton, **not yet tested end-to-end**. To turn it on:
+`run.sh` is the full runner, tailored to the Hetzner prod box (repo at
+`/opt/aiagregator`, github push via the `github_aiagg` key, deploy = local web
+image rebuild since the GHCR pipeline isn't built). Flow: fetch/ff → `claude -p`
+writes the post → **runner re-runs the gate** → commit+push `main` → rebuild &
+restart web → independent HTTP check → mark published/failed.
 
-1. Put a deploy checkout of this repo on the VPS; give it a push credential that
-   can push to `main` (or open a PR — see the deploy decision).
-2. Set up the GHCR build workflow (`.github/workflows/deploy-web.yml`) so push →
-   image → VPS pull.
-3. Fill `run.sh`: `CLAUDE_CODE_OAUTH_TOKEN` source, `DOMAIN`, alert hook, verify
-   timeout tuned to the Actions build time.
-4. Test: `DRY=1 ./run.sh` → `FORCE=1 ./run.sh` under watch → verify the live post
-   → only then add the cron slot.
+### Turning it on
+
+The box starts bare (no node / pnpm / `claude` CLI). One-time provisioning:
+
+```bash
+# on the box, as root
+bash /opt/aiagregator/blog-autopilot/provision-box.sh
+```
+
+That installs Node, pnpm + repo deps, and the `claude` CLI. Two manual steps
+remain (the script prints them):
+
+1. **OAuth token** — the one thing only the operator can do. `claude setup-token`
+   locally, then drop it in `/root/.config/blog-autopilot/oauth.token` (mode 600).
+   `run.sh` reads it into `CLAUDE_CODE_OAUTH_TOKEN`.
+2. **Smoke-test + cron** — `DRY=1 ./run.sh`, then `FORCE=1 ./run.sh` under watch,
+   verify the live post, then add one daily crontab slot.
+
+Optional: set `ALERT_WEBHOOK` (a URL taking `?text=`) for per-run pings; otherwise
+runs just log to `daily/<date>/run.log`.
+
+### Deploy note
+
+Today the runner rebuilds the `web` image on the box each run (~1–2 min). If/when
+the GHCR pipeline lands, swap step 7 of `run.sh` for an image pull.
