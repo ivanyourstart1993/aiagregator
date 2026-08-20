@@ -74,8 +74,16 @@ pnpm check:blog >>"$LOG" 2>&1 || fail "gate (check:blog) failed for $SLUG — se
 [ -f "$REPO/apps/web/src/content/blog/$SLUG.mdx" ] || fail "agent did not create $SLUG.mdx"
 grep -q "'$SLUG'" "$REPO/apps/web/src/content/blog/index.ts" || fail "$SLUG not registered in index.ts"
 
-# 6. Commit + push (only the two blog files — never the infra drift).
-git -C "$REPO" add "apps/web/src/content/blog/$SLUG.mdx" "apps/web/src/content/blog/index.ts"
+# 5b. Generate a hero cover via the aigenway API (best-effort: a cover failure
+#     must not block publishing — the layout falls back to a branded gradient).
+node "$DIR/gen-cover.mjs" "$SLUG" >>"$LOG" 2>&1 || alert "cover gen failed for $SLUG (publishing without it)"
+
+# 6. Commit + push (blog files + cover — never the infra drift).
+git -C "$REPO" add \
+  "apps/web/src/content/blog/$SLUG.mdx" \
+  "apps/web/src/content/blog/index.ts" \
+  "apps/web/public/blog/$SLUG.png" 2>/dev/null || \
+  git -C "$REPO" add "apps/web/src/content/blog/$SLUG.mdx" "apps/web/src/content/blog/index.ts"
 git -C "$REPO" \
   -c user.name='aigenway-autopilot' -c user.email='autopilot@aigenway.com' \
   commit -m "feat(blog): add $SLUG post (autopilot)" >>"$LOG" 2>&1 || fail "commit failed for $SLUG (see $LOG)"
