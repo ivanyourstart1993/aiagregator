@@ -80,7 +80,10 @@ async function main() {
       provider: PROVIDER,
       model: MODEL,
       method: 'text_to_image',
-      params: { prompt, aspect_ratio: '16:9', mode: 'high' },
+      // NOTE: adding `mode`/`quality` can route to an unpriced bundle
+      // (422 price_not_configured). These exact params match a priced bundle;
+      // if you change them, re-check with POST /v1/estimate first.
+      params: { prompt, aspect_ratio: '16:9' },
     }),
   });
   const created = await createRes.json();
