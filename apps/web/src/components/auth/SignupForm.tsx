@@ -12,8 +12,6 @@ import { Label } from '@/components/ui/label';
 import { Link, useRouter } from '@/i18n/navigation';
 import { GoogleButton } from './GoogleButton';
 import { registerUser } from '@/app/[locale]/(auth)/signup/actions';
-import { trackSignUp } from '@/lib/analytics';
-import { r7k12TrackRegistration } from '@/lib/r7k12';
 
 const schema = z.object({
   name: z.string().min(1),
@@ -47,8 +45,6 @@ export function SignupForm() {
         return;
       }
       toast.success(tCommon('success'));
-      trackSignUp({ method: 'password' });
-      r7k12TrackRegistration();
       router.push('/check-inbox');
     });
   }

@@ -9,7 +9,6 @@ import { Link } from '@/i18n/navigation';
 import { fetchDepositAction } from '@/app/[locale]/(dashboard)/top-up/actions';
 import type { DepositView } from '@/lib/server-api';
 import { formatNanoToUSD } from '@/lib/money';
-import { trackPurchase } from '@/lib/analytics';
 import { DepositStatusBadge } from './DepositStatusBadge';
 
 interface Props {
@@ -67,32 +66,6 @@ export function DepositStatusPanel({ initialDeposit }: Props) {
       clearTimeout(timer);
     };
   }, [deposit.id, polling]);
-
-  // Fire the Meta Purchase conversion once, when the deposit lands on PAID.
-  // Guarded by sessionStorage so a refresh of an already-paid page (or the
-  // poll re-rendering the PAID branch) doesn't double-count the purchase.
-  useEffect(() => {
-    if (deposit.status !== 'PAID') return;
-    if (typeof window === 'undefined') return;
-    const key = `fb_purchase_${deposit.id}`;
-    try {
-      if (window.sessionStorage.getItem(key)) return;
-    } catch {
-      // sessionStorage read blocked (sandboxed iframe / strict privacy) — we
-      // can't dedup, so fall through and fire rather than silently drop the
-      // conversion. A rare double-count beats a silent zero-count.
-    }
-    trackPurchase({
-      value: Number(formatNanoToUSD(deposit.amountUnits, 2)),
-      currency: 'USD',
-      transactionId: deposit.id,
-    });
-    try {
-      window.sessionStorage.setItem(key, '1');
-    } catch {
-      // sessionStorage unavailable (private mode quota) — accept rare double-fire.
-    }
-  }, [deposit.status, deposit.id, deposit.amountUnits]);
 
   const expiresInSec = useMemo(() => diffSeconds(deposit.expiresAt), [deposit.expiresAt, now]);
 
