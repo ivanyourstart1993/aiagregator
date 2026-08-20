@@ -2,171 +2,848 @@
   "topics": [
     {
       "id": 1,
-      "slug": "seedance-api",
-      "primaryKeyword": "Seedance API",
+      "slug": "nano-banana-api",
+      "primaryKeyword": "Nano Banana API",
       "funnel": "BOFU",
-      "tags": ["Video generation", "Seedance"],
-      "title_hint": "Seedance API: Text-to-Video and Image-to-Video",
-      "angle": "Call ByteDance Seedance for fast, cheap text-to-video and image-to-video over the gateway's task contract.",
+      "tags": [
+        "Image generation",
+        "Nano Banana",
+        "Gemini"
+      ],
+      "title_hint": "",
+      "angle": "done",
       "status": "published"
     },
     {
       "id": 2,
-      "slug": "veo-3-api",
-      "primaryKeyword": "Veo 3 API",
+      "slug": "kling-api",
+      "primaryKeyword": "Kling API",
       "funnel": "BOFU",
-      "tags": ["Video generation", "Veo"],
-      "title_hint": "Google Veo 3 API: Generate Video with Native Audio",
-      "angle": "Access Google Veo 3 (incl. audio) without a GCP project — one API key, prepaid USD.",
+      "tags": [
+        "Video generation",
+        "Kling"
+      ],
+      "title_hint": "",
+      "angle": "done",
       "status": "published"
     },
     {
       "id": 3,
-      "slug": "midjourney-api-alternative",
-      "primaryKeyword": "Midjourney API alternative",
+      "slug": "seedance-api",
+      "primaryKeyword": "Seedance API",
       "funnel": "BOFU",
-      "tags": ["Image generation", "Midjourney", "Alternatives"],
-      "title_hint": "Midjourney API Alternative: A Real, Documented Image API",
-      "angle": "Midjourney has no official API and third-party wrappers risk bans/ToS. Get comparable quality from FLUX / Nano Banana / Seedream over one documented REST API, prepaid USD, $5 free credit. Low-freq BOFU: SERP is small wrappers, not giants.",
-      "status": "pending"
+      "tags": [
+        "Video generation",
+        "Seedance"
+      ],
+      "title_hint": "",
+      "angle": "done",
+      "status": "published"
     },
     {
       "id": 4,
-      "slug": "fal-ai-alternative",
-      "primaryKeyword": "fal.ai alternative",
+      "slug": "veo-3-api",
+      "primaryKeyword": "Veo 3 API",
       "funnel": "BOFU",
-      "tags": ["AI API", "Alternatives"],
-      "title_hint": "fal.ai Alternative: One API for Image, Video and Text Models",
-      "angle": "Same multi-model breadth as fal.ai but with prepaid USD billing (read your balance from the API), one stable task contract, and no per-model client quirks. Honest, developer-to-developer comparison.",
-      "status": "pending"
+      "tags": [
+        "Video generation",
+        "Veo"
+      ],
+      "title_hint": "",
+      "angle": "done",
+      "status": "published"
     },
     {
       "id": 5,
-      "slug": "replicate-api-alternative",
-      "primaryKeyword": "Replicate API alternative",
+      "slug": "midjourney-api-alternative",
+      "primaryKeyword": "Midjourney API alternative",
       "funnel": "BOFU",
-      "tags": ["AI API", "Replicate", "Alternatives"],
-      "title_hint": "Replicate API Alternative: Unified Image + Video + Text",
-      "angle": "One task contract across image, video and text models (switch with a string), prepaid USD, signed webhooks. For teams who want a single integration instead of per-model wiring.",
+      "tags": [
+        "Image generation",
+        "Midjourney",
+        "Alternatives"
+      ],
+      "title_hint": "",
+      "angle": "Midjourney has no official API and third-party wrappers risk bans. Midjourney is not hosted on the gateway — this is the honest alternative: get comparable results from Nano Banana (Gemini), Imagen 4, gpt-image-1 and DALL·E 3 behind one API key, prepaid USD, one task contract. Cover what Midjourney is known for and how to reproduce it here; no false claim that we run Midjourney.",
       "status": "pending"
     },
     {
       "id": 6,
-      "slug": "runway-api-alternative",
-      "primaryKeyword": "Runway API alternative",
+      "slug": "flux-api-alternative",
+      "primaryKeyword": "Flux API alternative",
       "funnel": "BOFU",
-      "tags": ["Video generation", "Runway", "Alternatives"],
-      "title_hint": "Runway API Alternative: Kling, Veo & Seedance Over One Key",
-      "angle": "Reach multiple top video models (Kling, Veo, Seedance, Wan) through one API and prepaid per-second USD billing, instead of a single-vendor account.",
+      "tags": [
+        "Image generation",
+        "Flux",
+        "Alternatives"
+      ],
+      "title_hint": "",
+      "angle": "Black Forest Labs FLUX is not hosted on the gateway — this is the honest alternative: get comparable results from Nano Banana (Gemini), Imagen 4, gpt-image-1 and DALL·E 3 behind one API key, prepaid USD, one task contract. Cover what Black Forest Labs FLUX is known for and how to reproduce it here; no false claim that we run Black Forest Labs FLUX.",
       "status": "pending"
     },
     {
       "id": 7,
-      "slug": "image-to-video-api-webhook",
-      "primaryKeyword": "image to video API with webhook",
-      "funnel": "MOFU",
-      "tags": ["Video generation", "Image-to-video", "Webhooks"],
-      "title_hint": "Image-to-Video API with Webhooks: The Async Flow",
-      "angle": "How the async task + signed webhook flow works for animating a still, identical across Kling/Veo/Seedance/Wan. Real curl + callback payload. Long-tail, competitors are aggregators.",
-      "status": "pending"
-    },
-    {
-      "slug": "cheapest-ai-video-api",
-      "primaryKeyword": "cheapest AI video generation API",
-      "funnel": "MOFU",
-      "tags": ["Video generation", "Pricing"],
-      "title_hint": "Cheapest AI Video Generation API: Honest Per-Second Numbers",
-      "angle": "Per-second cost across Seedance/Kling/Veo tiers, prepaid USD (pay only for seconds generated), $5 free credit to test. Transparent comparison rather than a sales page.",
-      "status": "pending"
-    },
-    {
-      "slug": "flux-api-python-example",
-      "primaryKeyword": "FLUX API Python example",
-      "funnel": "MOFU",
-      "tags": ["Image generation", "Flux", "Python"],
-      "title_hint": "FLUX API in Python: Copy-Paste Text-to-Image Example",
-      "angle": "Minimal Python to call FLUX (text-to-image + image edit) via the gateway — requests-based, poll/webhook for async, one API key. Code-example intent.",
-      "status": "pending"
-    },
-    {
-      "slug": "kling-api-nodejs-example",
-      "primaryKeyword": "Kling API Node.js example",
-      "funnel": "MOFU",
-      "tags": ["Video generation", "Kling", "Node.js"],
-      "title_hint": "Kling API in Node.js: Image-to-Video Example",
-      "angle": "Node/TypeScript example: submit image-to-video, poll the task or handle the webhook. Real fetch code against the gateway.",
-      "status": "pending"
-    },
-    {
-      "slug": "unified-ai-generation-api",
-      "primaryKeyword": "one API for AI image video and text",
-      "funnel": "TOFU",
-      "tags": ["AI API", "Gateway"],
-      "title_hint": "One API for Every AI Image, Video and Text Model",
-      "angle": "The case for a single gateway: one key, one request shape, switch model with a string, prepaid USD. Category/education post that funnels to signup.",
-      "status": "pending"
-    },
-    {
-      "slug": "wan-video-api",
-      "primaryKeyword": "Wan 2.2 video API",
+      "slug": "ideogram-api-alternative",
+      "primaryKeyword": "Ideogram API alternative",
       "funnel": "BOFU",
-      "tags": ["Video generation", "Wan"],
-      "title_hint": "Wan 2.2 API: Open Video Model Over One Endpoint",
-      "angle": "Use Alibaba's Wan 2.2 through the gateway instead of self-hosting GPUs; text-to-video and image-to-video, prepaid USD. Niche low-freq model term.",
+      "tags": [
+        "Image generation",
+        "Ideogram",
+        "Typography"
+      ],
+      "title_hint": "",
+      "angle": "Ideogram (legible in-image text) is not hosted on the gateway — this is the honest alternative: get comparable results from Nano Banana (Gemini), Imagen 4, gpt-image-1 and DALL·E 3 behind one API key, prepaid USD, one task contract. Cover what Ideogram (legible in-image text) is known for and how to reproduce it here; no false claim that we run Ideogram (legible in-image text).",
       "status": "pending"
     },
     {
-      "slug": "hailuo-api",
-      "primaryKeyword": "Hailuo API",
+      "id": 8,
+      "slug": "recraft-api-alternative",
+      "primaryKeyword": "Recraft API alternative",
       "funnel": "BOFU",
-      "tags": ["Video generation", "Hailuo", "MiniMax"],
-      "title_hint": "Hailuo (MiniMax) API: Text and Image to Video",
-      "angle": "Call MiniMax Hailuo video generation via one API key; strong motion, same task contract. Niche low-freq model term.",
+      "tags": [
+        "Image generation",
+        "Recraft",
+        "Vector"
+      ],
+      "title_hint": "",
+      "angle": "Recraft (vector/brand styles) is not hosted on the gateway — this is the honest alternative: get comparable results from Nano Banana (Gemini), Imagen 4, gpt-image-1 and DALL·E 3 behind one API key, prepaid USD, one task contract. Cover what Recraft (vector/brand styles) is known for and how to reproduce it here; no false claim that we run Recraft (vector/brand styles).",
       "status": "pending"
     },
     {
-      "slug": "ideogram-api",
-      "primaryKeyword": "Ideogram API",
+      "id": 9,
+      "slug": "stable-diffusion-api-alternative",
+      "primaryKeyword": "Stable Diffusion API alternative",
       "funnel": "BOFU",
-      "tags": ["Image generation", "Ideogram", "Typography"],
-      "title_hint": "Ideogram API: Generate Images with Legible Text",
-      "angle": "Ideogram's edge is in-image typography — posters, logos, text-heavy images over one REST endpoint. Niche low-freq model term.",
+      "tags": [
+        "Image generation",
+        "Stable Diffusion",
+        "Alternatives"
+      ],
+      "title_hint": "",
+      "angle": "No GPUs or self-hosting. Stable Diffusion is not hosted on the gateway — this is the honest alternative: get comparable results from Nano Banana (Gemini), Imagen 4, gpt-image-1 and DALL·E 3 behind one API key, prepaid USD, one task contract. Cover what Stable Diffusion is known for and how to reproduce it here; no false claim that we run Stable Diffusion.",
       "status": "pending"
     },
     {
-      "slug": "recraft-api",
-      "primaryKeyword": "Recraft API",
+      "id": 10,
+      "slug": "leonardo-ai-api-alternative",
+      "primaryKeyword": "Leonardo AI API alternative",
       "funnel": "BOFU",
-      "tags": ["Image generation", "Recraft", "Vector"],
-      "title_hint": "Recraft API: Vector and Brand-Style Images",
-      "angle": "Recraft does SVG/vector and consistent brand styles; call it via the gateway for design assets. Niche low-freq model term.",
+      "tags": [
+        "Image generation",
+        "Leonardo",
+        "Alternatives"
+      ],
+      "title_hint": "",
+      "angle": "Leonardo AI is not hosted on the gateway — this is the honest alternative: get comparable results from Nano Banana (Gemini), Imagen 4, gpt-image-1 and DALL·E 3 behind one API key, prepaid USD, one task contract. Cover what Leonardo AI is known for and how to reproduce it here; no false claim that we run Leonardo AI.",
       "status": "pending"
     },
     {
-      "slug": "qwen-image-api",
-      "primaryKeyword": "Qwen image API",
+      "id": 11,
+      "slug": "runway-api-alternative",
+      "primaryKeyword": "Runway API alternative",
       "funnel": "BOFU",
-      "tags": ["Image generation", "Qwen"],
-      "title_hint": "Qwen Image API: Generate and Edit Images",
-      "angle": "Call Alibaba's Qwen image model for generation and editing through one API key; cost-effective option. Niche low-freq model term.",
+      "tags": [
+        "Video generation",
+        "Runway",
+        "Alternatives"
+      ],
+      "title_hint": "",
+      "angle": "Runway is not on the gateway — honest alternative: reach Kling, Veo 3 and Seedance through one API key and prepaid per-second USD. Explain the trade-off vs Runway and how to switch.",
       "status": "pending"
     },
     {
-      "slug": "luma-dream-machine-api",
-      "primaryKeyword": "Luma Dream Machine API",
+      "id": 12,
+      "slug": "imagen-4-api",
+      "primaryKeyword": "Google Imagen 4 API",
       "funnel": "BOFU",
-      "tags": ["Video generation", "Luma"],
-      "title_hint": "Luma Dream Machine API: Text and Image to Video",
-      "angle": "Call Luma's Dream Machine for fluid text-to-video and image-to-video via one API key. Niche low-freq model term.",
+      "tags": [
+        "Image generation",
+        "Imagen",
+        "Google"
+      ],
+      "title_hint": "",
+      "angle": "Call Google Imagen 4 (imagen-4.0, incl. Ultra) via the gateway (google_banana) — one API key, prepaid USD, no separate provider account. Real curl, discover exact model codes via /v1/methods.",
       "status": "pending"
     },
     {
+      "id": 13,
       "slug": "gpt-image-1-api",
       "primaryKeyword": "gpt-image-1 API",
       "funnel": "BOFU",
-      "tags": ["Image generation", "OpenAI", "gpt-image-1"],
-      "title_hint": "gpt-image-1 API: OpenAI Image Generation & Editing",
-      "angle": "Call OpenAI's gpt-image-1 via the gateway — one API key and prepaid USD instead of a separate OpenAI account. Niche low-freq model term.",
+      "tags": [
+        "Image generation",
+        "OpenAI",
+        "gpt-image-1"
+      ],
+      "title_hint": "",
+      "angle": "Call OpenAI's gpt-image-1 via the gateway (openai_image) — one API key, prepaid USD, no separate provider account. Real curl, discover exact model codes via /v1/methods.",
+      "status": "pending"
+    },
+    {
+      "id": 14,
+      "slug": "dalle-3-api",
+      "primaryKeyword": "DALL·E 3 API",
+      "funnel": "BOFU",
+      "tags": [
+        "Image generation",
+        "OpenAI",
+        "DALL-E"
+      ],
+      "title_hint": "",
+      "angle": "Call OpenAI's DALL·E 3 via the gateway (openai_image) — one API key, prepaid USD, no separate provider account. Real curl, discover exact model codes via /v1/methods.",
+      "status": "pending"
+    },
+    {
+      "id": 15,
+      "slug": "fal-ai-alternative",
+      "primaryKeyword": "fal.ai alternative",
+      "funnel": "BOFU",
+      "tags": [
+        "AI API",
+        "Alternatives"
+      ],
+      "title_hint": "",
+      "angle": "Positioned against the aggregator fal.ai: same multi-model breadth, but prepaid USD billing (read your balance from the API), one stable task contract, signed webhooks. Developer-to-developer, honest.",
+      "status": "pending"
+    },
+    {
+      "id": 16,
+      "slug": "replicate-api-alternative",
+      "primaryKeyword": "Replicate API alternative",
+      "funnel": "BOFU",
+      "tags": [
+        "AI API",
+        "Replicate",
+        "Alternatives"
+      ],
+      "title_hint": "",
+      "angle": "Positioned against the aggregator Replicate: same multi-model breadth, but prepaid USD billing (read your balance from the API), one stable task contract, signed webhooks. Developer-to-developer, honest.",
+      "status": "pending"
+    },
+    {
+      "id": 17,
+      "slug": "aimlapi-alternative",
+      "primaryKeyword": "AIMLAPI alternative",
+      "funnel": "BOFU",
+      "tags": [
+        "AI API",
+        "Alternatives"
+      ],
+      "title_hint": "",
+      "angle": "Positioned against the aggregator AIMLAPI: same multi-model breadth, but prepaid USD billing (read your balance from the API), one stable task contract, signed webhooks. Developer-to-developer, honest.",
+      "status": "pending"
+    },
+    {
+      "id": 18,
+      "slug": "together-ai-images-alternative",
+      "primaryKeyword": "Together AI images alternative",
+      "funnel": "BOFU",
+      "tags": [
+        "AI API",
+        "Alternatives"
+      ],
+      "title_hint": "",
+      "angle": "Positioned against the aggregator Together AI (images): same multi-model breadth, but prepaid USD billing (read your balance from the API), one stable task contract, signed webhooks. Developer-to-developer, honest.",
+      "status": "pending"
+    },
+    {
+      "id": 19,
+      "slug": "pika-api-alternative",
+      "primaryKeyword": "Pika API alternative",
+      "funnel": "BOFU",
+      "tags": [
+        "Video generation",
+        "Pika",
+        "Alternatives"
+      ],
+      "title_hint": "",
+      "angle": "Pika is not on the gateway — honest alternative: reach Kling, Veo 3 and Seedance through one API key and prepaid per-second USD. Explain the trade-off vs Pika and how to switch.",
+      "status": "pending"
+    },
+    {
+      "id": 20,
+      "slug": "luma-dream-machine-api-alternative",
+      "primaryKeyword": "Luma Dream Machine API alternative",
+      "funnel": "BOFU",
+      "tags": [
+        "Video generation",
+        "Luma",
+        "Alternatives"
+      ],
+      "title_hint": "",
+      "angle": "Luma Dream Machine is not on the gateway — honest alternative: reach Kling, Veo 3 and Seedance through one API key and prepaid per-second USD. Explain the trade-off vs Luma Dream Machine and how to switch.",
+      "status": "pending"
+    },
+    {
+      "id": 21,
+      "slug": "wan-video-api-alternative",
+      "primaryKeyword": "Wan 2.2 API alternative",
+      "funnel": "BOFU",
+      "tags": [
+        "Video generation",
+        "Wan",
+        "Alternatives"
+      ],
+      "title_hint": "",
+      "angle": "Alibaba Wan 2.2 is not on the gateway — honest alternative: reach Kling, Veo 3 and Seedance through one API key and prepaid per-second USD. Explain the trade-off vs Alibaba Wan 2.2 and how to switch.",
+      "status": "pending"
+    },
+    {
+      "id": 22,
+      "slug": "hailuo-api-alternative",
+      "primaryKeyword": "Hailuo API alternative",
+      "funnel": "BOFU",
+      "tags": [
+        "Video generation",
+        "Hailuo",
+        "MiniMax"
+      ],
+      "title_hint": "",
+      "angle": "MiniMax Hailuo is not on the gateway — honest alternative: reach Kling, Veo 3 and Seedance through one API key and prepaid per-second USD. Explain the trade-off vs MiniMax Hailuo and how to switch.",
+      "status": "pending"
+    },
+    {
+      "id": 23,
+      "slug": "nano-banana-api-python",
+      "primaryKeyword": "Nano Banana API Python example",
+      "funnel": "MOFU",
+      "tags": [
+        "Image generation",
+        "Nano Banana",
+        "Python"
+      ],
+      "title_hint": "",
+      "angle": "Copy-paste Python (requests) to call Nano Banana (Gemini image) text_to_image + image_edit via the gateway; poll/webhook for async.",
+      "status": "pending"
+    },
+    {
+      "id": 24,
+      "slug": "kling-api-nodejs-example",
+      "primaryKeyword": "Kling API Node.js example",
+      "funnel": "MOFU",
+      "tags": [
+        "Video generation",
+        "Kling",
+        "Node.js"
+      ],
+      "title_hint": "",
+      "angle": "Node/TypeScript: submit Kling image-to-video, poll the task or handle the webhook. Real fetch code.",
+      "status": "pending"
+    },
+    {
+      "id": 25,
+      "slug": "image-to-video-api-webhook",
+      "primaryKeyword": "Image-to-video API with webhook",
+      "funnel": "MOFU",
+      "tags": [
+        "Video generation",
+        "Image-to-video",
+        "Webhooks"
+      ],
+      "title_hint": "",
+      "angle": "The async task + signed webhook flow for animating a still, identical across Kling/Veo/Seedance. Real curl + callback payload.",
+      "status": "pending"
+    },
+    {
+      "id": 26,
+      "slug": "veo-3-vs-kling-vs-seedance",
+      "primaryKeyword": "Veo 3 vs Kling vs Seedance",
+      "funnel": "MOFU",
+      "tags": [
+        "Video generation",
+        "Comparison"
+      ],
+      "title_hint": "",
+      "angle": "Honest head-to-head of the three video models we host: quality, speed, cost per second, i2v vs t2v. All callable via one key.",
+      "status": "pending"
+    },
+    {
+      "id": 27,
+      "slug": "nano-banana-vs-gpt-image-vs-imagen",
+      "primaryKeyword": "Nano Banana vs gpt-image vs Imagen 4",
+      "funnel": "MOFU",
+      "tags": [
+        "Image generation",
+        "Comparison"
+      ],
+      "title_hint": "",
+      "angle": "Compare the three image models we host: prompt adherence, editing, text rendering, cost. Switch with a string.",
+      "status": "pending"
+    },
+    {
+      "id": 28,
+      "slug": "dalle-3-vs-gpt-image-1",
+      "primaryKeyword": "DALL·E 3 vs gpt-image-1",
+      "funnel": "MOFU",
+      "tags": [
+        "Image generation",
+        "OpenAI",
+        "Comparison"
+      ],
+      "title_hint": "",
+      "angle": "Two OpenAI image models on the gateway: when to use which, quality/cost, editing support.",
+      "status": "pending"
+    },
+    {
+      "id": 29,
+      "slug": "cheapest-ai-video-api",
+      "primaryKeyword": "Cheapest AI video generation API",
+      "funnel": "MOFU",
+      "tags": [
+        "Video generation",
+        "Pricing"
+      ],
+      "title_hint": "",
+      "angle": "Per-second cost across Seedance/Kling/Veo tiers, prepaid USD, $5 free credit. Transparent numbers, not a sales page.",
+      "status": "pending"
+    },
+    {
+      "id": 30,
+      "slug": "cheapest-ai-image-api",
+      "primaryKeyword": "Cheapest AI image generation API",
+      "funnel": "MOFU",
+      "tags": [
+        "Image generation",
+        "Pricing"
+      ],
+      "title_hint": "",
+      "angle": "Per-image cost across Nano Banana/Imagen/gpt-image/DALL·E, prepaid USD, honest comparison.",
+      "status": "pending"
+    },
+    {
+      "id": 31,
+      "slug": "async-tasks-webhooks-guide",
+      "primaryKeyword": "Async tasks and webhooks for AI generation",
+      "funnel": "MOFU",
+      "tags": [
+        "AI API",
+        "Webhooks",
+        "Task lifecycle"
+      ],
+      "title_hint": "",
+      "angle": "The one task contract behind every model: submit → poll or signed webhook → fetch. The plumbing hub that other posts link to.",
+      "status": "pending"
+    },
+    {
+      "id": 32,
+      "slug": "one-api-for-ai-image-video-text",
+      "primaryKeyword": "One API for AI image, video and text",
+      "funnel": "TOFU",
+      "tags": [
+        "AI API",
+        "Gateway"
+      ],
+      "title_hint": "",
+      "angle": "Pillar: the case for a single gateway — one key, one request shape, switch model with a string, prepaid USD. Links to model + alt pages.",
+      "status": "pending"
+    },
+    {
+      "id": 33,
+      "slug": "sora-api-alternative",
+      "primaryKeyword": "Sora API alternative",
+      "funnel": "BOFU",
+      "tags": [
+        "Video generation",
+        "Sora",
+        "Alternatives"
+      ],
+      "title_hint": "",
+      "angle": "No public Sora API. OpenAI Sora is not on the gateway — honest alternative: reach Kling, Veo 3 and Seedance through one API key and prepaid per-second USD. Explain the trade-off vs OpenAI Sora and how to switch.",
+      "status": "pending"
+    },
+    {
+      "id": 34,
+      "slug": "qwen-image-api-alternative",
+      "primaryKeyword": "Qwen Image API alternative",
+      "funnel": "BOFU",
+      "tags": [
+        "Image generation",
+        "Qwen",
+        "Alternatives"
+      ],
+      "title_hint": "",
+      "angle": "Alibaba Qwen image is not hosted on the gateway — this is the honest alternative: get comparable results from Nano Banana (Gemini), Imagen 4, gpt-image-1 and DALL·E 3 behind one API key, prepaid USD, one task contract. Cover what Alibaba Qwen image is known for and how to reproduce it here; no false claim that we run Alibaba Qwen image.",
+      "status": "pending"
+    },
+    {
+      "id": 35,
+      "slug": "heygen-api-alternative",
+      "primaryKeyword": "HeyGen API alternative",
+      "funnel": "BOFU",
+      "tags": [
+        "Video generation",
+        "Avatars",
+        "Alternatives"
+      ],
+      "title_hint": "",
+      "angle": "For talking-head/avatar video: HeyGen is not on the gateway — honest alternative: reach Kling, Veo 3 and Seedance through one API key and prepaid per-second USD. Explain the trade-off vs HeyGen and how to switch.",
+      "status": "pending"
+    },
+    {
+      "id": 36,
+      "slug": "synthesia-api-alternative",
+      "primaryKeyword": "Synthesia API alternative",
+      "funnel": "BOFU",
+      "tags": [
+        "Video generation",
+        "Avatars",
+        "Alternatives"
+      ],
+      "title_hint": "",
+      "angle": "Synthesia is not on the gateway — honest alternative: reach Kling, Veo 3 and Seedance through one API key and prepaid per-second USD. Explain the trade-off vs Synthesia and how to switch.",
+      "status": "pending"
+    },
+    {
+      "id": 37,
+      "slug": "adobe-firefly-api-alternative",
+      "primaryKeyword": "Adobe Firefly API alternative",
+      "funnel": "BOFU",
+      "tags": [
+        "Image generation",
+        "Firefly",
+        "Alternatives"
+      ],
+      "title_hint": "",
+      "angle": "Adobe Firefly is not hosted on the gateway — this is the honest alternative: get comparable results from Nano Banana (Gemini), Imagen 4, gpt-image-1 and DALL·E 3 behind one API key, prepaid USD, one task contract. Cover what Adobe Firefly is known for and how to reproduce it here; no false claim that we run Adobe Firefly.",
+      "status": "pending"
+    },
+    {
+      "id": 38,
+      "slug": "segmind-api-alternative",
+      "primaryKeyword": "Segmind API alternative",
+      "funnel": "BOFU",
+      "tags": [
+        "AI API",
+        "Alternatives"
+      ],
+      "title_hint": "",
+      "angle": "Positioned against the aggregator Segmind: same multi-model breadth, but prepaid USD billing (read your balance from the API), one stable task contract, signed webhooks. Developer-to-developer, honest.",
+      "status": "pending"
+    },
+    {
+      "id": 39,
+      "slug": "novita-ai-alternative",
+      "primaryKeyword": "Novita AI alternative",
+      "funnel": "BOFU",
+      "tags": [
+        "AI API",
+        "Alternatives"
+      ],
+      "title_hint": "",
+      "angle": "Positioned against the aggregator Novita AI: same multi-model breadth, but prepaid USD billing (read your balance from the API), one stable task contract, signed webhooks. Developer-to-developer, honest.",
+      "status": "pending"
+    },
+    {
+      "id": 40,
+      "slug": "image-editing-api",
+      "primaryKeyword": "Image editing API (edits and inpainting)",
+      "funnel": "MOFU",
+      "tags": [
+        "Image generation",
+        "Editing"
+      ],
+      "title_hint": "",
+      "angle": "Edit an existing image via API: Nano Banana image_edit and gpt-image editing — instruction prompts, single source image, real curl.",
+      "status": "pending"
+    },
+    {
+      "id": 41,
+      "slug": "consistent-characters-api",
+      "primaryKeyword": "Generate consistent characters via API",
+      "funnel": "MOFU",
+      "tags": [
+        "Image generation",
+        "Characters"
+      ],
+      "title_hint": "",
+      "angle": "Keep a character on-model across generations using our image models; practical prompt + reference-image tactics.",
+      "status": "pending"
+    },
+    {
+      "id": 42,
+      "slug": "batch-image-generation-api",
+      "primaryKeyword": "Batch image generation API",
+      "funnel": "MOFU",
+      "tags": [
+        "Image generation",
+        "Scale"
+      ],
+      "title_hint": "",
+      "angle": "Generate many images programmatically: idempotency keys, concurrency, polling/webhooks, cost control.",
+      "status": "pending"
+    },
+    {
+      "id": 43,
+      "slug": "ai-product-photography-api",
+      "primaryKeyword": "AI product photography API",
+      "funnel": "BOFU",
+      "tags": [
+        "Image generation",
+        "E-commerce"
+      ],
+      "title_hint": "",
+      "angle": "Generate/edit product shots at scale via API for e-commerce; backgrounds, variants, consistency.",
+      "status": "pending"
+    },
+    {
+      "id": 44,
+      "slug": "ai-video-for-ads-api",
+      "primaryKeyword": "AI video for ads via API",
+      "funnel": "MOFU",
+      "tags": [
+        "Video generation",
+        "Marketing"
+      ],
+      "title_hint": "",
+      "angle": "Produce short ad clips programmatically with Kling/Veo/Seedance; text-to-video + image-to-video from product stills.",
+      "status": "pending"
+    },
+    {
+      "id": 45,
+      "slug": "generate-thumbnails-api",
+      "primaryKeyword": "Generate video thumbnails with an API",
+      "funnel": "MOFU",
+      "tags": [
+        "Image generation",
+        "Thumbnails"
+      ],
+      "title_hint": "",
+      "angle": "Auto-generate on-brand thumbnails via the image models; prompt patterns + sizing.",
+      "status": "pending"
+    },
+    {
+      "id": 46,
+      "slug": "poll-vs-webhook-generation",
+      "primaryKeyword": "Poll vs webhook for async generation",
+      "funnel": "MOFU",
+      "tags": [
+        "AI API",
+        "Webhooks"
+      ],
+      "title_hint": "",
+      "angle": "When to poll and when to use signed webhooks for long image/video jobs; reliability, retries, idempotency.",
+      "status": "pending"
+    },
+    {
+      "id": 47,
+      "slug": "imagen-4-vs-flux",
+      "primaryKeyword": "Imagen 4 vs Flux",
+      "funnel": "MOFU",
+      "tags": [
+        "Image generation",
+        "Comparison"
+      ],
+      "title_hint": "",
+      "angle": "Imagen 4 (hosted here) vs FLUX (not hosted): quality/latency/cost, and how to get FLUX-like results via the gateway.",
+      "status": "pending"
+    },
+    {
+      "id": 48,
+      "slug": "kling-vs-runway",
+      "primaryKeyword": "Kling vs Runway for image-to-video",
+      "funnel": "MOFU",
+      "tags": [
+        "Video generation",
+        "Comparison"
+      ],
+      "title_hint": "",
+      "angle": "Kling (hosted) vs Runway (not): i2v quality, motion, cost per second; how to reach Kling/Veo/Seedance via one key.",
+      "status": "pending"
+    },
+    {
+      "id": 49,
+      "slug": "veo-3-vs-sora",
+      "primaryKeyword": "Veo 3 vs Sora",
+      "funnel": "MOFU",
+      "tags": [
+        "Video generation",
+        "Comparison"
+      ],
+      "title_hint": "",
+      "angle": "Veo 3 (hosted, with audio) vs Sora (no public API): capabilities and the practical path to production video now.",
+      "status": "pending"
+    },
+    {
+      "id": 50,
+      "slug": "seedance-i2v-vs-t2v",
+      "primaryKeyword": "Seedance image-to-video vs text-to-video",
+      "funnel": "MOFU",
+      "tags": [
+        "Video generation",
+        "Seedance"
+      ],
+      "title_hint": "",
+      "angle": "When to use Seedance i2v vs t2v, quality/cost, and the same task contract for both.",
+      "status": "pending"
+    },
+    {
+      "id": 51,
+      "slug": "best-image-to-video-api",
+      "primaryKeyword": "Best image-to-video API in 2026",
+      "funnel": "MOFU",
+      "tags": [
+        "Video generation",
+        "Image-to-video"
+      ],
+      "title_hint": "",
+      "angle": "Honest roundup of image-to-video across Kling/Veo/Seedance (all one key), with when-to-use guidance.",
+      "status": "pending"
+    },
+    {
+      "id": 52,
+      "slug": "best-ai-image-api-2026",
+      "primaryKeyword": "Best AI image generation API in 2026",
+      "funnel": "MOFU",
+      "tags": [
+        "Image generation",
+        "Roundup"
+      ],
+      "title_hint": "",
+      "angle": "Roundup: Nano Banana/Imagen/gpt-image/DALL·E strengths, plus where hosted alternatives fit — one gateway.",
+      "status": "pending"
+    },
+    {
+      "id": 53,
+      "slug": "best-text-to-video-api-2026",
+      "primaryKeyword": "Best text-to-video API in 2026",
+      "funnel": "MOFU",
+      "tags": [
+        "Video generation",
+        "Text-to-video"
+      ],
+      "title_hint": "",
+      "angle": "Roundup of text-to-video via the gateway (Veo/Kling/Seedance) and the shared request/poll/webhook flow.",
+      "status": "pending"
+    },
+    {
+      "id": 54,
+      "slug": "ai-generation-api-pricing-compared",
+      "primaryKeyword": "AI generation API pricing compared",
+      "funnel": "MOFU",
+      "tags": [
+        "AI API",
+        "Pricing"
+      ],
+      "title_hint": "",
+      "angle": "How AI image/video APIs bill (per-image, per-second, per-token) and what prepaid USD gets you vs credit systems.",
+      "status": "pending"
+    },
+    {
+      "id": 55,
+      "slug": "prepaid-ai-api-no-subscription",
+      "primaryKeyword": "Prepaid AI API with no subscription",
+      "funnel": "BOFU",
+      "tags": [
+        "AI API",
+        "Pricing"
+      ],
+      "title_hint": "",
+      "angle": "Pay-as-you-go in real USD, no monthly plan, no per-provider accounts; read your balance from the API. $5 free to start.",
+      "status": "pending"
+    },
+    {
+      "id": 56,
+      "slug": "free-ai-image-api",
+      "primaryKeyword": "Free AI image API (and the catch)",
+      "funnel": "MOFU",
+      "tags": [
+        "Image generation",
+        "Pricing"
+      ],
+      "title_hint": "",
+      "angle": "Honest look at \"free\" AI image APIs (quotas/quality/rate limits) and the prepaid-USD + $5-credit path.",
+      "status": "pending"
+    },
+    {
+      "id": 57,
+      "slug": "idempotency-for-generation-api",
+      "primaryKeyword": "Idempotency keys for a generation API",
+      "funnel": "MOFU",
+      "tags": [
+        "AI API",
+        "Reliability"
+      ],
+      "title_hint": "",
+      "angle": "Why generation APIs need idempotency and how retries stay safe on the gateway; real header usage.",
+      "status": "pending"
+    },
+    {
+      "id": 58,
+      "slug": "rate-limits-ai-api",
+      "primaryKeyword": "Handling rate limits on AI generation APIs",
+      "funnel": "MOFU",
+      "tags": [
+        "AI API",
+        "Reliability"
+      ],
+      "title_hint": "",
+      "angle": "Backoff, queues and concurrency for image/video jobs; how the gateway helps.",
+      "status": "pending"
+    },
+    {
+      "id": 59,
+      "slug": "estimate-cost-before-generating",
+      "primaryKeyword": "Estimate generation cost before you spend",
+      "funnel": "MOFU",
+      "tags": [
+        "AI API",
+        "Pricing"
+      ],
+      "title_hint": "",
+      "angle": "Use /v1/estimate to show users a price before generating; per-model pricing and bundle gotchas.",
+      "status": "pending"
+    },
+    {
+      "id": 60,
+      "slug": "image-generation-api-pillar",
+      "primaryKeyword": "Image generation API: models, methods, billing",
+      "funnel": "TOFU",
+      "tags": [
+        "Image generation",
+        "Gateway"
+      ],
+      "title_hint": "",
+      "angle": "Pillar/hub for the image cluster: every hosted image model, methods, and how billing works. Links all image pages.",
+      "status": "pending"
+    },
+    {
+      "id": 61,
+      "slug": "video-generation-api-pillar",
+      "primaryKeyword": "Video generation API: models, methods, billing",
+      "funnel": "TOFU",
+      "tags": [
+        "Video generation",
+        "Gateway"
+      ],
+      "title_hint": "",
+      "angle": "Pillar/hub for the video cluster: Kling/Veo/Seedance, t2v/i2v, async + webhooks, billing. Links all video pages.",
+      "status": "pending"
+    },
+    {
+      "id": 62,
+      "slug": "text-to-image-api",
+      "primaryKeyword": "Text to image API",
+      "funnel": "MOFU",
+      "tags": [
+        "Image generation",
+        "Text-to-image"
+      ],
+      "title_hint": "",
+      "angle": "Category page: text-to-image across our hosted models behind one request shape; pick a model with a string.",
+      "status": "pending"
+    },
+    {
+      "id": 63,
+      "slug": "pay-ai-api-with-crypto",
+      "primaryKeyword": "Pay for an AI API with crypto (USDT)",
+      "funnel": "BOFU",
+      "tags": [
+        "AI API",
+        "Pricing",
+        "Crypto"
+      ],
+      "title_hint": "",
+      "angle": "Differentiator: top up your prepaid USD balance with crypto (USDT and more) — no card required — then call every model.",
       "status": "pending"
     }
   ]
