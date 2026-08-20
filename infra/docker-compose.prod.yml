@@ -1,0 +1,178 @@
+name: aiagg-prod
+
+# Production stack for a single small VPS (e.g. ukraine.com.ua VPS 6G, 6 GB RAM).
+# Runs: Postgres + Redis + MinIO + api + worker + web + admin, all behind Caddy
+# (automatic HTTPS). Designed for the low/no-load case.
+#
+# Build contexts point at the repo root (..) because every app Dockerfile does
+# `COPY . .` from the monorepo root.
+#
+# Usage:
+#   cp infra/.env.prod.example infra/.env.prod   # then fill it in
+#   docker compose -f infra/docker-compose.prod.yml --env-file infra/.env.prod build
+#   docker compose -f infra/docker-compose.prod.yml --env-file infra/.env.prod up -d
+#
+# See infra/DEPLOY.md for the full runbook.
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: aiagg-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - pg-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER}']
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    # No published ports: only reachable inside the compose network.
+
+  redis:
+    image: redis:7-alpine
+    container_name: aiagg-redis
+    restart: unless-stopped
+    command: ['redis-server', '--appendonly', 'yes', '--requirepass', '${REDIS_PASSWORD}']
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ['CMD', 'redis-cli', '-a', '${REDIS_PASSWORD}', 'ping']
+      interval: 10s
+      timeout: 3s
+      retries: 10
+
+  minio:
+    image: minio/minio:latest
+    container_name: aiagg-minio
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${S3_ACCESS_KEY}
+      MINIO_ROOT_PASSWORD: ${S3_SECRET_KEY}
+    volumes:
+      - minio-data:/data
+    healthcheck:
+      test: ['CMD', 'curl', '-f', 'http://localhost:9000/minio/health/live']
+      interval: 15s
+      timeout: 5s
+      retries: 10
+
+  # One-shot: creates the bucket on first boot, then exits.
+  minio-init:
+    image: minio/mc:latest
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+      mc alias set local http://minio:9000 ${S3_ACCESS_KEY} ${S3_SECRET_KEY} &&
+      mc mb --ignore-existing local/${S3_BUCKET} &&
+      echo 'bucket ready';
+      "
+    restart: 'no'
+
+  # One-shot: applies Prisma migrations, then exits. api/worker wait for it.
+  migrate:
+    build:
+      context: ..
+      dockerfile: apps/api/Dockerfile
+    image: aiagg-api:latest
+    depends_on:
+      postgres:
+        condition: service_healthy
+    working_dir: /repo
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+    command: ['pnpm', 'db:migrate:deploy']
+    restart: 'no'
+
+  api:
+    build:
+      context: ..
+      dockerfile: apps/api/Dockerfile
+    image: aiagg-api:latest
+    container_name: aiagg-api
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    env_file: .env.prod
+    expose:
+      - '4000'
+
+  worker:
+    build:
+      context: ..
+      dockerfile: apps/worker/Dockerfile
+    image: aiagg-worker:latest
+    container_name: aiagg-worker
+    restart: unless-stopped
+    depends_on:
+      redis:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    env_file: .env.prod
+
+  web:
+    build:
+      context: ..
+      dockerfile: apps/web/Dockerfile
+    image: aiagg-web:latest
+    container_name: aiagg-web
+    restart: unless-stopped
+    depends_on:
+      - api
+    env_file: .env.prod
+    expose:
+      - '3000'
+
+  admin:
+    build:
+      context: ..
+      dockerfile: apps/admin/Dockerfile
+    image: aiagg-admin:latest
+    container_name: aiagg-admin
+    restart: unless-stopped
+    depends_on:
+      - api
+    env_file: .env.prod
+    expose:
+      - '3001'
+
+  caddy:
+    image: caddy:2-alpine
+    container_name: aiagg-caddy
+    restart: unless-stopped
+    depends_on:
+      - web
+      - admin
+      - api
+    ports:
+      - '80:80'
+      - '443:443'
+    environment:
+      APP_DOMAIN: ${APP_DOMAIN}
+      ADMIN_DOMAIN: ${ADMIN_DOMAIN}
+      API_DOMAIN: ${API_DOMAIN}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+
+volumes:
+  pg-data:
+  redis-data:
+  minio-data:
+  caddy-data:
+  caddy-config:
