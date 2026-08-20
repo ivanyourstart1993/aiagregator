@@ -7,6 +7,7 @@
 import nanoBananaApi from './nano-banana-api.mdx?raw';
 import klingApi from './kling-api.mdx?raw';
 import seedanceApi from './seedance-api.mdx?raw';
+import veo3Api from './veo-3-api.mdx?raw';
 
 export interface RawPost {
   slug: string;
@@ -17,4 +18,5 @@ export const rawPosts: RawPost[] = [
   { slug: 'nano-banana-api', raw: nanoBananaApi },
   { slug: 'kling-api', raw: klingApi },
   { slug: 'seedance-api', raw: seedanceApi },
+  { slug: 'veo-3-api', raw: veo3Api },
 ];

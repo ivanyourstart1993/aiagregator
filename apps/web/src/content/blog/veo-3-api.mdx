@@ -1,0 +1,116 @@
+---
+title: "Google Veo 3 API: Generate Video with Native Audio"
+description: "Call Google's Veo 3 with native audio through one API key and prepaid USD billing — no GCP project. Text-to-video, image-to-video, poll or webhook for the clip."
+date: "2026-08-20"
+updated: "2026-08-20"
+tags: ["Video generation", "Veo"]
+primaryKeyword: "Veo 3 API"
+funnel: "BOFU"
+author:
+  name: "Aigenway"
+relatedDocs:
+  - label: "Task lifecycle"
+    href: "/docs/task-lifecycle"
+  - label: "Webhooks"
+    href: "/docs/webhooks"
+  - label: "Getting started"
+    href: "/docs/getting-started"
+---
+
+Veo 3 is Google's flagship video model, and the headline feature is native audio — dialogue, sound effects and ambient noise generated in the same pass as the picture, not bolted on afterward. Normally that means a GCP project, Vertex AI billing, and quota requests before you send a single prompt. Through the Aigenway gateway you skip all of that: one API key, prepaid USD balance, the same task contract you use for every other model.
+
+## What you get
+
+Veo 3 ships in a few variants trading render time, resolution and cost against each other, and Google updates them on its own schedule. Confirm the exact codes live on your account before hardcoding a model string:
+
+```bash
+curl "https://api.aigenway.com/v1/methods?provider=veo" \
+  -H "Authorization: Bearer sk_live_..."
+```
+
+That call returns the current `model` and `method` values, plus per-second pricing. Expect a standard tier for everyday clips and a fast tier for iteration — the audio generation is part of the base model, not a separate add-on you toggle.
+
+## Text-to-video with audio
+
+Send a prompt describing both the scene and the sound, and the response includes audio baked into the output clip — no separate voice or SFX pass to orchestrate:
+
+```bash
+curl -X POST https://api.aigenway.com/v1/generations \
+  -H "Authorization: Bearer sk_live_..." \
+  -H "Idempotency-Key: $(uuidgen)" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "provider": "veo",
+    "model": "veo-3",
+    "method": "text_to_video",
+    "params": {
+      "prompt": "a barista steams milk behind a coffee counter, hiss of the steam wand, faint chatter in the background, morning light",
+      "duration": 8,
+      "aspect_ratio": "16:9"
+    }
+  }'
+```
+
+`Idempotency-Key` makes retries safe on a slow or dropped connection — resend the same key and you get back the same task instead of paying for a second render.
+
+<SignupCTA
+  title="Generate your first Veo 3 clip"
+  description="Create a free account, get $5 in free credit, and run the request above — native audio included, no GCP project required."
+/>
+
+## Image-to-video
+
+Animate a still you already control — a product shot, a character frame, a generated keyframe — and describe the motion and sound you want layered on top:
+
+```bash
+curl -X POST https://api.aigenway.com/v1/generations \
+  -H "Authorization: Bearer sk_live_..." \
+  -H "Idempotency-Key: $(uuidgen)" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "provider": "veo",
+    "model": "veo-3",
+    "method": "image_to_video",
+    "params": {
+      "prompt": "camera pushes in slowly, distant traffic hum, a bird calls once",
+      "input_image": "https://example.com/street-scene.png",
+      "duration": 8
+    }
+  }'
+```
+
+Same endpoint, same `provider`/`model`/`method`/`params` shape as text-to-video — only the `method` and the added `input_image` change, so switching between the two modes is a one-line diff in your integration.
+
+## Poll or webhook for the finished clip
+
+Video is never synchronous, and audio generation adds to the render time — the `POST` above returns a task in `queued` or `processing` state, not a finished file. Two ways to get the result:
+
+1. **Poll.** `GET /v1/generations/{task_id}` until `status` becomes `succeeded` (or `failed`), then read the output URL off the response.
+2. **Webhook.** Set a `callback_url` on the request and the gateway `POST`s the finished task to your endpoint as soon as it completes — no polling loop to write or rate-limit.
+
+```bash
+curl -X POST https://api.aigenway.com/v1/generations \
+  -H "Authorization: Bearer sk_live_..." \
+  -H "Idempotency-Key: $(uuidgen)" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "provider": "veo",
+    "model": "veo-3",
+    "method": "text_to_video",
+    "params": { "prompt": "waves breaking on a rocky shore at dusk, wind and surf audio", "duration": 8 },
+    "callback_url": "https://your-app.example.com/webhooks/aigenway"
+  }'
+```
+
+The task shape — fields, status values, webhook payload and signature — is identical across every model on the gateway, so this same code also drives Kling and Seedance. Full details are in the [task lifecycle](/docs/task-lifecycle) and [webhooks](/docs/webhooks) docs.
+
+## Why one gateway beats a GCP project
+
+- **No cloud project to stand up.** No Vertex AI enablement, no service account, no quota request — sign up and call the endpoint.
+- **One integration, many models.** The same request shape that calls Veo also calls Kling, Seedance and every image model — swap a string, not your SDK.
+- **Real USD billing.** Prepaid balance, no GCP invoicing or committed spend to forecast; check remaining balance from the API at any time.
+- **Production plumbing included.** Idempotency keys, queueing, task state and signed webhooks are already built in.
+
+When Google ships a new Veo version, you point at the new model code from `/v1/methods` and keep shipping — no re-provisioning required.
+
+<SignupCTA />
