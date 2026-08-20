@@ -8,17 +8,18 @@
 set -euo pipefail
 REPO=/opt/aiagregator
 
-echo "== Node 22 LTS (pnpm 11 needs >=22.13) =="
+echo "== Node (repo engines: >=20) =="
 NODE_MAJOR="$(node -v 2>/dev/null | sed 's/v\([0-9]*\).*/\1/')"
-if [ -z "$NODE_MAJOR" ] || [ "$NODE_MAJOR" -lt 22 ]; then
+if [ -z "$NODE_MAJOR" ] || [ "$NODE_MAJOR" -lt 20 ]; then
   curl -fsSL https://deb.nodesource.com/setup_22.x | bash -
   apt-get install -y nodejs
 fi
 node -v
 
-echo "== pnpm (via corepack) =="
+echo "== pnpm (pinned to the repo's packageManager) =="
 corepack enable || npm i -g corepack
-corepack prepare pnpm@latest --activate || npm i -g pnpm
+# Match package.json "packageManager": pnpm@9.15.0 (node 20 compatible).
+corepack prepare pnpm@9.15.0 --activate || npm i -g pnpm@9.15.0
 pnpm -v
 
 echo "== claude CLI =="
