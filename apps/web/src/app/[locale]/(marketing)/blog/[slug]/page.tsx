@@ -22,7 +22,14 @@ export function generateMetadata({ params }: BlogPostParams): Metadata {
 
   const { title, description, date, updated, ogImage, canonical, tags } = post.frontmatter;
   const url = canonical ?? `${SITE_URL}/blog/${post.slug}`;
-  const images = ogImage ? [ogImage] : undefined;
+  // Social scrapers need an absolute URL. Point at the real cover (ogImage); the
+  // former `/opengraph-image` route 404s under next-intl, so it is not used.
+  const ogAbs = ogImage
+    ? ogImage.startsWith('http')
+      ? ogImage
+      : `${SITE_URL}${ogImage}`
+    : undefined;
+  const images = ogAbs ? [ogAbs] : undefined;
   // EN-only blog: keep non-default locales out of the index but let them be
   // crawled/followed, with the canonical pointing back to the prefix-less URL.
   const isDefaultLocale = params.locale === 'en';
@@ -74,7 +81,7 @@ export default async function BlogPostPage({ params }: BlogPostParams) {
     ? ogImage.startsWith('http')
       ? ogImage
       : `${SITE_URL}${ogImage}`
-    : `${url}/opengraph-image`;
+    : `${SITE_URL}/icon.svg`;
 
   const articleLd = {
     '@context': 'https://schema.org',

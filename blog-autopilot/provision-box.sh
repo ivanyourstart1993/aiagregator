@@ -30,6 +30,10 @@ echo "== repo deps (so 'pnpm check:blog' runs) =="
 cd "$REPO"
 pnpm install --frozen-lockfile || pnpm install
 
+echo "== cover-gen dep (sharp) for blog-autopilot =="
+cd "$REPO/blog-autopilot"
+npm install --no-audit --no-fund
+
 echo "== token dir =="
 install -d -m 700 /root/.config/blog-autopilot
 

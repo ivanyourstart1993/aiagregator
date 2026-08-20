@@ -13,6 +13,7 @@ import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { randomUUID } from 'node:crypto';
+import sharp from 'sharp';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO = resolve(HERE, '..');
@@ -55,7 +56,7 @@ const primaryKeyword = field('primaryKeyword') || title;
 const alreadyHasImage = /^ogImage:/m.test(fm);
 
 const publicDir = resolve(REPO, 'apps/web/public/blog');
-const outFile = resolve(publicDir, `${slug}.png`);
+const outFile = resolve(publicDir, `${slug}.jpg`);
 if (alreadyHasImage && existsSync(outFile) && !force) {
   console.log(`cover already present for ${slug} — skipping`);
   process.exit(0);
@@ -121,12 +122,17 @@ async function main() {
   const imgRes = await fetch(fileUrl, { headers: auth });
   if (!imgRes.ok) throw new Error(`download failed ${imgRes.status}`);
   const buf = Buffer.from(await imgRes.arrayBuffer());
+  // Downscale to 16:9 and encode a web-weight JPEG (~150–250 KB vs ~1.3 MB PNG).
+  const jpg = await sharp(buf)
+    .resize(1280, 720, { fit: 'cover' })
+    .jpeg({ quality: 82, mozjpeg: true })
+    .toBuffer();
   mkdirSync(publicDir, { recursive: true });
-  writeFileSync(outFile, buf);
-  console.log(`[gen-cover] ${slug}: saved ${outFile} (${Math.round(buf.length / 1024)} KB)`);
+  writeFileSync(outFile, jpg);
+  console.log(`[gen-cover] ${slug}: saved ${outFile} (${Math.round(jpg.length / 1024)} KB)`);
 
   // Set ogImage in frontmatter (replace or insert before closing ---).
-  const ogLine = `ogImage: "/blog/${slug}.png"`;
+  const ogLine = `ogImage: "/blog/${slug}.jpg"`;
   let next;
   if (alreadyHasImage) {
     next = src.replace(/^ogImage:.*$/m, ogLine);
