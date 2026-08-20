@@ -1,0 +1,124 @@
+{
+  "topics": [
+    {
+      "id": 1,
+      "slug": "seedance-api",
+      "primaryKeyword": "Seedance API",
+      "funnel": "BOFU",
+      "tags": ["Video generation", "Seedance"],
+      "title_hint": "Seedance API: Text-to-Video and Image-to-Video",
+      "angle": "Call ByteDance Seedance for fast, cheap text-to-video and image-to-video over the gateway's task contract; compare tiers, show the async task + webhook flow.",
+      "status": "pending"
+    },
+    {
+      "id": 2,
+      "slug": "veo-3-api",
+      "primaryKeyword": "Veo 3 API",
+      "funnel": "BOFU",
+      "tags": ["Video generation", "Veo"],
+      "title_hint": "Google Veo 3 API: Generate Video with Native Audio",
+      "angle": "Access Google Veo 3 (incl. audio) without a GCP project — one API key, prepaid USD. Text-to-video and image-to-video, poll or webhook for the finished clip.",
+      "status": "pending"
+    },
+    {
+      "id": 3,
+      "slug": "flux-api",
+      "primaryKeyword": "Flux API",
+      "funnel": "BOFU",
+      "tags": ["Image generation", "Flux"],
+      "title_hint": "FLUX API: Text-to-Image and Image Editing",
+      "angle": "Call Black Forest Labs FLUX for high-fidelity text-to-image and edits via one REST endpoint; contrast with running FLUX yourself on GPUs.",
+      "status": "pending"
+    },
+    {
+      "id": 4,
+      "slug": "wan-video-api",
+      "primaryKeyword": "Wan 2.2 API",
+      "funnel": "BOFU",
+      "tags": ["Video generation", "Wan"],
+      "title_hint": "Wan 2.2 API: Open Video Model over One Endpoint",
+      "angle": "Use Alibaba's Wan 2.2 video model through the gateway instead of self-hosting; text-to-video and image-to-video, prepaid USD billing.",
+      "status": "pending"
+    },
+    {
+      "id": 5,
+      "slug": "hailuo-api",
+      "primaryKeyword": "Hailuo API",
+      "funnel": "BOFU",
+      "tags": ["Video generation", "Hailuo", "MiniMax"],
+      "title_hint": "Hailuo (MiniMax) API: Text and Image to Video",
+      "angle": "Call MiniMax Hailuo video generation via one API key; strong motion and prompt adherence, same task contract as every other model.",
+      "status": "pending"
+    },
+    {
+      "id": 6,
+      "slug": "ideogram-api",
+      "primaryKeyword": "Ideogram API",
+      "funnel": "BOFU",
+      "tags": ["Image generation", "Ideogram", "Typography"],
+      "title_hint": "Ideogram API: Generate Images with Legible Text",
+      "angle": "Ideogram's edge is in-image typography — call it for posters, logos, and text-heavy images over one REST endpoint with prepaid USD billing.",
+      "status": "pending"
+    },
+    {
+      "id": 7,
+      "slug": "recraft-api",
+      "primaryKeyword": "Recraft API",
+      "funnel": "BOFU",
+      "tags": ["Image generation", "Recraft", "Vector"],
+      "title_hint": "Recraft API: Vector and Brand-Style Images",
+      "angle": "Recraft does SVG/vector and consistent brand styles; call it via the gateway for design assets without a Recraft account.",
+      "status": "pending"
+    },
+    {
+      "id": 8,
+      "slug": "qwen-image-api",
+      "primaryKeyword": "Qwen Image API",
+      "funnel": "BOFU",
+      "tags": ["Image generation", "Qwen"],
+      "title_hint": "Qwen Image API: Generate and Edit Images",
+      "angle": "Call Alibaba's Qwen image model for generation and editing through one API key; a cost-effective alternative in the image lineup.",
+      "status": "pending"
+    },
+    {
+      "id": 9,
+      "slug": "gpt-image-api",
+      "primaryKeyword": "gpt-image-1 API",
+      "funnel": "BOFU",
+      "tags": ["Image generation", "OpenAI", "gpt-image-1"],
+      "title_hint": "gpt-image-1 API: OpenAI Image Generation & Editing",
+      "angle": "Call OpenAI's gpt-image-1 for text-to-image and edits via the gateway — one API key and prepaid USD instead of a separate OpenAI account.",
+      "status": "pending"
+    },
+    {
+      "id": 10,
+      "slug": "image-to-video-api",
+      "primaryKeyword": "image to video API",
+      "funnel": "MOFU",
+      "tags": ["Video generation", "Image-to-video"],
+      "title_hint": "Image-to-Video API: Animate a Still from Your Code",
+      "angle": "Category page: how image-to-video works across Kling, Veo, Seedance and Wan behind one task contract — pick a model with a string, not a rewrite.",
+      "status": "pending"
+    },
+    {
+      "id": 11,
+      "slug": "text-to-video-api",
+      "primaryKeyword": "text to video API",
+      "funnel": "MOFU",
+      "tags": ["Video generation", "Text-to-video"],
+      "title_hint": "Text-to-Video API: One Endpoint, Many Models",
+      "angle": "Category page: compare text-to-video models on the gateway and show the shared request/poll/webhook flow that drives all of them.",
+      "status": "pending"
+    },
+    {
+      "id": 12,
+      "slug": "luma-dream-machine-api",
+      "primaryKeyword": "Luma Dream Machine API",
+      "funnel": "BOFU",
+      "tags": ["Video generation", "Luma"],
+      "title_hint": "Luma Dream Machine API: Text and Image to Video",
+      "angle": "Call Luma's Dream Machine for fluid text-to-video and image-to-video via one API key; same idempotent task contract and webhooks.",
+      "status": "pending"
+    }
+  ]
+}

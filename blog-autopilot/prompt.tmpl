@@ -1,0 +1,55 @@
+You are writing ONE production SEO blog post for aigenway.com, a gateway that
+exposes every AI image / video / text model behind one API key, one task
+contract, and prepaid USD billing. The post targets a low-frequency, high-intent
+keyword and closes the reader on creating a free API key.
+
+TOPIC (JSON):
+__TOPIC__
+
+Repo root: __REPO__
+Today: __DATE__
+Output dir for this run: __OUT__
+
+Do EVERYTHING below in a SINGLE turn. Do not run anything in the background (no
+`&`). Do not end your turn until you have written __OUT__/result.json. If you
+stop early, the deploy never happens.
+
+STEPS
+
+1. Read blog-autopilot/CANON.md — it is the binding spec. Read the two existing
+   posts in apps/web/src/content/blog/*.mdx to match voice, structure, and the
+   exact request/response shape used in code examples.
+
+2. If you need the real model codes for this provider, you MAY note that the
+   reader should list them via `GET https://api.aigenway.com/v1/methods?provider=<p>`
+   rather than inventing specific version strings. Never fabricate model codes,
+   prices, or capabilities. When unsure, describe the pattern, not a fake exact.
+
+3. Write apps/web/src/content/blog/<slug>.mdx using the topic's `slug`:
+   - Frontmatter per CANON (title, description, date="__DATE__", tags,
+     primaryKeyword, funnel from the topic, author {name:"Aigenway"},
+     relatedDocs ≥2 pointing ONLY at routes listed in CANON, one of which should
+     be a relevant /docs/* page).
+   - Body: 20–100-word lead, ≥4 unique H2 sections, ≥1 fenced `curl` to
+     https://api.aigenway.com/v1/generations (Bearer sk_live_..., Idempotency-Key,
+     provider/model/method/params), ≥1 inline <SignupCTA .../> after the first
+     example (tailor its title/description to the topic).
+
+4. Register the post in apps/web/src/content/blog/index.ts: add
+   `import <camel> from './<slug>.mdx?raw';` with the other imports and append
+   `{ slug: '<slug>', raw: <camel> }` to `rawPosts`. THIS STEP IS MANDATORY — an
+   unregistered post renders nowhere and fails the gate.
+
+5. From the repo root run `pnpm check:blog`. If it reports any ✗ ERROR, fix the
+   article/frontmatter and re-run until it prints "✓ blog canon: N post(s) valid".
+   WARN lines are acceptable but tighten title/description toward the sweet spot
+   if it is cheap to do so.
+
+6. Write __OUT__/result.json:
+   {"status":"ok","slug":"<slug>","url":"https://www.aigenway.com/blog/<slug>",
+    "title":"<title>","primaryKeyword":"<kw>","notes":"<1 line: what you covered>"}
+   If you could not produce a gate-clean article, write status:"failed" with a
+   `notes` explaining why, and do NOT leave a half-written file registered.
+
+Do not commit, push, or deploy — the runner does that after independently
+re-checking the gate. Your job ends at a gate-clean article + result.json.

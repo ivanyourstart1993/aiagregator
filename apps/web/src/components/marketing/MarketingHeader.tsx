@@ -30,6 +30,9 @@ export async function MarketingHeader() {
             <Link href="/#pricing">{t('pricing')}</Link>
           </Button>
           <Button asChild variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground">
+            <Link href="/blog">{t('blog')}</Link>
+          </Button>
+          <Button asChild variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground">
             <Link href="/docs/getting-started">{t('docs')}</Link>
           </Button>
         </nav>

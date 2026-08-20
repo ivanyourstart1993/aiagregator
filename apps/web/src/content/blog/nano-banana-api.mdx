@@ -1,0 +1,94 @@
+---
+title: "Nano Banana API: Generate & Edit Images with Gemini"
+description: "Call Google's Nano Banana (Gemini image) model from your code with one API key and prepaid USD billing — text-to-image and image editing over a single REST endpoint, no GCP project required."
+date: "2026-06-01"
+updated: "2026-06-01"
+tags: ["Image generation", "Nano Banana", "Gemini"]
+primaryKeyword: "Nano Banana API"
+funnel: "BOFU"
+author:
+  name: "Aigenway"
+relatedDocs:
+  - label: "Getting started"
+    href: "/docs/getting-started"
+  - label: "Authentication"
+    href: "/docs/authentication"
+  - label: "Task lifecycle"
+    href: "/docs/task-lifecycle"
+---
+
+"Nano Banana" is the nickname for Google's Gemini image model — the one behind the wave of viral one-shot edits and photoreal generations. It is excellent at following instructions, keeping characters consistent, and editing an existing image instead of starting from scratch. The catch: getting programmatic access usually means a Google Cloud project, billing setup, and provider-specific SDKs.
+
+This guide shows the shortcut: call Nano Banana over a single REST endpoint with one API key and a prepaid USD balance, the same way you would call any other model.
+
+## What you get
+
+Through the Aigenway gateway, Nano Banana is exposed as the `google_banana` provider with two everyday methods:
+
+- `text_to_image` — generate an image from a prompt.
+- `image_edit` — edit one source image with an instruction prompt.
+
+Billing is pay-per-generation in real USD (no token math), requests are idempotent, and long jobs return a task you can poll or receive via webhook.
+
+## Generate an image from text
+
+Send a `POST` to `/v1/generations`. The `Idempotency-Key` header makes retries safe — resend the same key and you get the same result back instead of paying twice.
+
+```bash
+curl -X POST https://api.aigenway.com/v1/generations \
+  -H "Authorization: Bearer sk_live_..." \
+  -H "Idempotency-Key: $(uuidgen)" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "provider": "google_banana",
+    "model": "gemini-3.1-flash-image-preview",
+    "method": "text_to_image",
+    "params": {
+      "prompt": "a cinematic neon-lit ramen stall in the rain, shallow depth of field",
+      "aspect_ratio": "16:9"
+    }
+  }'
+```
+
+You can estimate the price first by sending the same body to `/v1/estimate` — handy for showing a cost to your users before you spend anything.
+
+<SignupCTA />
+
+## Edit an existing image
+
+`image_edit` takes a single source image plus an instruction. Pass the image as a URL (or an uploaded reference) in `input_images` and describe the change in the prompt:
+
+```bash
+curl -X POST https://api.aigenway.com/v1/generations \
+  -H "Authorization: Bearer sk_live_..." \
+  -H "Idempotency-Key: $(uuidgen)" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "provider": "google_banana",
+    "model": "gemini-3.1-flash-image-preview",
+    "method": "image_edit",
+    "params": {
+      "prompt": "replace the background with a snowy mountain range at golden hour",
+      "input_images": ["https://example.com/portrait.jpg"]
+    }
+  }'
+```
+
+A few practical notes:
+
+- Keep edits to one source image per request — the editing method is built around a single reference.
+- Be specific about what to change and what to keep ("same pose, same lighting") for consistent results.
+- For a sharper, higher-fidelity model, swap `gemini-3.1-flash-image-preview` for the Pro image model when you need quality over speed.
+
+## Handling the result
+
+Image generation is fast, but treat it like any async job: read the returned task, then poll its status or let a webhook deliver the finished asset. The unified task shape is the same across every model on the gateway, so the code you write for Nano Banana works unchanged when you add Veo or Kling later. See the [task lifecycle](/docs/task-lifecycle) and [webhooks](/docs/webhooks) docs for the exact contract.
+
+## Why go through one gateway
+
+The point is not just Nano Banana — it is that the *same* integration covers GPT Image, DALL·E, Imagen and the video models too. One key, one prepaid balance, one response shape. When Google ships the next image model, you change a string, not your billing relationship.
+
+<SignupCTA
+  title="Generate your first image in minutes"
+  description="Create a free account, copy your API key, and run the curl above against Nano Banana with prepaid USD billing — no GCP project, no per-provider contracts."
+/>

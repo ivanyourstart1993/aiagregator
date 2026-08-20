@@ -24,6 +24,12 @@ const nextConfig = {
       bodySizeLimit: '2mb',
     },
   },
+  webpack: (config) => {
+    // Blog `.mdx` sources are imported as raw strings and compiled at request
+    // time by next-mdx-remote, keeping content bundled for `output: standalone`.
+    config.module.rules.push({ test: /\.mdx?$/, type: 'asset/source' });
+    return config;
+  },
 };
 
 export default withNextIntl(nextConfig);

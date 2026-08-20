@@ -1,0 +1,100 @@
+---
+title: "Kling AI API: Text-to-Video, Image-to-Video & Motion Control"
+description: "Call Kling's video models through one API key with prepaid USD billing — text-to-video, image-to-video and Motion Control over a single REST endpoint, with idempotent requests and webhooks."
+date: "2026-05-28"
+updated: "2026-05-28"
+tags: ["Video generation", "Kling", "Motion Control"]
+primaryKeyword: "Kling API"
+funnel: "BOFU"
+author:
+  name: "Aigenway"
+relatedDocs:
+  - label: "Kling video guide"
+    href: "/docs/guides/kling-video"
+  - label: "Getting started"
+    href: "/docs/getting-started"
+  - label: "Webhooks"
+    href: "/docs/webhooks"
+---
+
+Kling is one of the strongest AI video models available — fluid motion, strong prompt adherence, and image-to-video that keeps your character on model. This guide covers how to call it from your own code: text-to-video, image-to-video, and the feature that sets it apart, **Motion Control**.
+
+Rather than managing a Kling account and credits directly, you call it through the Aigenway gateway: one API key, prepaid USD billing, and the same request/response shape you use for every other model.
+
+## Pick a version
+
+Kling ships several model versions with different speed/quality trade-offs. Availability moves quickly, so always confirm the exact model codes for your account with a quick call to the methods endpoint:
+
+```bash
+curl "https://api.aigenway.com/v1/methods?provider=kling" \
+  -H "Authorization: Bearer sk_live_..."
+```
+
+As a rough map of what the family looks like:
+
+| Tier | Good for | Notes |
+| --- | --- | --- |
+| Standard | Drafts, fast iteration | Lowest cost per second |
+| Pro | Production shots | Sharper detail and motion |
+| Master | Hero/cinematic clips | Highest fidelity, highest cost |
+| Turbo | Latency-sensitive flows | Faster turnaround |
+
+## Image-to-video
+
+The most common production use: animate a still you already control (a product render, a character art, a generated frame). Send the image plus a motion prompt:
+
+```bash
+curl -X POST https://api.aigenway.com/v1/generations \
+  -H "Authorization: Bearer sk_live_..." \
+  -H "Idempotency-Key: $(uuidgen)" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "provider": "kling",
+    "model": "kling-v2-master",
+    "method": "image_to_video",
+    "params": {
+      "prompt": "slow dolly-in, hair moving gently in the wind, cinematic",
+      "input_image": "https://example.com/character.png",
+      "duration": 5
+    }
+  }'
+```
+
+Video jobs take time, so the response is a task. Poll its status or — better — register a `callback_url` and let the webhook deliver the finished clip. The task contract is identical across every model on the gateway, so this code path also drives Veo and Seedance.
+
+<SignupCTA
+  title="Generate your first Kling clip"
+  description="Create a free account, add a few dollars, and run the request above. Prepaid USD billing means you only pay for the seconds you generate."
+/>
+
+## Motion Control: reuse motion you already like
+
+Motion Control is Kling's standout capability: take a **reference video** whose motion you want, and a **character image**, and transfer that motion onto your character. It is how you get consistent, repeatable choreography instead of re-rolling prompts and hoping.
+
+```bash
+curl -X POST https://api.aigenway.com/v1/generations \
+  -H "Authorization: Bearer sk_live_..." \
+  -H "Idempotency-Key: $(uuidgen)" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "provider": "kling",
+    "model": "kling-motion-control",
+    "method": "motion_control",
+    "params": {
+      "input_image": "https://example.com/character.png",
+      "reference_video": "https://example.com/dance-reference.mp4"
+    }
+  }'
+```
+
+This is a genuinely hard thing to find behind a clean API, and it unlocks use cases that prompt-only video cannot: branded mascots performing the same routine, avatars lip-syncing or dancing to a template, repeatable product demos. For exact parameters and limits, see the [Kling video guide](/docs/guides/kling-video).
+
+## Why one gateway beats a Kling-only account
+
+- **One integration, many models.** The same request shape calls Veo, Seedance and the image models — switch with a string, not a rewrite.
+- **Real USD billing.** No credit packs to forecast; pay per generation and read your balance from the API.
+- **Production plumbing included.** Idempotency keys, a queue, task state and signed webhooks out of the box.
+
+When a new Kling version lands, you point at the new model code and keep shipping.
+
+<SignupCTA />
