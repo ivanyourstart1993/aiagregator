@@ -76,7 +76,9 @@ grep -q "'$SLUG'" "$REPO/apps/web/src/content/blog/index.ts" || fail "$SLUG not 
 
 # 6. Commit + push (only the two blog files — never the infra drift).
 git -C "$REPO" add "apps/web/src/content/blog/$SLUG.mdx" "apps/web/src/content/blog/index.ts"
-git -C "$REPO" commit -m "feat(blog): add $SLUG post (autopilot)" >>"$LOG" 2>&1 || fail "nothing to commit for $SLUG"
+git -C "$REPO" \
+  -c user.name='aigenway-autopilot' -c user.email='autopilot@aigenway.com' \
+  commit -m "feat(blog): add $SLUG post (autopilot)" >>"$LOG" 2>&1 || fail "commit failed for $SLUG (see $LOG)"
 git -C "$REPO" push origin "HEAD:$BRANCH" >>"$LOG" 2>&1 || fail "push failed for $SLUG"
 
 # 7. Deploy: rebuild the web image and restart web (blog content is baked in).
