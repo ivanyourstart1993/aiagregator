@@ -173,7 +173,7 @@ export default async function BlogPostPage({ params }: BlogPostParams) {
       <SignupCTA
         className="mt-10"
         title="Ready to ship it?"
-        description="Create a free account, grab an API key, and call every model in this guide from your own code in minutes — prepaid USD billing, no per-provider setup."
+        description="Create a free account, grab an API key, and call every model in this guide from your own code in minutes — $5 in free credit to start, prepaid USD billing, no per-provider setup."
       />
     </article>
   );

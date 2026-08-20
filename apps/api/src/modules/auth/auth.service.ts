@@ -9,12 +9,14 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { Prisma, UserStatus, VerificationTokenType, type User } from '@aiagg/db';
-import { ErrorCode } from '@aiagg/shared';
+import { ErrorCode, NANO_PER_CENT } from '@aiagg/shared';
 import { verifyGoogleIdToken } from '@aiagg/shared';
 import * as argon2 from 'argon2';
 import { customAlphabet } from 'nanoid';
 import { PrismaService } from '../../common/prisma/prisma.service';
+import { BillingService } from '../billing/billing.service';
 import { MailService } from '../mail/mail.service';
+import { canonicalEmail, isDisposableEmail } from './disposable-domains';
 import type { AuthConfig } from '../../config/configuration';
 import type { LoginDto } from './dto/login.dto';
 import type { RegisterDto } from './dto/register.dto';
@@ -64,6 +66,7 @@ export class AuthService {
     private readonly config: ConfigService,
     private readonly mail: MailService,
     private readonly jwt: JwtService,
+    private readonly billing: BillingService,
   ) {
     const auth = this.config.get<AuthConfig>('auth');
     if (!auth) throw new Error('auth config namespace missing');
@@ -71,8 +74,45 @@ export class AuthService {
     this.webUrl = this.config.get<string>('webUrl') ?? 'http://localhost:3000';
   }
 
+  /**
+   * Grant the one-time welcome bonus (spendable BONUS balance) the first time an
+   * account reaches a verified state. Controlled by `WELCOME_BONUS_USD` (default
+   * 0 = disabled). Idempotent per real inbox via the `WELCOME:<canonicalEmail>`
+   * key, so calling it from every verification path — and across plus-tag / dot
+   * aliases of one mailbox — grants exactly once. Best-effort: a failure is
+   * logged but never blocks signup/verification.
+   */
+  private async grantWelcomeBonusIfEnabled(userId: string, email: string): Promise<void> {
+    const usd = Number(process.env.WELCOME_BONUS_USD ?? '0');
+    if (!Number.isFinite(usd) || usd <= 0) return;
+    const amountUnits = BigInt(Math.round(usd * 100)) * NANO_PER_CENT;
+    try {
+      // Key on the canonical email, not the userId: plus-tag / Gmail-dot aliases
+      // all resolve to one real inbox, so they share one grant and can't farm it.
+      // A second alias account calling this simply replays the first grant (no
+      // new credit) via the billing idempotency layer.
+      await this.billing.grantBonus({
+        userId,
+        amountUnits,
+        idempotencyKey: `WELCOME:${canonicalEmail(email)}`,
+        reason: 'welcome_bonus',
+        description: `Welcome bonus $${usd}`,
+      });
+    } catch (err) {
+      this.logger.error(
+        `welcome bonus grant failed for user ${userId}: ${(err as Error).message}`,
+      );
+    }
+  }
+
   async register(dto: RegisterDto): Promise<{ user: SafeUser }> {
     const email = dto.email.toLowerCase().trim();
+    if (isDisposableEmail(email)) {
+      throw new BadRequestException({
+        code: ErrorCode.INVALID_REQUEST,
+        message: 'Please sign up with a permanent email address.',
+      });
+    }
     const passwordHash = await argon2.hash(dto.password + this.auth.apiKeyPepper, {
       type: argon2.argon2id,
       memoryCost: 19456,
@@ -108,6 +148,10 @@ export class AuthService {
 
     if (!autoVerify) {
       await this.issueAndSendVerification(user.email, user.name ?? user.email);
+    } else {
+      // Dev/self-hosted shortcut: the account is verified on creation, so grant
+      // the welcome bonus now (the verifyEmail path would never run).
+      await this.grantWelcomeBonusIfEnabled(user.id, user.email);
     }
     return { user: toSafeUser(user) };
   }
@@ -163,6 +207,7 @@ export class AuthService {
       return updated;
     });
 
+    await this.grantWelcomeBonusIfEnabled(user.id, user.email);
     return { user: toSafeUser(user) };
   }
 
@@ -325,6 +370,15 @@ export class AuthService {
       return { user: toSafeUser(updated) };
     }
 
+    // Apply the same disposable-email guard as password signup, so the OAuth
+    // new-account path can't mint a bonus-eligible account on a throwaway domain.
+    if (isDisposableEmail(email)) {
+      throw new BadRequestException({
+        code: ErrorCode.INVALID_REQUEST,
+        message: 'Please sign up with a permanent email address.',
+      });
+    }
+
     const created = await this.prisma.$transaction(async (tx) => {
       const user = await tx.user.create({
         data: {
@@ -345,6 +399,8 @@ export class AuthService {
       });
       return user;
     });
+    // New account created via OAuth — verified by the IdP, so grant now.
+    await this.grantWelcomeBonusIfEnabled(created.id, created.email);
     return { user: toSafeUser(created) };
   }
 

@@ -22,7 +22,7 @@ export interface SignupCTAProps {
  */
 export function SignupCTA({
   title = 'Start building with one API key',
-  description = 'Get instant access to Nano Banana, Kling, Veo, Seedance and dozens more models behind one stable API — prepaid USD billing, no per-provider accounts. Free to start.',
+  description = 'Get instant access to Nano Banana, Kling, Veo, Seedance and dozens more models behind one stable API — prepaid USD billing, no per-provider accounts. Sign up and get $5 in free credit to start.',
   primaryLabel = 'Create your free API key',
   primaryHref = '/signup',
   secondaryLabel = 'Try the playground',
