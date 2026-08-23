@@ -10,6 +10,7 @@ import seedanceApi from './seedance-api.mdx?raw';
 import veo3Api from './veo-3-api.mdx?raw';
 import midjourneyApiAlternative from './midjourney-api-alternative.mdx?raw';
 import fluxApiAlternative from './flux-api-alternative.mdx?raw';
+import ideogramApiAlternative from './ideogram-api-alternative.mdx?raw';
 
 export interface RawPost {
   slug: string;
@@ -23,4 +24,5 @@ export const rawPosts: RawPost[] = [
   { slug: 'veo-3-api', raw: veo3Api },
   { slug: 'midjourney-api-alternative', raw: midjourneyApiAlternative },
   { slug: 'flux-api-alternative', raw: fluxApiAlternative },
+  { slug: 'ideogram-api-alternative', raw: ideogramApiAlternative },
 ];
