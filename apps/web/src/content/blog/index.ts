@@ -12,6 +12,7 @@ import midjourneyApiAlternative from './midjourney-api-alternative.mdx?raw';
 import fluxApiAlternative from './flux-api-alternative.mdx?raw';
 import ideogramApiAlternative from './ideogram-api-alternative.mdx?raw';
 import recraftApiAlternative from './recraft-api-alternative.mdx?raw';
+import stableDiffusionApiAlternative from './stable-diffusion-api-alternative.mdx?raw';
 
 export interface RawPost {
   slug: string;
@@ -27,4 +28,5 @@ export const rawPosts: RawPost[] = [
   { slug: 'flux-api-alternative', raw: fluxApiAlternative },
   { slug: 'ideogram-api-alternative', raw: ideogramApiAlternative },
   { slug: 'recraft-api-alternative', raw: recraftApiAlternative },
+  { slug: 'stable-diffusion-api-alternative', raw: stableDiffusionApiAlternative },
 ];
