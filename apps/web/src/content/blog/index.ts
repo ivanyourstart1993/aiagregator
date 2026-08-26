@@ -13,6 +13,7 @@ import fluxApiAlternative from './flux-api-alternative.mdx?raw';
 import ideogramApiAlternative from './ideogram-api-alternative.mdx?raw';
 import recraftApiAlternative from './recraft-api-alternative.mdx?raw';
 import stableDiffusionApiAlternative from './stable-diffusion-api-alternative.mdx?raw';
+import leonardoAiApiAlternative from './leonardo-ai-api-alternative.mdx?raw';
 
 export interface RawPost {
   slug: string;
@@ -29,4 +30,5 @@ export const rawPosts: RawPost[] = [
   { slug: 'ideogram-api-alternative', raw: ideogramApiAlternative },
   { slug: 'recraft-api-alternative', raw: recraftApiAlternative },
   { slug: 'stable-diffusion-api-alternative', raw: stableDiffusionApiAlternative },
+  { slug: 'leonardo-ai-api-alternative', raw: leonardoAiApiAlternative },
 ];
