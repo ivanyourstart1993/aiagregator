@@ -1,0 +1,112 @@
+---
+title: "Google Imagen 4 API: Call It With One Key"
+description: "Call Google Imagen 4 (including Ultra) through one API key and prepaid USD billing — no separate Google Cloud project. Real curl, exact model codes via /v1/methods."
+date: "2026-08-28"
+updated: "2026-08-28"
+tags: ["Image generation", "Imagen", "Google"]
+primaryKeyword: "Google Imagen 4 API"
+funnel: "BOFU"
+author:
+  name: "Aigenway"
+relatedDocs:
+  - label: "Methods"
+    href: "/docs/methods"
+  - label: "Getting started"
+    href: "/docs/getting-started"
+  - label: "Task lifecycle"
+    href: "/docs/task-lifecycle"
+ogImage: "/blog/imagen-4-api.jpg"
+---
+
+Imagen 4 is Google's flagship text-to-image model, including the higher-fidelity Ultra tier, and it normally lives behind Vertex AI — a GCP project, billing setup, and quota approval before your first prompt. Through the Aigenway gateway you skip that entirely: Imagen 4 sits behind the same `google_banana` provider, one API key, and a prepaid USD balance you already use for every other model.
+
+## What you get
+
+Google ships Imagen 4 as a family — a standard tier for everyday generation and an Ultra tier for maximum prompt fidelity and detail, trading speed for quality. Google updates the exact version strings on its own schedule, so confirm the live codes on your account instead of hardcoding one from a blog post:
+
+```bash
+curl "https://api.aigenway.com/v1/methods?provider=google_banana" \
+  -H "Authorization: Bearer sk_live_..."
+```
+
+That call returns the current `model` values for `google_banana` — including whichever Imagen 4 and Imagen 4 Ultra codes are live — plus the `method` names and per-image pricing available on your account right now.
+
+## Generate an image from text
+
+Once you have a model code, the request is a standard `POST` to `/v1/generations`. The `Idempotency-Key` header makes retries safe on a flaky connection — resend the same key and you get the same result back, not a second charge:
+
+```bash
+curl -X POST https://api.aigenway.com/v1/generations \
+  -H "Authorization: Bearer sk_live_..." \
+  -H "Idempotency-Key: $(uuidgen)" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "provider": "google_banana",
+    "model": "imagen-4.0-generate",
+    "method": "text_to_image",
+    "params": {
+      "prompt": "a weathered lighthouse on a rocky cliff at dusk, dramatic clouds, photorealistic",
+      "aspect_ratio": "16:9"
+    }
+  }'
+```
+
+Swap the `model` string for whichever Imagen 4 Ultra code `/v1/methods` returned when prompt fidelity matters more than turnaround time — the rest of the request shape stays identical.
+
+<SignupCTA
+  title="Generate your first Imagen 4 image"
+  description="Create a free account, copy your API key, and run the curl above against Imagen 4 — $5 in free credit to start, prepaid USD billing, no GCP project required."
+/>
+
+## Estimate cost before you spend it
+
+Imagen 4 and Imagen 4 Ultra price differently per image, and that difference is easy to lose track of across a fleet of models. Send the same request body to `/v1/estimate` first to get a cost figure back without generating anything — useful for showing a price to your own users before they commit:
+
+```bash
+curl -X POST https://api.aigenway.com/v1/estimate \
+  -H "Authorization: Bearer sk_live_..." \
+  -H "Content-Type: application/json" \
+  -d '{
+    "provider": "google_banana",
+    "model": "imagen-4.0-generate",
+    "method": "text_to_image",
+    "params": {
+      "prompt": "a weathered lighthouse on a rocky cliff at dusk, dramatic clouds, photorealistic",
+      "aspect_ratio": "16:9"
+    }
+  }'
+```
+
+## Poll or webhook for the result
+
+Generation returns a task, not a finished image inline — read the task ID off the response and get the output one of two ways:
+
+1. **Poll.** `GET /v1/generations/{task_id}` until `status` flips to `succeeded` (or `failed`), then read the image URL off the response.
+2. **Webhook.** Set a `callback_url` on the request and the gateway `POST`s the finished task to your endpoint the moment it's ready — no polling loop to write or rate-limit yourself.
+
+```bash
+curl -X POST https://api.aigenway.com/v1/generations \
+  -H "Authorization: Bearer sk_live_..." \
+  -H "Idempotency-Key: $(uuidgen)" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "provider": "google_banana",
+    "model": "imagen-4.0-generate",
+    "method": "text_to_image",
+    "params": { "prompt": "macro shot of dew on a spiderweb, morning light" },
+    "callback_url": "https://your-app.example.com/webhooks/aigenway"
+  }'
+```
+
+The task fields, status values and webhook signature are identical across every model on the gateway — the code you write for Imagen 4 also drives Nano Banana, Flux and every other image model without changes. Full contract in the [task lifecycle](/docs/task-lifecycle) and [webhooks](/docs/webhooks) docs.
+
+## Why one gateway beats a GCP project
+
+- **No cloud project to provision.** No Vertex AI enablement, no service account keys, no quota request — sign up and call the endpoint.
+- **One integration, every model.** The same `provider`/`model`/`method`/`params` shape that calls Imagen 4 also calls Nano Banana, Flux, Ideogram and the video models — swap a string, not your SDK.
+- **Real USD billing.** A prepaid balance replaces GCP invoicing and committed spend; check what's left from the API at any time.
+- **Idempotency and webhooks included.** Retry-safe requests and signed callbacks are already built into the task contract, not something you bolt on yourself.
+
+When Google ships Imagen 5 or retires a tier, you pull the new code from `/v1/methods` and change one string — no re-provisioning, no new contract.
+
+<SignupCTA />

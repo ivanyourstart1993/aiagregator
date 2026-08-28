@@ -4,6 +4,7 @@
 //
 // To publish a new post: add `<slug>.mdx` next to this file, import it here,
 // and append an entry below. The filename stem is the URL slug.
+import imagen4Api from './imagen-4-api.mdx?raw';
 import nanoBananaApi from './nano-banana-api.mdx?raw';
 import klingApi from './kling-api.mdx?raw';
 import seedanceApi from './seedance-api.mdx?raw';
@@ -22,6 +23,7 @@ export interface RawPost {
 }
 
 export const rawPosts: RawPost[] = [
+  { slug: 'imagen-4-api', raw: imagen4Api },
   { slug: 'nano-banana-api', raw: nanoBananaApi },
   { slug: 'kling-api', raw: klingApi },
   { slug: 'seedance-api', raw: seedanceApi },
