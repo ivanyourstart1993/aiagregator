@@ -1,0 +1,103 @@
+---
+title: "GPT Image 1 API: Call OpenAI's Image Model, One Key"
+description: "Call OpenAI's gpt-image-1 via one API key and prepaid USD billing — no separate OpenAI account. Real curl requests and exact model codes via /v1/methods."
+date: "2026-08-29"
+updated: "2026-08-29"
+tags: ["Image generation", "OpenAI", "gpt-image-1"]
+primaryKeyword: "gpt-image-1 API"
+funnel: "BOFU"
+author:
+  name: "Aigenway"
+relatedDocs:
+  - label: "Methods"
+    href: "/docs/methods"
+  - label: "Getting started"
+    href: "/docs/getting-started"
+  - label: "Idempotency"
+    href: "/docs/idempotency"
+ogImage: "/blog/gpt-image-1-api.jpg"
+---
+
+`gpt-image-1` is OpenAI's native multimodal image model — the one behind ChatGPT's in-chat image generation, good at following detailed prompts and rendering text inside an image. Calling it directly means an OpenAI account, its own billing, and its own SDK. Through the Aigenway gateway it sits behind the `openai_image` provider instead — one API key, one prepaid USD balance, the same request shape you use for every other model.
+
+## What you get
+
+`openai_image` covers the whole OpenAI image lineup — `gpt-image-1`, its newer sibling `gpt-image-2`, and the legacy `dall-e-3` / `dall-e-2` — behind two methods: `text_to_image` and `image_edit`. OpenAI can ship new codes or retire old ones on its own schedule, so pull the live list instead of hardcoding one:
+
+```bash
+curl "https://api.aigenway.com/v1/methods?provider=openai_image" \
+  -H "Authorization: Bearer sk_live_..."
+```
+
+The response gives you the current `model` codes, the `method` names each supports, and per-image pricing on your account right now — confirm `gpt-image-1` is listed before you build against it.
+
+## Generate an image from text
+
+`POST` to `/v1/generations` with `provider`, `model`, `method` and `params`. The `Idempotency-Key` header makes retries safe — resend the same key on a dropped connection and you get the same result back, not a second charge:
+
+```bash
+curl -X POST https://api.aigenway.com/v1/generations \
+  -H "Authorization: Bearer sk_live_..." \
+  -H "Idempotency-Key: $(uuidgen)" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "provider": "openai_image",
+    "model": "gpt-image-1",
+    "method": "text_to_image",
+    "params": {
+      "prompt": "a hand-lettered coffee shop sign reading OPEN 7AM, warm morning light",
+      "resolution": "1024x1024",
+      "mode": "medium"
+    }
+  }'
+```
+
+`mode` sets the quality tier for `gpt-image-1` (`low` / `medium` / `high` / `auto`), and `resolution` picks the output size (`1024x1024`, `1024x1536`, `1536x1024`, or `auto`). Both are worth reading off `/v1/methods` too, since the accepted values differ across the OpenAI models sharing this provider.
+
+<SignupCTA
+  title="Generate your first gpt-image-1 image"
+  description="Create a free account, copy your API key, and run the curl above against gpt-image-1 — $5 in free credit to start, prepaid USD billing, no OpenAI account required."
+/>
+
+## Edit an existing image
+
+`gpt-image-1` also handles composite edits — up to six input images plus a prompt describing the change, with an optional PNG mask to constrain the region:
+
+```bash
+curl -X POST https://api.aigenway.com/v1/generations \
+  -H "Authorization: Bearer sk_live_..." \
+  -H "Idempotency-Key: $(uuidgen)" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "provider": "openai_image",
+    "model": "gpt-image-1",
+    "method": "image_edit",
+    "params": {
+      "prompt": "add a small orange cat sleeping on the windowsill",
+      "input_images": ["https://example.com/kitchen.png"],
+      "resolution": "1024x1024"
+    }
+  }'
+```
+
+`background` is another `gpt-image-1`-specific option worth knowing — set it to `transparent` when you need a cutout instead of a filled background, or leave it `auto` otherwise.
+
+## Poll or webhook for the result
+
+Both methods return a task, not a finished image inline. Read the task ID off the response, then get the output one of two ways:
+
+1. **Poll.** `GET /v1/generations/{task_id}` until `status` flips to `succeeded` (or `failed`), then read the image URL off the response.
+2. **Webhook.** Set a `callback_url` on the request and the gateway `POST`s the finished task to your endpoint the moment it's ready — no polling loop to write or rate-limit yourself.
+
+The task shape, status values and webhook signature are identical across every model on the gateway — the code you write for `gpt-image-1` also drives Nano Banana, Imagen 4 and every video model unchanged. Full contract in the [task lifecycle](/docs/task-lifecycle) and [webhooks](/docs/webhooks) docs.
+
+## Why one gateway beats a provider-only account
+
+- **No separate OpenAI account.** No API key to provision on platform.openai.com, no separate invoice to reconcile — sign up once and call the endpoint.
+- **One integration, every model.** The same `provider`/`model`/`method`/`params` shape that calls `gpt-image-1` also calls DALL·E, Imagen, Nano Banana and the video models — swap a string, not your SDK.
+- **Real USD billing.** A prepaid balance replaces per-provider invoicing; check what's left from the API at any time.
+- **Idempotency and webhooks included.** Retry-safe requests and signed callbacks are already built into the task contract, not something you bolt on yourself.
+
+When OpenAI ships `gpt-image-2` or retires a tier, pull the new code from `/v1/methods` and change one string — no new account, no new contract.
+
+<SignupCTA />

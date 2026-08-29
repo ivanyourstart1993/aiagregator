@@ -16,6 +16,7 @@ import recraftApiAlternative from './recraft-api-alternative.mdx?raw';
 import stableDiffusionApiAlternative from './stable-diffusion-api-alternative.mdx?raw';
 import leonardoAiApiAlternative from './leonardo-ai-api-alternative.mdx?raw';
 import runwayApiAlternative from './runway-api-alternative.mdx?raw';
+import gptImage1Api from './gpt-image-1-api.mdx?raw';
 
 export interface RawPost {
   slug: string;
@@ -35,4 +36,5 @@ export const rawPosts: RawPost[] = [
   { slug: 'stable-diffusion-api-alternative', raw: stableDiffusionApiAlternative },
   { slug: 'leonardo-ai-api-alternative', raw: leonardoAiApiAlternative },
   { slug: 'runway-api-alternative', raw: runwayApiAlternative },
+  { slug: 'gpt-image-1-api', raw: gptImage1Api },
 ];
