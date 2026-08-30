@@ -1,0 +1,106 @@
+---
+title: "DALL·E 3 API: Call It With One Key, No OpenAI Account"
+description: "Call OpenAI's DALL·E 3 through one API key and prepaid USD billing — no separate OpenAI account. Real curl requests and exact model codes via /v1/methods."
+date: "2026-08-30"
+updated: "2026-08-30"
+tags: ["Image generation", "OpenAI", "DALL-E"]
+primaryKeyword: "DALL·E 3 API"
+funnel: "BOFU"
+author:
+  name: "Aigenway"
+relatedDocs:
+  - label: "Methods"
+    href: "/docs/methods"
+  - label: "Getting started"
+    href: "/docs/getting-started"
+  - label: "Idempotency"
+    href: "/docs/idempotency"
+ogImage: "/blog/dalle-3-api.jpg"
+---
+
+DALL·E 3 is still OpenAI's most widely integrated image model — the one behind ChatGPT's image generation for years before `gpt-image-1` shipped, and still the model plenty of production pipelines are built on for its style and prompt-adherence. Calling it directly means an OpenAI account, its own billing, and its own SDK. Through the Aigenway gateway it sits behind the `openai_image` provider instead — one API key, one prepaid USD balance, the same request shape you use for every other model.
+
+## What you get
+
+`openai_image` covers the full OpenAI image lineup — `dall-e-3`, the older `dall-e-2`, and the newer `gpt-image-1` family — behind shared methods like `text_to_image`. OpenAI can adjust availability or pricing on its own schedule, so pull the live list instead of hardcoding a model code from a blog post:
+
+```bash
+curl "https://api.aigenway.com/v1/methods?provider=openai_image" \
+  -H "Authorization: Bearer sk_live_..."
+```
+
+The response gives you the current `model` codes, the `method` names each one supports, and per-image pricing on your account right now — confirm `dall-e-3` is listed before you build against it.
+
+## Generate an image from text
+
+`POST` to `/v1/generations` with `provider`, `model`, `method` and `params`. The `Idempotency-Key` header makes retries safe — resend the same key on a dropped connection and you get the same result back, not a second charge:
+
+```bash
+curl -X POST https://api.aigenway.com/v1/generations \
+  -H "Authorization: Bearer sk_live_..." \
+  -H "Idempotency-Key: $(uuidgen)" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "provider": "openai_image",
+    "model": "dall-e-3",
+    "method": "text_to_image",
+    "params": {
+      "prompt": "a vintage travel poster of a mountain train station at sunrise, bold flat colors",
+      "resolution": "1024x1024",
+      "quality": "hd",
+      "style": "vivid"
+    }
+  }'
+```
+
+`quality` (`standard` / `hd`) and `style` (`vivid` / `natural`) are DALL·E 3-specific knobs — `vivid` pushes toward hyper-real, dramatic output, `natural` toward more realistic, less stylized results. `resolution` accepts `1024x1024`, `1792x1024`, or `1024x1792`. Check `/v1/methods` for the exact accepted values, since they differ from the other models sharing this provider.
+
+<SignupCTA
+  title="Generate your first DALL·E 3 image"
+  description="Create a free account, copy your API key, and run the curl above against DALL·E 3 — $5 in free credit to start, prepaid USD billing, no OpenAI account required."
+/>
+
+## Read back the revised prompt
+
+DALL·E 3 rewrites most prompts internally before generating, adding detail the model decides it needs — which means the image you get back doesn't always match your input prompt verbatim. The task response includes that rewritten prompt alongside the image, so you can log or display what actually drove the output:
+
+```bash
+curl https://api.aigenway.com/v1/generations/{task_id} \
+  -H "Authorization: Bearer sk_live_..."
+```
+
+Look for the `revised_prompt` field once `status` is `succeeded`. If your pipeline depends on tight prompt fidelity — product shots, brand assets with exact copy — factor this in, or compare results against `gpt-image-1` on the same provider, which follows prompts more literally.
+
+## Poll or webhook for the result
+
+Generation returns a task, not a finished image inline. Read the task ID off the response, then get the output one of two ways:
+
+1. **Poll.** `GET /v1/generations/{task_id}` until `status` flips to `succeeded` (or `failed`), then read the image URL and `revised_prompt` off the response.
+2. **Webhook.** Set a `callback_url` on the request and the gateway `POST`s the finished task to your endpoint the moment it's ready — no polling loop to write or rate-limit yourself.
+
+```bash
+curl -X POST https://api.aigenway.com/v1/generations \
+  -H "Authorization: Bearer sk_live_..." \
+  -H "Idempotency-Key: $(uuidgen)" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "provider": "openai_image",
+    "model": "dall-e-3",
+    "method": "text_to_image",
+    "params": { "prompt": "a cross-section illustration of a lighthouse, technical diagram style" },
+    "callback_url": "https://your-app.example.com/webhooks/aigenway"
+  }'
+```
+
+The task shape, status values and webhook signature are identical across every model on the gateway — the code you write for DALL·E 3 also drives `gpt-image-1`, Imagen 4 and every video model unchanged. Full contract in the [task lifecycle](/docs/task-lifecycle) and [webhooks](/docs/webhooks) docs.
+
+## Why one gateway beats a provider-only account
+
+- **No separate OpenAI account.** No API key to provision on platform.openai.com, no separate invoice to reconcile — sign up once and call the endpoint.
+- **One integration, every model.** The same `provider`/`model`/`method`/`params` shape that calls DALL·E 3 also calls `gpt-image-1`, Imagen, Nano Banana and the video models — swap a string, not your SDK.
+- **Real USD billing.** A prepaid balance replaces per-provider invoicing; check what's left from the API at any time.
+- **Idempotency and webhooks included.** Retry-safe requests and signed callbacks are already built into the task contract, not something you bolt on yourself.
+
+Whether you're maintaining an existing DALL·E 3 integration or picking it for a new one, the gateway path stays the same — pull the current code from `/v1/methods`, and switch models later by changing one string, not your whole stack.
+
+<SignupCTA />
