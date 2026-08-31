@@ -18,6 +18,7 @@ import leonardoAiApiAlternative from './leonardo-ai-api-alternative.mdx?raw';
 import runwayApiAlternative from './runway-api-alternative.mdx?raw';
 import gptImage1Api from './gpt-image-1-api.mdx?raw';
 import dalle3Api from './dalle-3-api.mdx?raw';
+import falAiAlternative from './fal-ai-alternative.mdx?raw';
 
 export interface RawPost {
   slug: string;
@@ -39,4 +40,5 @@ export const rawPosts: RawPost[] = [
   { slug: 'runway-api-alternative', raw: runwayApiAlternative },
   { slug: 'gpt-image-1-api', raw: gptImage1Api },
   { slug: 'dalle-3-api', raw: dalle3Api },
+  { slug: 'fal-ai-alternative', raw: falAiAlternative },
 ];
