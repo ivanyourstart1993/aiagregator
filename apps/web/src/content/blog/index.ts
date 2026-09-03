@@ -21,6 +21,7 @@ import dalle3Api from './dalle-3-api.mdx?raw';
 import falAiAlternative from './fal-ai-alternative.mdx?raw';
 import replicateApiAlternative from './replicate-api-alternative.mdx?raw';
 import aimlapiAlternative from './aimlapi-alternative.mdx?raw';
+import togetherAiImagesAlternative from './together-ai-images-alternative.mdx?raw';
 
 export interface RawPost {
   slug: string;
@@ -45,4 +46,5 @@ export const rawPosts: RawPost[] = [
   { slug: 'fal-ai-alternative', raw: falAiAlternative },
   { slug: 'replicate-api-alternative', raw: replicateApiAlternative },
   { slug: 'aimlapi-alternative', raw: aimlapiAlternative },
+  { slug: 'together-ai-images-alternative', raw: togetherAiImagesAlternative },
 ];
