@@ -23,6 +23,7 @@ import replicateApiAlternative from './replicate-api-alternative.mdx?raw';
 import aimlapiAlternative from './aimlapi-alternative.mdx?raw';
 import togetherAiImagesAlternative from './together-ai-images-alternative.mdx?raw';
 import pikaApiAlternative from './pika-api-alternative.mdx?raw';
+import lumaDreamMachineApiAlternative from './luma-dream-machine-api-alternative.mdx?raw';
 
 export interface RawPost {
   slug: string;
@@ -49,4 +50,5 @@ export const rawPosts: RawPost[] = [
   { slug: 'aimlapi-alternative', raw: aimlapiAlternative },
   { slug: 'together-ai-images-alternative', raw: togetherAiImagesAlternative },
   { slug: 'pika-api-alternative', raw: pikaApiAlternative },
+  { slug: 'luma-dream-machine-api-alternative', raw: lumaDreamMachineApiAlternative },
 ];
