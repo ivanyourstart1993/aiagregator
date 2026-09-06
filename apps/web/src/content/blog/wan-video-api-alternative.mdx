@@ -1,0 +1,101 @@
+---
+title: "Wan 2.2 API Alternative: Kling, Veo 3 & Seedance, One Key"
+description: "Wan 2.2 isn't on the gateway. The honest trade-off, and how to get comparable video from Kling, Veo 3 and Seedance behind one API key and prepaid USD billing."
+date: "2026-09-06"
+updated: "2026-09-06"
+tags: ["Video generation", "Wan", "Alternatives"]
+primaryKeyword: "Wan 2.2 API alternative"
+funnel: "BOFU"
+author:
+  name: "Aigenway"
+relatedDocs:
+  - label: "Kling video guide"
+    href: "/docs/guides/kling-video"
+  - label: "Task lifecycle"
+    href: "/docs/task-lifecycle"
+  - label: "Getting started"
+    href: "/docs/getting-started"
+ogImage: "/blog/wan-video-api-alternative.jpg"
+---
+
+Alibaba's Wan 2.2 is not on Aigenway, and we're not going to pretend otherwise. If you're looking for a Wan 2.2 API alternative because you want prepaid USD billing instead of GPU-hour math, or a hosted call instead of standing up your own inference, here's the honest comparison — and how Kling, Veo 3 and Seedance cover the same ground behind one API key.
+
+## Why Wan 2.2 isn't here, and what you're trading away
+
+Wan 2.2 is open-weight, which is its whole draw: you can self-host it on your own GPUs, fine-tune it on custom data, and run it with no per-generation vendor fee once the hardware is paid for. We don't proxy it, and we're not going to fake that trade-off — a hosted gateway can't hand you the weights or a LoRA fine-tune slot. If self-hosting or fine-tuning on Wan specifically is the actual requirement, keep that stack. What you gain by switching to a hosted alternative is everything self-hosting costs you in ops time: no GPU provisioning, no queue to manage, no model server to patch, and billing you can read from an API instead of a cloud invoice.
+
+## What replaces it: Kling, Veo 3, Seedance
+
+These three cover what most Wan 2.2 users are actually rendering — image-to-video animation, native-audio generation, and fast, cheap iteration for drafts — without the infrastructure:
+
+- **Kling** — fluid motion and strong image-to-video, plus Motion Control for transferring a reference video's motion onto a character.
+- **Veo 3** — Google's flagship, with audio (dialogue, SFX, ambience) generated in the same pass as the picture.
+- **Seedance** — ByteDance's model, fast render times and a low cost per second, a good default for volume drafts and quick concept passes.
+
+Confirm the live model codes for whichever one you pick before hardcoding a string — availability and versions move:
+
+```bash
+curl "https://api.aigenway.com/v1/methods?provider=kling" \
+  -H "Authorization: Bearer sk_live_..."
+```
+
+## A concrete call: image-to-video
+
+The core Wan 2.2 use case — animate a still frame with a motion prompt — maps directly onto the same request shape here:
+
+```bash
+curl -X POST https://api.aigenway.com/v1/generations \
+  -H "Authorization: Bearer sk_live_..." \
+  -H "Idempotency-Key: $(uuidgen)" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "provider": "kling",
+    "model": "kling-v2-master",
+    "method": "image_to_video",
+    "params": {
+      "prompt": "camera drifts left, steam rising off the street, neon reflections in puddles",
+      "input_image": "https://example.com/frame.png",
+      "duration": 5
+    }
+  }'
+```
+
+`Idempotency-Key` makes retries safe — resend the same key on a dropped connection and you get back the same task instead of paying for a second render.
+
+<SignupCTA
+  title="Try the switch from Wan 2.2"
+  description="Create a free account, get $5 in free credit, and run the request above against Kling, Veo 3 or Seedance — prepaid per-second USD, no GPU to provision."
+/>
+
+## The async task and webhook flow
+
+Video generation is never instant, whether you're queuing jobs on your own GPU cluster or calling a hosted model — the `POST` above returns a task in `queued` or `processing` state, not a finished clip. Two ways to get the result:
+
+1. **Poll.** `GET /v1/generations/{task_id}` until `status` becomes `succeeded` (or `failed`), then read the output URL off the response.
+2. **Webhook.** Set a `callback_url` on the request and the gateway `POST`s the finished task to your endpoint as soon as it's ready — no polling loop to write, and no queue depth to babysit.
+
+```bash
+curl -X POST https://api.aigenway.com/v1/generations \
+  -H "Authorization: Bearer sk_live_..." \
+  -H "Idempotency-Key: $(uuidgen)" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "provider": "seedance",
+    "model": "seedance-1-lite",
+    "method": "text_to_video",
+    "params": { "prompt": "a cargo ship glides under a bridge at dawn, wide aerial shot", "duration": 5 },
+    "callback_url": "https://your-app.example.com/webhooks/aigenway"
+  }'
+```
+
+The task shape — fields, status values, webhook signature — is identical across Kling, Veo 3 and Seedance, so code written against one drives all three. Details in the [task lifecycle](/docs/task-lifecycle) docs.
+
+## Why one gateway beats self-hosting Wan 2.2
+
+- **Three models, no cluster.** Swap `provider`/`model` to compare Kling against Veo 3 or Seedance on the same brief instead of maintaining GPU capacity for one.
+- **Prepaid per-second USD.** One balance you top up and draw down, no idle GPU cost between jobs.
+- **Production plumbing included.** Idempotency keys, a queue, task state and signed webhooks, already built — the parts of a self-hosted stack that take the longest to get right.
+
+If self-hosting or fine-tuning Wan 2.2 is genuinely the requirement, that trade-off is real and this gateway won't replace it. For everything else — prompt-driven and image-to-video generation without the ops overhead — Kling, Veo 3 and Seedance behind one key cover it, and you can compare all three without rewriting your integration each time.
+
+<SignupCTA />
