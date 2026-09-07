@@ -25,6 +25,7 @@ import togetherAiImagesAlternative from './together-ai-images-alternative.mdx?ra
 import pikaApiAlternative from './pika-api-alternative.mdx?raw';
 import lumaDreamMachineApiAlternative from './luma-dream-machine-api-alternative.mdx?raw';
 import wanVideoApiAlternative from './wan-video-api-alternative.mdx?raw';
+import hailuoApiAlternative from './hailuo-api-alternative.mdx?raw';
 
 export interface RawPost {
   slug: string;
@@ -53,4 +54,5 @@ export const rawPosts: RawPost[] = [
   { slug: 'pika-api-alternative', raw: pikaApiAlternative },
   { slug: 'luma-dream-machine-api-alternative', raw: lumaDreamMachineApiAlternative },
   { slug: 'wan-video-api-alternative', raw: wanVideoApiAlternative },
+  { slug: 'hailuo-api-alternative', raw: hailuoApiAlternative },
 ];
