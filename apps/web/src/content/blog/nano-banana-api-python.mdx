@@ -1,0 +1,136 @@
+---
+title: "Nano Banana API Python Example: requests, No SDK"
+description: "Copy-paste Python using requests to call Nano Banana (Gemini image) text-to-image and image-edit through one gateway API key, then poll or webhook for the result."
+date: "2026-09-08"
+updated: "2026-09-08"
+tags: ["Image generation", "Nano Banana", "Python"]
+primaryKeyword: "Nano Banana API Python example"
+funnel: "MOFU"
+author:
+  name: "Aigenway"
+relatedDocs:
+  - label: "Getting started"
+    href: "/docs/getting-started"
+  - label: "Task lifecycle"
+    href: "/docs/task-lifecycle"
+  - label: "Nano Banana API"
+    href: "/blog/nano-banana-api"
+ogImage: "/blog/nano-banana-api-python.jpg"
+---
+
+Most "Nano Banana API" write-ups stop at a `curl` command. This one is Python: a working `requests` script that generates an image, edits it, and reads back the result — no Google Cloud SDK, no provider-specific client library, just `requests` and one API key.
+
+## Set up the client
+
+Nano Banana (Google's Gemini image model) sits behind the `google_banana` provider on the gateway. You only need `requests` and your API key — no `google-generativeai` package, no service account JSON:
+
+```python
+import os
+import uuid
+import requests
+
+API_KEY = os.environ["AIGENWAY_API_KEY"]  # sk_live_...
+BASE_URL = "https://api.aigenway.com/v1"
+
+session = requests.Session()
+session.headers.update({
+    "Authorization": f"Bearer {API_KEY}",
+    "Content-Type": "application/json",
+})
+```
+
+Confirm the exact model codes live on your account before hardcoding one — providers add and retire versions on their own schedule:
+
+```python
+resp = session.get(f"{BASE_URL}/methods", params={"provider": "google_banana"})
+resp.raise_for_status()
+print(resp.json())  # model codes, supported methods, current pricing
+```
+
+## Generate an image from text
+
+`POST /v1/generations` with `provider`, `model`, `method`, `params`, and an `Idempotency-Key` so a retried request never double-charges you:
+
+```python
+def create_generation(provider, model, method, params):
+    resp = session.post(
+        f"{BASE_URL}/generations",
+        headers={"Idempotency-Key": str(uuid.uuid4())},
+        json={
+            "provider": provider,
+            "model": model,
+            "method": method,
+            "params": params,
+        },
+    )
+    resp.raise_for_status()
+    return resp.json()
+
+task = create_generation(
+    "google_banana",
+    "gemini-3.1-flash-image-preview",
+    "text_to_image",
+    {
+        "prompt": "a cinematic neon-lit ramen stall in the rain, shallow depth of field",
+        "aspect_ratio": "16:9",
+    },
+)
+print(task["id"], task["status"])
+```
+
+<SignupCTA
+  title="Run this script against your own key"
+  description="Create a free account, drop your key into AIGENWAY_API_KEY, and this exact Python hits Nano Banana in minutes — $5 free credit, prepaid USD billing, no GCP project."
+/>
+
+## Edit an existing image
+
+`image_edit` takes one source image plus an instruction — pass the source as a URL in `input_images` and reuse the same `create_generation` helper:
+
+```python
+edit_task = create_generation(
+    "google_banana",
+    "gemini-3.1-flash-image-preview",
+    "image_edit",
+    {
+        "prompt": "replace the background with a snowy mountain range at golden hour",
+        "input_images": ["https://example.com/portrait.jpg"],
+    },
+)
+print(edit_task["id"], edit_task["status"])
+```
+
+Keep edits to a single source image per request, and be explicit about what should stay the same ("same pose, same lighting") — vague prompts produce inconsistent edits.
+
+## Poll or webhook for the result
+
+Both calls above return a task, not a finished image — generation happens async. Poll it in a small loop, or skip the loop entirely with a webhook.
+
+```python
+import time
+
+def wait_for_result(task_id, timeout=120, interval=2):
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        resp = session.get(f"{BASE_URL}/generations/{task_id}")
+        resp.raise_for_status()
+        data = resp.json()
+        if data["status"] in ("succeeded", "failed"):
+            return data
+        time.sleep(interval)
+    raise TimeoutError(f"task {task_id} did not finish in time")
+
+result = wait_for_result(task["id"])
+print(result["status"], result.get("outputs"))
+```
+
+For production code, skip the polling loop and set `callback_url` on the original request instead — the gateway `POST`s the finished task to your endpoint the moment it's ready, signed so you can verify it came from Aigenway. The task shape, status values, and webhook signature are identical for every model on the gateway, so this same `wait_for_result` helper works unchanged once you add Imagen or a video model. Full contract in the [task lifecycle](/docs/task-lifecycle) docs.
+
+## Why this beats a provider SDK
+
+- **No SDK dependency.** `requests` (or any HTTP client) is enough — nothing to pin, nothing to upgrade when Google ships a breaking client release.
+- **Same script, every model.** Swap `provider`/`model` and the identical `create_generation`/`wait_for_result` functions call GPT Image, Imagen 4, or Kling — you write the async handling once.
+- **Prepaid USD billing.** No Google Cloud billing account, no per-token math — check your balance from the API.
+- **Idempotent by default.** The `Idempotency-Key` header means a retried request on a flaky connection never generates (or bills) twice.
+
+<SignupCTA />

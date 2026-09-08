@@ -26,6 +26,7 @@ import pikaApiAlternative from './pika-api-alternative.mdx?raw';
 import lumaDreamMachineApiAlternative from './luma-dream-machine-api-alternative.mdx?raw';
 import wanVideoApiAlternative from './wan-video-api-alternative.mdx?raw';
 import hailuoApiAlternative from './hailuo-api-alternative.mdx?raw';
+import nanoBananaApiPython from './nano-banana-api-python.mdx?raw';
 
 export interface RawPost {
   slug: string;
@@ -55,4 +56,5 @@ export const rawPosts: RawPost[] = [
   { slug: 'luma-dream-machine-api-alternative', raw: lumaDreamMachineApiAlternative },
   { slug: 'wan-video-api-alternative', raw: wanVideoApiAlternative },
   { slug: 'hailuo-api-alternative', raw: hailuoApiAlternative },
+  { slug: 'nano-banana-api-python', raw: nanoBananaApiPython },
 ];
