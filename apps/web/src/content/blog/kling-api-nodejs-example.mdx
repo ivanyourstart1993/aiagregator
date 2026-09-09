@@ -1,0 +1,142 @@
+---
+title: "Kling API Node.js Example: fetch, Poll, and Webhooks"
+description: "Working Node.js/TypeScript code for Kling image-to-video: submit with fetch, poll the task with async/await, or verify a signed webhook in Express."
+date: "2026-09-09"
+updated: "2026-09-09"
+tags: ["Video generation", "Kling", "Node.js"]
+primaryKeyword: "Kling API Node.js example"
+funnel: "MOFU"
+author:
+  name: "Aigenway"
+relatedDocs:
+  - label: "Kling video guide"
+    href: "/docs/guides/kling-video"
+  - label: "Task lifecycle"
+    href: "/docs/task-lifecycle"
+  - label: "Webhooks"
+    href: "/docs/webhooks"
+  - label: "Kling API"
+    href: "/blog/kling-api"
+ogImage: "/blog/kling-api-nodejs-example.jpg"
+---
+
+Most Kling API examples are `curl` snippets you have to translate yourself. This one is Node.js: plain `fetch`, no provider SDK, submitting an image-to-video job and getting the finished clip back two ways — a polling loop and an Express webhook handler.
+
+## Submit an image-to-video job
+
+You need Node 18+ (for global `fetch`) and an API key. No `kling-sdk`, no auth dance — one `POST` with `provider`, `model`, `method`, and `params`:
+
+```ts
+const API_KEY = process.env.AIGENWAY_API_KEY!; // sk_live_...
+const BASE_URL = "https://api.aigenway.com/v1";
+
+async function createGeneration(provider: string, model: string, method: string, params: Record<string, unknown>) {
+  const res = await fetch(`${BASE_URL}/generations`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${API_KEY}`,
+      "Content-Type": "application/json",
+      "Idempotency-Key": crypto.randomUUID(),
+    },
+    body: JSON.stringify({ provider, model, method, params }),
+  });
+  if (!res.ok) throw new Error(`generation failed: ${res.status} ${await res.text()}`);
+  return res.json() as Promise<{ id: string; status: string }>;
+}
+
+const task = await createGeneration("kling", "kling-v2-master", "image_to_video", {
+  prompt: "slow dolly-in, hair moving gently in the wind, cinematic",
+  input_image: "https://example.com/character.png",
+  duration: 5,
+});
+console.log(task.id, task.status);
+```
+
+Kling ships several versions with different speed/quality trade-offs, and the exact codes change as the provider ships new ones — list what's live on your account before hardcoding a string:
+
+```bash
+curl "https://api.aigenway.com/v1/methods?provider=kling" \
+  -H "Authorization: Bearer sk_live_..."
+```
+
+<SignupCTA
+  title="Run this from your own Node app"
+  description="Create a free account, drop your key into AIGENWAY_API_KEY, and this exact fetch call submits a Kling job in minutes — $5 free credit, prepaid USD billing."
+/>
+
+## Poll the task with async/await
+
+`createGeneration` returns a task immediately — video rendering happens async. A small polling loop with `setTimeout` is enough for a script or a background job:
+
+```ts
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function waitForResult(taskId: string, { timeoutMs = 120_000, intervalMs = 2_000 } = {}) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    const res = await fetch(`${BASE_URL}/generations/${taskId}`, {
+      headers: { Authorization: `Bearer ${API_KEY}` },
+    });
+    if (!res.ok) throw new Error(`poll failed: ${res.status} ${await res.text()}`);
+    const data = await res.json();
+    if (data.status === "succeeded" || data.status === "failed") return data;
+    await sleep(intervalMs);
+  }
+  throw new Error(`task ${taskId} did not finish in time`);
+}
+
+const result = await waitForResult(task.id);
+console.log(result.status, result.outputs);
+```
+
+This same loop works unchanged for Veo, Seedance, or any image model on the gateway — the task shape and status values are identical across providers, so you write the polling code once.
+
+## Handle the webhook instead
+
+Polling is fine for a CLI tool, but a server should skip it. Set `callback_url` on the original request and the gateway `POST`s the finished task to your endpoint the moment it's ready, signed so you can verify it came from Aigenway:
+
+```ts
+const task = await createGeneration("kling", "kling-v2-master", "image_to_video", {
+  prompt: "slow dolly-in, hair moving gently in the wind, cinematic",
+  input_image: "https://example.com/character.png",
+  duration: 5,
+  callback_url: "https://your-app.example.com/webhooks/aigenway",
+});
+```
+
+An Express handler that verifies the signature before trusting the payload:
+
+```ts
+import express from "express";
+import crypto from "node:crypto";
+
+const app = express();
+app.use(express.raw({ type: "application/json" }));
+
+const WEBHOOK_SECRET = process.env.AIGENWAY_WEBHOOK_SECRET!;
+
+app.post("/webhooks/aigenway", (req, res) => {
+  const signature = req.header("X-Aigenway-Signature") ?? "";
+  const expected = crypto.createHmac("sha256", WEBHOOK_SECRET).update(req.body).digest("hex");
+  if (signature !== expected) return res.status(401).send("bad signature");
+
+  const task = JSON.parse(req.body.toString("utf8"));
+  console.log(task.id, task.status, task.outputs);
+  res.status(200).send("ok");
+});
+
+app.listen(3000);
+```
+
+Check the exact header name and payload shape in the [webhooks](/docs/webhooks) docs before wiring this into production — this is the pattern, not a guarantee of the literal header string.
+
+## Why fetch and a gateway beat a Kling SDK
+
+- **Zero dependencies.** Node's built-in `fetch` and `crypto` are enough — nothing to pin, nothing that breaks on a Node upgrade.
+- **One task contract, every model.** `createGeneration` and `waitForResult` are unchanged if you swap in Veo, Seedance, or an image model — only the `provider`/`model`/`params` values differ.
+- **Prepaid USD billing.** No Kling credit pack to forecast; pay per generation and read your balance from the API.
+- **Idempotent by default.** The `Idempotency-Key` header means a retried request on a flaky connection never submits (or bills) the same clip twice.
+
+<SignupCTA />
