@@ -28,6 +28,7 @@ import wanVideoApiAlternative from './wan-video-api-alternative.mdx?raw';
 import hailuoApiAlternative from './hailuo-api-alternative.mdx?raw';
 import nanoBananaApiPython from './nano-banana-api-python.mdx?raw';
 import klingApiNodejsExample from './kling-api-nodejs-example.mdx?raw';
+import imageToVideoApiWebhook from './image-to-video-api-webhook.mdx?raw';
 
 export interface RawPost {
   slug: string;
@@ -59,4 +60,5 @@ export const rawPosts: RawPost[] = [
   { slug: 'hailuo-api-alternative', raw: hailuoApiAlternative },
   { slug: 'nano-banana-api-python', raw: nanoBananaApiPython },
   { slug: 'kling-api-nodejs-example', raw: klingApiNodejsExample },
+  { slug: 'image-to-video-api-webhook', raw: imageToVideoApiWebhook },
 ];

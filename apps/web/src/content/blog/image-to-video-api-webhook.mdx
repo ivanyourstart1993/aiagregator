@@ -1,0 +1,109 @@
+---
+title: "Image-to-Video API with Webhook Callbacks"
+description: "Animate a still image and get the clip pushed to your endpoint instead of polling — one signed webhook contract shared by Kling, Veo and Seedance on Aigenway."
+date: "2026-09-10"
+updated: "2026-09-10"
+tags: ["Video generation", "Image-to-video", "Webhooks"]
+primaryKeyword: "Image-to-video API with webhook"
+funnel: "MOFU"
+author:
+  name: "Aigenway"
+relatedDocs:
+  - label: "Webhooks"
+    href: "/docs/webhooks"
+  - label: "Task lifecycle"
+    href: "/docs/task-lifecycle"
+  - label: "Idempotency"
+    href: "/docs/idempotency"
+ogImage: "/blog/image-to-video-api-webhook.jpg"
+---
+
+Image-to-video is never instant — a clip takes seconds to minutes to render, so the API hands you a task, not a file. Poll it in a loop and you burn requests and add latency; register a `callback_url` instead and the gateway pushes a signed `POST` to your endpoint the moment the clip is ready, with the same payload and signature scheme no matter which model rendered it.
+
+## Submit the image and get a task back
+
+The request is the same task contract used for every model on the gateway: `provider`, `model`, `method`, `params`. For image-to-video you pass the source image and a motion prompt; the response is a task in `PENDING` or `PROCESSING` state, not a finished video.
+
+```bash
+curl -X POST https://api.aigenway.com/v1/generations \
+  -H "Authorization: Bearer sk_live_..." \
+  -H "Idempotency-Key: $(uuidgen)" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "provider": "kling",
+    "model": "kling-v2-master",
+    "method": "image_to_video",
+    "params": {
+      "prompt": "slow push-in, fabric moving in a light breeze, cinematic",
+      "input_image": "https://example.com/product-still.png",
+      "duration": 5
+    },
+    "callback_url": "https://your-app.example.com/webhooks/aigenway"
+  }'
+```
+
+`Idempotency-Key` makes it safe to retry the submit on a flaky connection — resend the same key and you get the same task back instead of paying for a second render. Confirm the exact `model` codes your account can call with `GET https://api.aigenway.com/v1/methods?provider=kling` rather than hardcoding a guess; providers rev their model lineup on their own schedule.
+
+<SignupCTA
+  title="Wire up your first image-to-video webhook"
+  description="Create a free account, get $5 in free credit, and point callback_url at a local tunnel to see the signed payload land."
+/>
+
+## What lands on your webhook
+
+When the task finishes, the gateway sends a `POST` to `callback_url` with headers identifying the event and a body carrying the result — same shape whether the source model was Kling, Veo or Seedance:
+
+```
+POST <your callback_url>
+Content-Type: application/json
+User-Agent: aiagg-webhook/1.0
+X-Aggregator-Event: generation.completed
+X-Aggregator-Task-Id: <task_id>
+X-Aggregator-Signature: sha256=<hex>
+```
+
+```json
+{
+  "event": "generation.completed",
+  "task_id": "cmomwuy0m000qbr0371src20a",
+  "status": "succeeded",
+  "provider": "kling",
+  "model": "kling-v2-master",
+  "method": "image_to_video",
+  "charged_amount": "180000000",
+  "currency": "USD",
+  "result": {
+    "type": "video",
+    "url": "https://api.aigenway.com/v1/files/results/<userId>/<taskId>/video_0-....mp4",
+    "mime_type": "video/mp4",
+    "available_until": "2026-10-10T12:50:51.831Z",
+    "files": [ { "type": "video", "url": "...", "mime_type": "video/mp4", "available_until": "..." } ]
+  },
+  "error": null
+}
+```
+
+`charged_amount` is in micro-USD, `result.url` is a signed link that expires at `available_until` — pull the file down (or re-host it) before then rather than storing the URL as permanent.
+
+## Verify the signature before you trust the body
+
+Anyone who learns your `callback_url` can `POST` to it, so don't act on a webhook you haven't verified. `X-Aggregator-Signature` is an HMAC-SHA256 of the raw request body, keyed with your webhook secret:
+
+```javascript
+import { createHmac, timingSafeEqual } from 'node:crypto';
+
+function verify(rawBody, header, secret) {
+  const expected = createHmac('sha256', secret).update(rawBody).digest('hex');
+  const got = header.replace(/^sha256=/, '');
+  if (got.length !== expected.length) return false;
+  return timingSafeEqual(Buffer.from(got, 'hex'), Buffer.from(expected, 'hex'));
+}
+```
+
+Compute the HMAC over the untouched raw body — not a re-serialized `JSON.stringify` of the parsed object, which can reorder keys or change whitespace and silently break the comparison. Return a `2xx` once you've accepted the event; anything else is treated as delivery failure and retried on a backoff, so keep the handler idempotent using `task_id`.
+
+## One flow for Kling, Veo and Seedance
+
+This is the point of routing image-to-video through a gateway instead of three provider SDKs: the submit shape, the task states, the webhook headers and the signature scheme are identical regardless of which `provider`/`model` you pick. Swap `"provider": "kling"` for `"provider": "veo"` or `"provider": "seedance"`, adjust `params` for that model's inputs, and the same callback handler picks up the result — no branch in your webhook code for "which vendor sent this." If you'd rather not run a receiver at all, `GET /v1/tasks/<task_id>` on the [task lifecycle](/docs/task-lifecycle) endpoint gives you the identical `result` object on demand.
+
+<SignupCTA />
