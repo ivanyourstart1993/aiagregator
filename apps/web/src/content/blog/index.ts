@@ -30,6 +30,7 @@ import nanoBananaApiPython from './nano-banana-api-python.mdx?raw';
 import klingApiNodejsExample from './kling-api-nodejs-example.mdx?raw';
 import imageToVideoApiWebhook from './image-to-video-api-webhook.mdx?raw';
 import veo3VsKlingVsSeedance from './veo-3-vs-kling-vs-seedance.mdx?raw';
+import nanoBananaVsGptImageVsImagen from './nano-banana-vs-gpt-image-vs-imagen.mdx?raw';
 
 export interface RawPost {
   slug: string;
@@ -63,4 +64,5 @@ export const rawPosts: RawPost[] = [
   { slug: 'kling-api-nodejs-example', raw: klingApiNodejsExample },
   { slug: 'image-to-video-api-webhook', raw: imageToVideoApiWebhook },
   { slug: 'veo-3-vs-kling-vs-seedance', raw: veo3VsKlingVsSeedance },
+  { slug: 'nano-banana-vs-gpt-image-vs-imagen', raw: nanoBananaVsGptImageVsImagen },
 ];

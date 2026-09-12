@@ -1,0 +1,126 @@
+---
+title: "Nano Banana vs gpt-image vs Imagen 4: Which to Call"
+description: "Compare Nano Banana, gpt-image-1 and Imagen 4 on prompt adherence, editing, text rendering and cost — all three sit behind one API key, switch with a string."
+date: "2026-09-12"
+updated: "2026-09-12"
+tags: ["Image generation", "Comparison"]
+primaryKeyword: "Nano Banana vs gpt-image vs Imagen 4"
+funnel: "MOFU"
+author:
+  name: "Aigenway"
+relatedDocs:
+  - label: "Methods"
+    href: "/docs/methods"
+  - label: "Getting started"
+    href: "/docs/getting-started"
+  - label: "Nano Banana API"
+    href: "/blog/nano-banana-api"
+ogImage: "/blog/nano-banana-vs-gpt-image-vs-imagen.jpg"
+---
+
+Nano Banana, gpt-image-1 and Imagen 4 are the three image models developers ask us to compare most, and they don't overlap as much as the marketing suggests: Nano Banana is the editor, gpt-image-1 is the one that reliably puts text inside an image, and Imagen 4 is the one to reach for on raw photorealism. All three sit behind the same API key on Aigenway, so this comparison is something you can rerun on your own prompts instead of trusting a demo reel.
+
+## What each model is actually good at
+
+Nano Banana (Google's Gemini image model) is built around editing an existing image rather than starting fresh — it holds a character or product consistent across edits and follows multi-step instructions well, which is why it's the default choice for "take this photo and change X" workflows. gpt-image-1 is the strongest of the three at rendering legible text inside a generated image — signage, labels, UI mockups — a place the other two still tend to garble letterforms. Imagen 4 leans toward photorealism and fine detail on a first-pass generation, with an Ultra tier that trades speed for even higher fidelity. None of this is fixed forever — providers ship new versions on their own schedule, so confirm what's live on your account before you build around a specific one:
+
+```bash
+curl "https://api.aigenway.com/v1/methods?provider=google_banana" \
+  -H "Authorization: Bearer sk_live_..."
+
+curl "https://api.aigenway.com/v1/methods?provider=openai_image" \
+  -H "Authorization: Bearer sk_live_..."
+```
+
+Nano Banana and Imagen 4 both live under the `google_banana` provider (different `model` codes); gpt-image-1 lives under `openai_image`. Each call returns the current `model` values, supported `method` names, and per-image pricing on your account right now.
+
+## Same request, three models
+
+Every model on the gateway shares one task contract, so comparing them is a one-line change to `provider` and `model` — the `method` and `params` shape stay the same:
+
+```bash
+curl -X POST https://api.aigenway.com/v1/generations \
+  -H "Authorization: Bearer sk_live_..." \
+  -H "Idempotency-Key: $(uuidgen)" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "provider": "google_banana",
+    "model": "gemini-3.1-flash-image-preview",
+    "method": "text_to_image",
+    "params": {
+      "prompt": "a hand-painted shop sign reading FRESH BREAD DAILY above a bakery window, morning light",
+      "aspect_ratio": "16:9"
+    }
+  }'
+```
+
+Swap `"provider": "google_banana"` / `"model": "gemini-3.1-flash-image-preview"` for `"provider": "openai_image"` / `"model": "gpt-image-1"`, or for the Imagen 4 code returned by `/v1/methods`, and the identical prompt runs on all three — the fastest way to see which one actually renders that sign legibly for your use case.
+
+<SignupCTA
+  title="Run the same prompt on all three models"
+  description="Create a free account, get $5 in free credit, and compare Nano Banana, gpt-image-1 and Imagen 4 head-to-head with the request above."
+/>
+
+## Editing: Nano Banana's strongest ground
+
+Only Nano Banana and gpt-image-1 expose a dedicated `image_edit` method on this gateway today; Imagen 4 is a text-to-image model without an edit endpoint, so if your workflow is "change this one existing photo," it's a two-horse race:
+
+```bash
+curl -X POST https://api.aigenway.com/v1/generations \
+  -H "Authorization: Bearer sk_live_..." \
+  -H "Idempotency-Key: $(uuidgen)" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "provider": "google_banana",
+    "model": "gemini-3.1-flash-image-preview",
+    "method": "image_edit",
+    "params": {
+      "prompt": "replace the background with a snowy mountain range at golden hour, keep the subject and pose unchanged",
+      "input_images": ["https://example.com/portrait.jpg"]
+    }
+  }'
+```
+
+Nano Banana tends to hold the untouched parts of the image steadier across an edit; gpt-image-1's `image_edit` (same shape, `"provider": "openai_image"`, `"model": "gpt-image-1"`) accepts up to six input images at once and an optional mask, which makes it the better fit for composite edits — dropping a new object into a scene with several reference images — rather than a single subject touch-up.
+
+## Cost and when the price gap actually matters
+
+Per-image cost differs across all three, and the gap is wide enough to matter at volume even though a single image is cheap in isolation. Rather than quote numbers that drift the moment a provider reprices, check the current cost against your own prompt before you commit to one at scale:
+
+```bash
+curl -X POST https://api.aigenway.com/v1/estimate \
+  -H "Authorization: Bearer sk_live_..." \
+  -H "Content-Type: application/json" \
+  -d '{
+    "provider": "openai_image",
+    "model": "gpt-image-1",
+    "method": "text_to_image",
+    "params": {
+      "prompt": "a hand-painted shop sign reading FRESH BREAD DAILY above a bakery window, morning light",
+      "resolution": "1024x1024"
+    }
+  }'
+```
+
+Run the same `/v1/estimate` call for `google_banana` with each model code and you have a like-for-like price on your own prompt, not a vendor's list price for a generic benchmark image. `mode` on gpt-image-1 (`low` / `medium` / `high`) and the Imagen 4 vs Imagen 4 Ultra choice both move cost independently of the model you pick, so it's worth pricing the specific quality tier you'd actually ship.
+
+## Running the comparison in production
+
+Because the task fields, status values and webhook payload are identical across all three, wiring up a real bake-off doesn't require three SDKs or three billing relationships:
+
+1. **Fire the same prompt at all three** with one `POST /v1/generations` call each, differing only by `provider` / `model`.
+2. **Poll or webhook** each task with `GET /v1/generations/{task_id}` or a shared `callback_url` — the response shape is the same regardless of which model produced it.
+3. **Score text rendering, edit fidelity and photorealism on your own images**, since that's the part generic comparisons can't tell you — your product photos, your signage, your characters.
+
+See the [task lifecycle](/docs/task-lifecycle) docs for the exact contract if you're wiring this into a pipeline that runs unattended.
+
+## Why one gateway beats three provider accounts
+
+- **No separate GCP project or OpenAI account.** No Vertex AI enablement, no platform.openai.com key — sign up once and call the endpoint.
+- **One integration, every model.** The same `provider` / `model` / `method` / `params` shape that calls Nano Banana also calls gpt-image-1, Imagen 4 and every video model — swap a string, not your SDK.
+- **Real USD billing.** A prepaid balance replaces three separate invoices; check what's left from the API at any time.
+- **Idempotency and webhooks included.** Retry-safe requests and signed callbacks are already built into the task contract, not something you bolt on per provider.
+
+When Google or OpenAI ship the next version, pull the new code from `/v1/methods` and change one string — no new account, no new contract.
+
+<SignupCTA />
