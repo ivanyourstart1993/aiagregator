@@ -1,0 +1,107 @@
+---
+title: "DALL·E 3 vs gpt-image-1: Which OpenAI Model to Call"
+description: "DALL·E 3 vs gpt-image-1 compared on prompt fidelity, text rendering, and editing — both sit behind one API key on Aigenway, so you can test both on your own prompt."
+date: "2026-09-13"
+updated: "2026-09-13"
+tags: ["Image generation", "OpenAI", "Comparison"]
+primaryKeyword: "DALL·E 3 vs gpt-image-1"
+funnel: "MOFU"
+author:
+  name: "Aigenway"
+relatedDocs:
+  - label: "Methods"
+    href: "/docs/methods"
+  - label: "Getting started"
+    href: "/docs/getting-started"
+  - label: "GPT Image 1 API"
+    href: "/blog/gpt-image-1-api"
+  - label: "DALL·E 3 API"
+    href: "/blog/dalle-3-api"
+ogImage: "/blog/dalle-3-vs-gpt-image-1.jpg"
+---
+
+DALL·E 3 and gpt-image-1 are both OpenAI models, both live under the same `openai_image` provider on Aigenway, and still produce noticeably different images from the identical prompt — one leans stylized and hands-off, the other follows instructions literally and edits what you already have. Since they share one API key and one request shape on the gateway, the fastest way to pick is to run both, not read a benchmark.
+
+## Two models, one provider
+
+`openai_image` covers DALL·E 3, the older DALL·E 2, and the gpt-image-1 family behind shared methods — `text_to_image` for both, plus `image_edit` for gpt-image-1 only. OpenAI ships new codes and retires old ones on its own schedule, so confirm what's live on your account before hardcoding either:
+
+```bash
+curl "https://api.aigenway.com/v1/methods?provider=openai_image" \
+  -H "Authorization: Bearer sk_live_..."
+```
+
+The response lists the current `model` codes, which `method`s each one supports, and per-image pricing on your account right now — check that both `dall-e-3` and `gpt-image-1` are listed before you build a comparison around them.
+
+## The core difference: rewritten prompt vs literal prompt
+
+DALL·E 3 silently rewrites most prompts before generating — it adds detail it decides the image needs, which produces its recognizable vivid, illustrative style but means the output doesn't always match your input verbatim. gpt-image-1 follows the prompt far more literally and is the stronger of the two at rendering legible text inside the image — signage, labels, UI mockups — a place DALL·E 3 still tends to garble letterforms:
+
+```bash
+curl -X POST https://api.aigenway.com/v1/generations \
+  -H "Authorization: Bearer sk_live_..." \
+  -H "Idempotency-Key: $(uuidgen)" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "provider": "openai_image",
+    "model": "dall-e-3",
+    "method": "text_to_image",
+    "params": {
+      "prompt": "a hand-painted shop sign reading FRESH BREAD DAILY above a bakery window, morning light",
+      "resolution": "1024x1024",
+      "quality": "hd",
+      "style": "natural"
+    }
+  }'
+```
+
+Swap `"model": "dall-e-3"` for `"model": "gpt-image-1"`, drop `quality`/`style` (DALL·E 3-specific) for `mode` (`low`/`medium`/`high`/`auto`, gpt-image-1's equivalent knob), and the same sign prompt runs on both — read back `revised_prompt` on the DALL·E 3 response to see exactly what it changed before rendering.
+
+<SignupCTA
+  title="Run the same prompt on both OpenAI models"
+  description="Create a free account, get $5 in free credit, and compare DALL·E 3 against gpt-image-1 on your own prompt with the request above."
+/>
+
+## Editing: gpt-image-1 only
+
+DALL·E 3 is text-to-image only on this gateway — no edit method. If your workflow is "change this existing photo," gpt-image-1 is the only one of the two that does it, accepting up to six input images plus an optional mask for composite edits:
+
+```bash
+curl -X POST https://api.aigenway.com/v1/generations \
+  -H "Authorization: Bearer sk_live_..." \
+  -H "Idempotency-Key: $(uuidgen)" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "provider": "openai_image",
+    "model": "gpt-image-1",
+    "method": "image_edit",
+    "params": {
+      "prompt": "add a small orange cat sleeping on the windowsill",
+      "input_images": ["https://example.com/kitchen.png"],
+      "resolution": "1024x1024"
+    }
+  }'
+```
+
+That also makes gpt-image-1 the default choice for any pipeline that touches up product photos or user-uploaded images — DALL·E 3 has no equivalent call, so there's nothing to compare here beyond confirming the gap holds on your account via `/v1/methods`.
+
+## Picking one for production
+
+Both return a task, not an inline image, and the task shape is identical regardless of which model produced it — poll `GET /v1/generations/{task_id}` or set a `callback_url` and let the gateway webhook you when it's done. That means switching between them in production is a one-line change, not a rewrite:
+
+- **Reach for DALL·E 3** when you want a distinct illustrative or "vivid" look with minimal prompt engineering, and you don't need to edit an existing image.
+- **Reach for gpt-image-1** when prompt fidelity matters (exact text, exact layout), when you need `image_edit`, or when `background: transparent` cutouts are part of the job.
+- **When unsure, run both.** Same task contract, same idempotency and webhook behavior, so a head-to-head on your actual prompts costs one extra `curl` call, not a second integration.
+
+Full contract in the [task lifecycle](/docs/task-lifecycle) and [webhooks](/docs/webhooks) docs if you're wiring the comparison into a pipeline that runs unattended.
+
+## Why one gateway beats a provider-only account
+
+- **No separate OpenAI account.** No API key to provision on platform.openai.com, no separate invoice — sign up once and call the endpoint.
+- **One integration, both models.** The same `provider`/`model`/`method`/`params` shape drives DALL·E 3 and gpt-image-1 — swap a string, not your SDK.
+- **Real USD billing.** A prepaid balance replaces per-provider invoicing; check what's left from the API at any time.
+- **Idempotency and webhooks included.** Retry-safe requests and signed callbacks are already built into the task contract for both models.
+
+Pull the current codes from `/v1/methods`, run the same prompt against `dall-e-3` and `gpt-image-1`, and let your own output decide — not a vendor comparison page.
+
+<SignupCTA />
