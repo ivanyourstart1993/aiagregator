@@ -1,0 +1,104 @@
+---
+title: "Cheapest AI Video Generation API: Per-Second Cost Compared"
+description: "How Seedance, Kling and Veo actually price per second of generated video, why prepaid USD billing beats credit packs, and how to pull live numbers before you commit."
+date: "2026-09-14"
+updated: "2026-09-14"
+tags: ["Video generation", "Pricing"]
+primaryKeyword: "Cheapest AI video generation API"
+funnel: "MOFU"
+author:
+  name: "Aigenway"
+relatedDocs:
+  - label: "Pricing"
+    href: "/pricing"
+  - label: "Methods"
+    href: "/docs/methods"
+  - label: "Veo 3 vs Kling vs Seedance"
+    href: "/blog/veo-3-vs-kling-vs-seedance"
+ogImage: "/blog/cheapest-ai-video-api.jpg"
+---
+
+"Cheapest AI video API" is the wrong first question — the right one is cost per second of finished clip, because that's what actually shows up on your invoice. Seedance, Kling and Veo price differently per second, per tier, and per feature (audio, motion control), and none of them publish one number that covers every use case. Here's how to read the real cost before you pick a model, all from one prepaid account.
+
+## Why "cheapest" depends on the tier, not the provider
+
+There's no single cheapest provider — there's a cheapest tier for your use case. Seedance is generally the lowest cost per second and fastest to render, which is why it's the default for high-volume drafts, A/B variants and social clips where you're generating dozens of takes. Kling spans a wide range: a Standard tier that competes with Seedance on price, up through Pro and Master tiers priced for production and cinematic fidelity. Veo sits at the premium end, and its native audio generation adds cost and render time versus a silent clip of the same length. Picking the "cheapest API" without picking a tier is like asking the price of "a car" — pull live per-second pricing before you budget:
+
+```bash
+curl "https://api.aigenway.com/v1/methods?provider=seedance" \
+  -H "Authorization: Bearer sk_live_..."
+
+curl "https://api.aigenway.com/v1/methods?provider=kling" \
+  -H "Authorization: Bearer sk_live_..."
+
+curl "https://api.aigenway.com/v1/methods?provider=veo" \
+  -H "Authorization: Bearer sk_live_..."
+```
+
+Each response returns the live `model` codes for that provider along with current per-second pricing in USD — the only numbers worth budgeting against, since provider price lists change on their own schedule.
+
+## A real request, priced before you send it
+
+Every model on the gateway shares the same task contract, so the cheapest way to test a tier is to fire a short clip and read the cost off the task response rather than guessing from a pricing page:
+
+```bash
+curl -X POST https://api.aigenway.com/v1/generations \
+  -H "Authorization: Bearer sk_live_..." \
+  -H "Idempotency-Key: $(uuidgen)" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "provider": "seedance",
+    "model": "seedance-1-pro",
+    "method": "text_to_video",
+    "params": {
+      "prompt": "a delivery drone descending onto a rooftop pad at dusk",
+      "duration": 5,
+      "aspect_ratio": "16:9"
+    }
+  }'
+```
+
+The task response includes the cost charged against your prepaid balance for that specific job — a 5-second draft at Seedance's rate versus the same 5 seconds at Kling Master versus Veo with audio makes the per-second gap concrete instead of theoretical.
+
+<SignupCTA
+  title="Price a real clip before you commit to a tier"
+  description="Create a free account, get $5 in free credit, and run the request above to see the exact per-second cost on your own prompt."
+/>
+
+## Prepaid USD billing vs. credit packs
+
+Most providers sell video generation in credit packs — buy a bundle, watch an opaque "credits per second" conversion eat into it, and re-purchase when it runs low, often with credits that expire or don't roll over. Aigenway bills straight USD against a prepaid balance: the cost on a task response is a dollar amount, not a credit count you have to convert back to figure out what you actually spent. That matters most when you're comparing providers, because a credit-pack price only tells you the sticker price — it hides the real per-second rate until you do the conversion math yourself. With USD billing, the number on the task response is the number that hit your balance.
+
+## Cutting cost without changing providers
+
+Because switching providers is a one-line change to `provider` and `model` — not a new account, a new SDK or a new billing relationship — the cheapest workflow is usually a mix, not a single model:
+
+```bash
+curl -X POST https://api.aigenway.com/v1/generations \
+  -H "Authorization: Bearer sk_live_..." \
+  -H "Idempotency-Key: $(uuidgen)" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "provider": "kling",
+    "model": "kling-v2-standard",
+    "method": "text_to_video",
+    "params": {
+      "prompt": "same scene, cheap draft pass",
+      "duration": 5
+    }
+  }'
+```
+
+Draft on the cheapest tier that gives you usable motion and composition (often Seedance or Kling Standard), then re-render only the shots that survive review on a pricier tier or provider. Register a `callback_url` so drafts and finals land via [webhooks](/docs/webhooks) instead of a polling loop burning wall-clock time while you wait. That workflow — cheap iteration, selective upgrade — cuts spend far more than picking one "cheapest" model and using it for everything.
+
+## Why one gateway makes the cheapest option visible
+
+A provider-only account only shows you that provider's price list, so "cheapest" is a guess made from marketing pages. On the gateway, every provider quotes cost the same way — per second, in USD, on the task response — so:
+
+- **Comparisons are apples-to-apples.** No converting credits, tiers or bundle discounts by hand.
+- **The $5 free credit covers a real test.** Run the same prompt across tiers and see actual per-second cost before spending your own money.
+- **Switching is free.** No new account or contract to chase a cheaper tier when a provider repriced overnight.
+
+Pull current numbers from `/v1/methods` before you lock in a budget — that's the only price list that's never stale.
+
+<SignupCTA />
