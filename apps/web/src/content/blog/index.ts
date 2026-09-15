@@ -33,6 +33,7 @@ import veo3VsKlingVsSeedance from './veo-3-vs-kling-vs-seedance.mdx?raw';
 import nanoBananaVsGptImageVsImagen from './nano-banana-vs-gpt-image-vs-imagen.mdx?raw';
 import dalle3VsGptImage1 from './dalle-3-vs-gpt-image-1.mdx?raw';
 import cheapestAiVideoApi from './cheapest-ai-video-api.mdx?raw';
+import cheapestAiImageApi from './cheapest-ai-image-api.mdx?raw';
 
 export interface RawPost {
   slug: string;
@@ -69,4 +70,5 @@ export const rawPosts: RawPost[] = [
   { slug: 'nano-banana-vs-gpt-image-vs-imagen', raw: nanoBananaVsGptImageVsImagen },
   { slug: 'dalle-3-vs-gpt-image-1', raw: dalle3VsGptImage1 },
   { slug: 'cheapest-ai-video-api', raw: cheapestAiVideoApi },
+  { slug: 'cheapest-ai-image-api', raw: cheapestAiImageApi },
 ];

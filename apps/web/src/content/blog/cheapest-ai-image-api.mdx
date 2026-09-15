@@ -1,0 +1,101 @@
+---
+title: "Cheapest AI Image Generation API: Per-Image Cost Compared"
+description: "How Nano Banana, Imagen 4, gpt-image-1 and DALL·E 3 price per image, why prepaid USD billing beats credit packs, and how to check live numbers before you commit."
+date: "2026-09-15"
+updated: "2026-09-15"
+tags: ["Image generation", "Pricing"]
+primaryKeyword: "Cheapest AI image generation API"
+funnel: "MOFU"
+author:
+  name: "Aigenway"
+relatedDocs:
+  - label: "Pricing"
+    href: "/pricing"
+  - label: "Methods"
+    href: "/docs/methods"
+  - label: "Nano Banana vs gpt-image vs Imagen 4"
+    href: "/blog/nano-banana-vs-gpt-image-vs-imagen"
+ogImage: "/blog/cheapest-ai-image-api.jpg"
+---
+
+"Cheapest AI image API" is the wrong first question — the right one is cost per image at the resolution and quality tier you'll actually ship, because that's what shows up on your invoice. Nano Banana, Imagen 4, gpt-image-1 and DALL·E 3 each price per image differently, and none of them publish one number that covers every quality setting. Here's how to read the real cost before you pick a model, all from one prepaid account.
+
+## Why "cheapest" depends on the tier, not the model
+
+There's no single cheapest model — there's a cheapest setting for your use case. gpt-image-1's `mode` parameter (`low` / `medium` / `high`) changes cost per image on its own, independent of which model you picked. Imagen 4 has a standard tier and a higher-fidelity Ultra tier priced apart. DALL·E 3's `quality` flag (`standard` / `hd`) does the same, and its price also shifts with output resolution. Nano Banana, built for editing rather than first-pass generation, prices per edit call rather than per raw pixel count. Picking "the cheapest API" without picking a quality tier is like asking the price of "a car" — pull live per-image pricing before you budget:
+
+```bash
+curl "https://api.aigenway.com/v1/methods?provider=google_banana" \
+  -H "Authorization: Bearer sk_live_..."
+
+curl "https://api.aigenway.com/v1/methods?provider=openai_image" \
+  -H "Authorization: Bearer sk_live_..."
+```
+
+Nano Banana and Imagen 4 both live under the `google_banana` provider (different `model` codes); gpt-image-1 and DALL·E 3 both live under `openai_image`. Each call returns the current `model` values, supported `method` names, and per-image pricing on your account right now — the only numbers worth budgeting against, since provider price lists change on their own schedule.
+
+## A real request, priced before you send it
+
+Every model on the gateway shares the same task contract, so the fastest way to test a tier is to fire one image and read the cost off the task response rather than guessing from a pricing page:
+
+```bash
+curl -X POST https://api.aigenway.com/v1/generations \
+  -H "Authorization: Bearer sk_live_..." \
+  -H "Idempotency-Key: $(uuidgen)" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "provider": "openai_image",
+    "model": "gpt-image-1",
+    "method": "text_to_image",
+    "params": {
+      "prompt": "a minimalist product shot of a ceramic mug on a white background",
+      "mode": "low",
+      "resolution": "1024x1024"
+    }
+  }'
+```
+
+The task response includes the cost charged against your prepaid balance for that specific job — a `low`-mode draft versus the same prompt at `high` mode, or the same request routed to Imagen 4 instead, makes the per-image gap concrete instead of theoretical.
+
+<SignupCTA
+  title="Price a real image before you commit to a model"
+  description="Create a free account, get $5 in free credit, and run the request above to see the exact per-image cost on your own prompt."
+/>
+
+## Prepaid USD billing vs. credit packs
+
+Most providers sell image generation in credit packs — buy a bundle, watch an opaque "credits per image" conversion eat into it, and re-purchase when it runs low, often with credits that expire or don't roll over. Aigenway bills straight USD against a prepaid balance: the cost on a task response is a dollar amount, not a credit count you have to convert back to figure out what you actually spent. That matters most when you're comparing models, because a credit-pack price only tells you the sticker price — it hides the real per-image rate until you do the conversion math yourself. With USD billing, the number on the task response is the number that hit your balance.
+
+## Cutting cost without changing providers
+
+Because switching models is a one-line change to `provider` and `model` — not a new account, a new SDK or a new billing relationship — the cheapest workflow is usually a mix, not a single model:
+
+```bash
+curl -X POST https://api.aigenway.com/v1/generations \
+  -H "Authorization: Bearer sk_live_..." \
+  -H "Idempotency-Key: $(uuidgen)" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "provider": "google_banana",
+    "model": "gemini-3.1-flash-image-preview",
+    "method": "text_to_image",
+    "params": {
+      "prompt": "same product shot, cheap draft pass",
+      "aspect_ratio": "1:1"
+    }
+  }'
+```
+
+Draft on the cheapest setting that gives you a usable composition — often a lower `mode` or a non-Ultra tier — then re-render only the shots that survive review at a pricier tier or on a different model. Register a `callback_url` so results land via [webhooks](/docs/webhooks) instead of a polling loop burning wall-clock time while you wait. That workflow — cheap iteration, selective upgrade — cuts spend far more than picking one "cheapest" model and using it for everything.
+
+## Why one gateway makes the cheapest option visible
+
+A provider-only account only shows you that provider's price list, so "cheapest" is a guess made from marketing pages. On the gateway, every model quotes cost the same way — per image, in USD, on the task response — so:
+
+- **Comparisons are apples-to-apples.** No converting credits, tiers or bundle discounts by hand.
+- **The $5 free credit covers a real test.** Run the same prompt across Nano Banana, Imagen 4, gpt-image-1 and DALL·E 3 and see actual per-image cost before spending your own money.
+- **Switching is free.** No new account or contract to chase a cheaper tier when a provider repriced overnight.
+
+Pull current numbers from `/v1/methods` before you lock in a budget — that's the only price list that's never stale.
+
+<SignupCTA />
