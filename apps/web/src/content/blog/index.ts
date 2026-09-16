@@ -34,6 +34,7 @@ import nanoBananaVsGptImageVsImagen from './nano-banana-vs-gpt-image-vs-imagen.m
 import dalle3VsGptImage1 from './dalle-3-vs-gpt-image-1.mdx?raw';
 import cheapestAiVideoApi from './cheapest-ai-video-api.mdx?raw';
 import cheapestAiImageApi from './cheapest-ai-image-api.mdx?raw';
+import asyncTasksWebhooksGuide from './async-tasks-webhooks-guide.mdx?raw';
 
 export interface RawPost {
   slug: string;
@@ -71,4 +72,5 @@ export const rawPosts: RawPost[] = [
   { slug: 'dalle-3-vs-gpt-image-1', raw: dalle3VsGptImage1 },
   { slug: 'cheapest-ai-video-api', raw: cheapestAiVideoApi },
   { slug: 'cheapest-ai-image-api', raw: cheapestAiImageApi },
+  { slug: 'async-tasks-webhooks-guide', raw: asyncTasksWebhooksGuide },
 ];

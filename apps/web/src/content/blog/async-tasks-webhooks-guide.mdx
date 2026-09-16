@@ -1,0 +1,141 @@
+---
+title: "Async Tasks and Webhooks for AI Generation"
+description: "Every model on Aigenway shares one task contract: submit, then poll or get a signed webhook, then fetch the result. Here's the full lifecycle in code."
+date: "2026-09-16"
+updated: "2026-09-16"
+tags: ["Task lifecycle", "Webhooks", "AI API"]
+primaryKeyword: "Async tasks and webhooks for AI generation"
+funnel: "MOFU"
+author:
+  name: "Aigenway"
+relatedDocs:
+  - label: "Task lifecycle"
+    href: "/docs/task-lifecycle"
+  - label: "Webhooks"
+    href: "/docs/webhooks"
+  - label: "Idempotency"
+    href: "/docs/idempotency"
+  - label: "Errors"
+    href: "/docs/errors"
+---
+
+No AI model returns a finished image or video synchronously — generation takes seconds to minutes, so every call to Aigenway hands back a task, not a result. There are exactly two ways to learn when that task is done: poll it, or have the gateway push a signed webhook to you. Both use the same task object, the same status values, and the same result shape, no matter which provider or model ran the job.
+
+## Submit: one contract, every model
+
+Every generation request — image, video, or text — goes to the same endpoint with the same four fields: `provider`, `model`, `method`, `params`. You don't get a finished asset back; you get a task in `pending` or `processing` state.
+
+```bash
+curl -X POST https://api.aigenway.com/v1/generations \
+  -H "Authorization: Bearer sk_live_..." \
+  -H "Idempotency-Key: $(uuidgen)" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "provider": "kling",
+    "model": "kling-v2-master",
+    "method": "text_to_video",
+    "params": {
+      "prompt": "a paper boat floating down a rain-soaked street, cinematic",
+      "duration": 5
+    }
+  }'
+```
+
+```json
+{
+  "task_id": "cmomwuy0m000qbr0371src20a",
+  "status": "pending",
+  "provider": "kling",
+  "model": "kling-v2-master",
+  "method": "text_to_video",
+  "created_at": "2026-09-16T09:12:03.000Z"
+}
+```
+
+`Idempotency-Key` is what makes retries safe: if your connection drops after the request left but before the response arrived, resend the same key and you get the same task back instead of paying for a second render. Don't hardcode a `model` string from a blog post or your memory — list what your account can actually call with `GET https://api.aigenway.com/v1/methods?provider=kling` and pull the code from there, since providers rev their lineups on their own schedule.
+
+<SignupCTA
+  title="Wire up your first async task"
+  description="Create a free account, get $5 in free credit, and watch a task move from pending to succeeded with a real curl loop or a webhook."
+/>
+
+## Option A: poll the task until it settles
+
+If you don't want to run a public endpoint, poll `GET /v1/tasks/<task_id>` on an interval. The task moves through a small set of states — `pending` → `processing` → `succeeded` or `failed` — and the response shape is identical across every provider and method:
+
+```bash
+curl https://api.aigenway.com/v1/tasks/cmomwuy0m000qbr0371src20a \
+  -H "Authorization: Bearer sk_live_..."
+```
+
+```json
+{
+  "task_id": "cmomwuy0m000qbr0371src20a",
+  "status": "succeeded",
+  "provider": "kling",
+  "model": "kling-v2-master",
+  "method": "text_to_video",
+  "charged_amount": "180000000",
+  "currency": "USD",
+  "result": {
+    "type": "video",
+    "url": "https://api.aigenway.com/v1/files/results/<userId>/<taskId>/video_0-....mp4",
+    "mime_type": "video/mp4",
+    "available_until": "2026-10-16T09:12:03.000Z"
+  },
+  "error": null
+}
+```
+
+Poll with backoff — start around 2–3 seconds and stretch the interval as the task ages — rather than hammering the endpoint every 200ms. A `failed` task carries the same `error` object shape you'd get from a synchronous 4xx, documented on the [errors page](/docs/errors), so one error handler covers both paths.
+
+## Option B: register a webhook and skip the loop
+
+Pass `callback_url` on the original submit and the gateway pushes a signed `POST` to your endpoint the instant the task settles — no loop, no wasted requests while a five-minute video render sits at `processing`.
+
+```bash
+curl -X POST https://api.aigenway.com/v1/generations \
+  -H "Authorization: Bearer sk_live_..." \
+  -H "Idempotency-Key: $(uuidgen)" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "provider": "kling",
+    "model": "kling-v2-master",
+    "method": "text_to_video",
+    "params": { "prompt": "a paper boat floating down a rain-soaked street", "duration": 5 },
+    "callback_url": "https://your-app.example.com/webhooks/aigenway"
+  }'
+```
+
+The delivered payload is the same task object you'd get from polling, wrapped with event metadata and a signature:
+
+```
+POST <your callback_url>
+Content-Type: application/json
+X-Aggregator-Event: generation.completed
+X-Aggregator-Task-Id: cmomwuy0m000qbr0371src20a
+X-Aggregator-Signature: sha256=<hex>
+```
+
+Verify `X-Aggregator-Signature` — an HMAC-SHA256 of the raw request body keyed with your webhook secret — before trusting anything in it, since your `callback_url` is a public endpoint anyone can `POST` to once they guess or leak it:
+
+```javascript
+import { createHmac, timingSafeEqual } from 'node:crypto';
+
+function verify(rawBody, header, secret) {
+  const expected = createHmac('sha256', secret).update(rawBody).digest('hex');
+  const got = header.replace(/^sha256=/, '');
+  if (got.length !== expected.length) return false;
+  return timingSafeEqual(Buffer.from(got, 'hex'), Buffer.from(expected, 'hex'));
+}
+```
+
+Return a `2xx` once you've verified and accepted the event; anything else is treated as a delivery failure and retried on a backoff, so key your handler off `task_id` and make it idempotent — you may see the same event twice.
+
+## Fetch stays the same either way
+
+Whether you learned about completion from a poll response or a webhook body, the terminal step is identical: read `result` off the task, and don't treat `result.url` as permanent. It's a signed link that expires at `available_until` — download or re-host the file before then, because the gateway doesn't guarantee storage past that timestamp. This is also why a `pending`/`processing` task and a `failed` task both carry `null` for `result`: check `status` before you touch it, not just whether the field is present.
+
+The reason this is worth learning once instead of per-model: it's the same contract for `text_to_video`, `image_to_video`, `text_to_image`, and every other async method across every provider on the gateway. Learn the state machine here and it transfers directly to the [task lifecycle reference](/docs/task-lifecycle) and to every model-specific guide that links back to this page.
+
+<SignupCTA />
