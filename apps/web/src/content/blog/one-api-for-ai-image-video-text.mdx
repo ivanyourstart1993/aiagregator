@@ -1,0 +1,88 @@
+---
+title: "One API for AI Image, Video, and Text Generation"
+description: "Why one gateway beats a provider account per model: one key, one request shape across image/video/text, switch models with a string, prepaid USD billing."
+date: "2026-09-17"
+updated: "2026-09-17"
+tags: ["AI API", "Gateway"]
+primaryKeyword: "One API for AI image, video and text"
+funnel: "TOFU"
+author:
+  name: "Aigenway"
+relatedDocs:
+  - { label: "Getting started", href: "/docs/getting-started" }
+  - { label: "Methods", href: "/docs/methods" }
+  - { label: "Task lifecycle", href: "/docs/task-lifecycle" }
+  - { label: "Authentication", href: "/docs/authentication" }
+---
+
+Every image, video, and text model you'd want to call ships its own SDK, its own auth scheme, and its own idea of what a "request" looks like. Aigenway collapses all of that behind one API key and one request shape: `provider` / `model` / `method` / `params`, the same four fields whether you're generating a still image, a five-second video, or a block of text. Switching models is a string change, not a new integration.
+
+## What "one API" actually means here
+
+It doesn't mean one model pretending to do everything — it means one *contract* in front of many real models from many providers. Every call goes to the same endpoint, `POST /v1/generations`, with the same envelope. `provider` and `model` pick who runs the job, `method` picks the operation (`text_to_image`, `text_to_video`, `image_to_video`, and so on), and `params` carries whatever that specific method needs. Only `params` changes shape between models; the request, the response, and the task states around it never do. List what's live on your account instead of trusting a stale blog post for exact model codes:
+
+```bash
+curl "https://api.aigenway.com/v1/methods?provider=kling" \
+  -H "Authorization: Bearer sk_live_..."
+```
+
+## A real call: text-to-image, then swap the model with a string
+
+Here's a text-to-image request. Nothing about the shape below is specific to this one provider — it's the same envelope you'd use for video or text generation:
+
+```bash
+curl -X POST https://api.aigenway.com/v1/generations \
+  -H "Authorization: Bearer sk_live_..." \
+  -H "Idempotency-Key: $(uuidgen)" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "provider": "google_banana",
+    "model": "imagen-4.0-ultra-generate-001",
+    "method": "text_to_image",
+    "params": {
+      "prompt": "a lighthouse at dusk, storm clouds gathering offshore"
+    }
+  }'
+```
+
+```json
+{
+  "task_id": "cmomwuy0m000qbr0371src20a",
+  "status": "pending",
+  "provider": "google_banana",
+  "model": "imagen-4.0-ultra-generate-001",
+  "method": "text_to_image",
+  "created_at": "2026-09-17T09:12:03.000Z"
+}
+```
+
+To try a different image model, or move to video entirely, you change `provider`, `model`, and `method` — the request body's shape, the headers, and how you read the response stay identical. `Idempotency-Key` makes retries safe: resend the same key after a dropped connection and you get the same task back instead of paying for a second render.
+
+<SignupCTA
+  title="Try the gateway with your own prompt"
+  description="Create a free account, get $5 in free credit, and call an image, video, or text model through the same request shape."
+/>
+
+## Async by default: one task contract for every method
+
+No generative model returns a finished asset synchronously — a render takes seconds to minutes. Every call above hands back a task, not a result, and every task moves through the same small set of states no matter which provider ran it: `pending` → `processing` → `succeeded` or `failed`. Poll it:
+
+```bash
+curl https://api.aigenway.com/v1/tasks/cmomwuy0m000qbr0371src20a \
+  -H "Authorization: Bearer sk_live_..."
+```
+
+Or skip the loop and pass a `callback_url` on the original submit — the gateway pushes a signed `POST` to your endpoint the instant the task settles, with the same task object you'd get from polling. Either path, the terminal step is identical: read `result` off the task once `status` is `succeeded`, and don't treat `result.url` as permanent — it's a signed link that expires, not permanent storage. The full state machine, including webhook signature verification, is on the [task lifecycle](/docs/task-lifecycle) page.
+
+## Why one gateway beats a provider account per model
+
+A provider-direct integration works fine for one model. It stops working the moment a second model joins the roadmap — a new SDK, a new auth token, a new billing dashboard, a new request shape to learn, for every provider you add. What one gateway account replaces:
+
+- **One key, not N.** `Authorization: Bearer sk_live_...` is the same header for every provider and every method — no per-vendor SDK or credential to rotate.
+- **One request shape.** `provider` / `model` / `method` / `params` never changes structure; adding a model to your stack is a config change, not a new integration against a new schema.
+- **One prepaid USD balance.** Top up in dollars, spend in dollars, and check what's left with a plain `GET /v1/balance` — no per-provider credits ledger to reconcile before you can forecast spend.
+- **One task and webhook contract.** Every async job — image, video, or text — exposes the same status values, the same result shape, and the same signed callback format, so one poller and one webhook handler cover every model you'll ever add.
+
+That's the actual case for a single gateway: not that it's "easier," but that the integration work you do once for the first model is the same work that covers the fiftieth.
+
+<SignupCTA />

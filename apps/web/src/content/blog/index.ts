@@ -35,6 +35,7 @@ import dalle3VsGptImage1 from './dalle-3-vs-gpt-image-1.mdx?raw';
 import cheapestAiVideoApi from './cheapest-ai-video-api.mdx?raw';
 import cheapestAiImageApi from './cheapest-ai-image-api.mdx?raw';
 import asyncTasksWebhooksGuide from './async-tasks-webhooks-guide.mdx?raw';
+import oneApiForAiImageVideoText from './one-api-for-ai-image-video-text.mdx?raw';
 
 export interface RawPost {
   slug: string;
@@ -73,4 +74,5 @@ export const rawPosts: RawPost[] = [
   { slug: 'cheapest-ai-video-api', raw: cheapestAiVideoApi },
   { slug: 'cheapest-ai-image-api', raw: cheapestAiImageApi },
   { slug: 'async-tasks-webhooks-guide', raw: asyncTasksWebhooksGuide },
+  { slug: 'one-api-for-ai-image-video-text', raw: oneApiForAiImageVideoText },
 ];
