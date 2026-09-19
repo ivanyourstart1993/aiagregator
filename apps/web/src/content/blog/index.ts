@@ -37,6 +37,7 @@ import cheapestAiImageApi from './cheapest-ai-image-api.mdx?raw';
 import asyncTasksWebhooksGuide from './async-tasks-webhooks-guide.mdx?raw';
 import oneApiForAiImageVideoText from './one-api-for-ai-image-video-text.mdx?raw';
 import soraApiAlternative from './sora-api-alternative.mdx?raw';
+import qwenImageApiAlternative from './qwen-image-api-alternative.mdx?raw';
 
 export interface RawPost {
   slug: string;
@@ -77,4 +78,5 @@ export const rawPosts: RawPost[] = [
   { slug: 'async-tasks-webhooks-guide', raw: asyncTasksWebhooksGuide },
   { slug: 'one-api-for-ai-image-video-text', raw: oneApiForAiImageVideoText },
   { slug: 'sora-api-alternative', raw: soraApiAlternative },
+  { slug: 'qwen-image-api-alternative', raw: qwenImageApiAlternative },
 ];
