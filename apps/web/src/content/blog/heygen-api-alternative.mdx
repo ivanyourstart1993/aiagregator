@@ -1,0 +1,108 @@
+---
+title: "HeyGen API Alternative: Kling, Veo 3 & Seedance, One Key"
+description: "HeyGen isn't on the gateway. The honest trade-off, and how to get comparable talking-head and spoken video from Kling, Veo 3 and Seedance behind one API key."
+date: "2026-09-20"
+updated: "2026-09-20"
+tags: ["Video generation", "Avatars", "Alternatives"]
+primaryKeyword: "HeyGen API alternative"
+funnel: "BOFU"
+author:
+  name: "Aigenway"
+relatedDocs:
+  - label: "Kling video guide"
+    href: "/docs/guides/kling-video"
+  - label: "Task lifecycle"
+    href: "/docs/task-lifecycle"
+  - label: "Getting started"
+    href: "/docs/getting-started"
+ogImage: "/blog/heygen-api-alternative.jpg"
+---
+
+HeyGen is not on Aigenway, and we're not going to pretend otherwise. If you're evaluating a HeyGen API alternative because you want prepaid USD billing, a second vendor, or one gateway instead of a per-seat avatar subscription, here's the honest comparison — and how Kling, Veo 3 and Seedance cover the adjacent ground behind one API key.
+
+## Why HeyGen isn't here, and what you're trading away
+
+HeyGen is purpose-built for one job: turn a script into a talking-head video of a specific presenter — a cloned avatar of you, a stock avatar, or a photo you upload — with lip-synced text-to-speech in dozens of languages, on its own hosted account and credit system. That exact pipeline (photo in, avatar identity locked, script out as synced speech) isn't something this gateway reproduces, because it isn't proxying HeyGen's avatar and voice-cloning stack. If your product specifically needs a persistent, brand-approved digital presenter reciting arbitrary scripts on demand, keep a HeyGen account for that job — we'd rather say so than sell a workaround that quietly falls short. What you gain by switching for everything adjacent is the part that isn't tied to one vendor: three independently-trained video models behind one integration, and billing you can read from an API instead of a per-seat plan.
+
+## What replaces it: Kling, Veo 3, Seedance
+
+None of these three is an avatar product out of the box, but together they cover most of what people actually reach for HeyGen to do beyond the exact cloned-presenter flow:
+
+- **Kling** — strong image-to-video and Motion Control for animating a reference face or character with natural motion, the closest match here to "bring a still photo to life."
+- **Veo 3** — Google's flagship, and the most direct HeyGen substitute for spoken content: it generates dialogue, tone and lip movement in the same pass as the picture, straight from a text prompt.
+- **Seedance** — ByteDance's model, fast and cheap per second, good for iterating on a script's pacing before committing to a final render.
+
+Confirm the live model codes for whichever one you pick before hardcoding a string — availability and versions move:
+
+```bash
+curl "https://api.aigenway.com/v1/methods?provider=veo" \
+  -H "Authorization: Bearer sk_live_..."
+```
+
+## A concrete call: animate a presenter photo
+
+The nearest equivalent to a HeyGen avatar clip without voice cloning — animate a still portrait into natural speaking motion — maps onto Kling's image-to-video request shape:
+
+```bash
+curl -X POST https://api.aigenway.com/v1/generations \
+  -H "Authorization: Bearer sk_live_..." \
+  -H "Idempotency-Key: $(uuidgen)" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "provider": "kling",
+    "model": "kling-v2-master",
+    "method": "image_to_video",
+    "params": {
+      "prompt": "presenter speaks directly to camera, natural head and mouth movement, studio lighting, subtle hand gestures",
+      "input_image": "https://example.com/presenter.png",
+      "duration": 5
+    }
+  }'
+```
+
+`Idempotency-Key` makes retries safe — resend the same key on a dropped connection and you get back the same task instead of paying for a second render.
+
+<SignupCTA
+  title="Try the switch from HeyGen"
+  description="Create a free account, get $5 in free credit, and run the request above against Kling, Veo 3 or Seedance — prepaid per-second USD, no per-seat plan."
+/>
+
+## A second capability: spoken dialogue in one pass
+
+For scripted narration rather than a specific cloned face, Veo 3's native audio generation is the closer HeyGen substitute — the voice, pacing and lip sync come out of the same request as the video:
+
+```bash
+curl -X POST https://api.aigenway.com/v1/generations \
+  -H "Authorization: Bearer sk_live_..." \
+  -H "Idempotency-Key: $(uuidgen)" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "provider": "veo",
+    "model": "veo-3",
+    "method": "text_to_video",
+    "params": {
+      "prompt": "a friendly presenter in a home-office setting says: Here is your weekly product update. Natural lip sync, warm studio lighting.",
+      "duration": 8
+    },
+    "callback_url": "https://your-app.example.com/webhooks/aigenway"
+  }'
+```
+
+## The async task and webhook flow
+
+Video is never synchronous on any provider, HeyGen included — the `POST` above returns a task in `queued` or `processing` state, not a finished clip. Two ways to get the result:
+
+1. **Poll.** `GET /v1/generations/{task_id}` until `status` becomes `succeeded` (or `failed`), then read the output URL off the response.
+2. **Webhook.** Set a `callback_url` on the request and the gateway `POST`s the finished task to your endpoint as soon as it's ready — no polling loop to write.
+
+The task shape — fields, status values, webhook signature — is identical across Kling, Veo 3 and Seedance, so code written against one drives all three. Details in the [task lifecycle](/docs/task-lifecycle) docs.
+
+## Why one gateway beats a HeyGen-only account
+
+- **Three models, one integration.** Swap `provider`/`model` to compare Kling's image-driven animation against Veo 3's dialogue-in-one-pass approach for a given script.
+- **Prepaid per-second USD.** One balance, no per-seat or per-minute plan tiers to forecast.
+- **Production plumbing included.** Idempotency keys, a queue, task state and signed webhooks, already built.
+
+If a cloned, brand-locked digital presenter reciting arbitrary scripts is the actual requirement, keep a HeyGen account for that specific job. For everything else — animating a presenter photo or generating spoken, lip-synced video from a script — Kling, Veo 3 and Seedance behind one key cover it, and you can compare all three without rewriting your integration each time.
+
+<SignupCTA />

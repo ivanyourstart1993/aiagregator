@@ -38,6 +38,7 @@ import asyncTasksWebhooksGuide from './async-tasks-webhooks-guide.mdx?raw';
 import oneApiForAiImageVideoText from './one-api-for-ai-image-video-text.mdx?raw';
 import soraApiAlternative from './sora-api-alternative.mdx?raw';
 import qwenImageApiAlternative from './qwen-image-api-alternative.mdx?raw';
+import heygenApiAlternative from './heygen-api-alternative.mdx?raw';
 
 export interface RawPost {
   slug: string;
@@ -79,4 +80,5 @@ export const rawPosts: RawPost[] = [
   { slug: 'one-api-for-ai-image-video-text', raw: oneApiForAiImageVideoText },
   { slug: 'sora-api-alternative', raw: soraApiAlternative },
   { slug: 'qwen-image-api-alternative', raw: qwenImageApiAlternative },
+  { slug: 'heygen-api-alternative', raw: heygenApiAlternative },
 ];
