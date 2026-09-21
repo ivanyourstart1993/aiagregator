@@ -39,6 +39,7 @@ import oneApiForAiImageVideoText from './one-api-for-ai-image-video-text.mdx?raw
 import soraApiAlternative from './sora-api-alternative.mdx?raw';
 import qwenImageApiAlternative from './qwen-image-api-alternative.mdx?raw';
 import heygenApiAlternative from './heygen-api-alternative.mdx?raw';
+import synthesiaApiAlternative from './synthesia-api-alternative.mdx?raw';
 
 export interface RawPost {
   slug: string;
@@ -81,4 +82,5 @@ export const rawPosts: RawPost[] = [
   { slug: 'sora-api-alternative', raw: soraApiAlternative },
   { slug: 'qwen-image-api-alternative', raw: qwenImageApiAlternative },
   { slug: 'heygen-api-alternative', raw: heygenApiAlternative },
+  { slug: 'synthesia-api-alternative', raw: synthesiaApiAlternative },
 ];

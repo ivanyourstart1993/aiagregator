@@ -1,0 +1,108 @@
+---
+title: "Synthesia API Alternative: Kling, Veo 3 & Seedance, One Key"
+description: "Synthesia isn't on the gateway. The honest trade-off, and how to get comparable spoken avatar and narrated video from Kling, Veo 3 and Seedance behind one API key."
+date: "2026-09-21"
+updated: "2026-09-21"
+tags: ["Video generation", "Avatars", "Alternatives"]
+primaryKeyword: "Synthesia API alternative"
+funnel: "BOFU"
+author:
+  name: "Aigenway"
+relatedDocs:
+  - label: "Kling video guide"
+    href: "/docs/guides/kling-video"
+  - label: "Task lifecycle"
+    href: "/docs/task-lifecycle"
+  - label: "Getting started"
+    href: "/docs/getting-started"
+ogImage: "/blog/synthesia-api-alternative.jpg"
+---
+
+Synthesia is not on Aigenway, and we're not going to pretend otherwise. If you're evaluating a Synthesia API alternative because you want a second vendor, prepaid USD billing, or one gateway instead of a per-minute enterprise plan, here's the honest comparison — and how Kling, Veo 3 and Seedance cover the adjacent ground behind one API key.
+
+## Why Synthesia isn't here, and what you're trading away
+
+Synthesia's core product is a library of stock and custom avatars reciting a script you type into a slide-based editor, with lip-synced TTS in 140-plus languages, on its own hosted account and per-minute credit plan. That specific pipeline — pick a pre-built presenter, paste a script, get a training video with zero video-generation prompting — isn't something this gateway reproduces, because it isn't proxying Synthesia's avatar library or template editor. If your team's actual workflow is "corporate L&D videos from a script, fast, with no prompt-writing," keep a Synthesia seat for that job; we'd rather say so than sell a workaround that quietly falls short. What you gain by switching for everything adjacent is the part that isn't tied to one vendor's avatar catalog: three independently-trained video models behind one integration, and billing you can read from an API instead of a per-minute enterprise contract.
+
+## What replaces it: Kling, Veo 3, Seedance
+
+None of these three ships a slide editor or a stock avatar library, but together they cover most of what people reach for Synthesia to do beyond the exact template-and-script flow:
+
+- **Veo 3** — Google's flagship, and the closest Synthesia substitute for narrated content: it generates dialogue, tone and lip movement in the same pass as the picture, straight from a text prompt, so a script becomes a spoken clip without a separate voice-cloning step.
+- **Kling** — strong image-to-video, useful for animating a specific presenter photo or brand asset into natural speaking motion instead of picking from a stock avatar grid.
+- **Seedance** — ByteDance's model, fast and cheap per second, a good default for iterating on a script's pacing or a short explainer before committing to a final render.
+
+Confirm the live model codes for whichever one you pick before hardcoding a string — availability and versions move:
+
+```bash
+curl "https://api.aigenway.com/v1/methods?provider=veo" \
+  -H "Authorization: Bearer sk_live_..."
+```
+
+## A concrete call: turn a script into narrated video
+
+The nearest equivalent to a Synthesia avatar clip — a script becomes spoken, lip-synced video — maps onto Veo 3's text-to-video request shape:
+
+```bash
+curl -X POST https://api.aigenway.com/v1/generations \
+  -H "Authorization: Bearer sk_live_..." \
+  -H "Idempotency-Key: $(uuidgen)" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "provider": "veo",
+    "model": "veo-3",
+    "method": "text_to_video",
+    "params": {
+      "prompt": "a professional presenter in a bright office says: Welcome to this week'"'"'s onboarding module. Natural lip sync, calm confident tone, direct eye contact with camera.",
+      "duration": 8
+    }
+  }'
+```
+
+`Idempotency-Key` makes retries safe — resend the same key on a dropped connection and you get back the same task instead of paying for a second render.
+
+<SignupCTA
+  title="Try the switch from Synthesia"
+  description="Create a free account, get $5 in free credit, and run the request above against Kling, Veo 3 or Seedance — prepaid per-second USD, no per-minute plan."
+/>
+
+## A second capability: animate a specific presenter
+
+When the requirement is a particular person or brand-approved face rather than a stock avatar, Kling's image-to-video handles the "photo in, presenter moving and speaking out" case that Synthesia's custom-avatar tier otherwise gates behind an enterprise setup fee:
+
+```bash
+curl -X POST https://api.aigenway.com/v1/generations \
+  -H "Authorization: Bearer sk_live_..." \
+  -H "Idempotency-Key: $(uuidgen)" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "provider": "kling",
+    "model": "kling-v2-master",
+    "method": "image_to_video",
+    "params": {
+      "prompt": "presenter speaks directly to camera, natural head and mouth movement, studio lighting, subtle hand gestures",
+      "input_image": "https://example.com/presenter.png",
+      "duration": 5
+    },
+    "callback_url": "https://your-app.example.com/webhooks/aigenway"
+  }'
+```
+
+## The async task and webhook flow
+
+Video is never synchronous on any provider, Synthesia included — the `POST` above returns a task in `queued` or `processing` state, not a finished clip. Two ways to get the result:
+
+1. **Poll.** `GET /v1/generations/{task_id}` until `status` becomes `succeeded` (or `failed`), then read the output URL off the response.
+2. **Webhook.** Set a `callback_url` on the request and the gateway `POST`s the finished task to your endpoint as soon as it's ready — no polling loop to write.
+
+The task shape — fields, status values, webhook signature — is identical across Kling, Veo 3 and Seedance, so code written against one drives all three. Details in the [task lifecycle](/docs/task-lifecycle) docs.
+
+## Why one gateway beats a Synthesia-only account
+
+- **Three models, one integration.** Swap `provider`/`model` to compare Veo 3's narrated dialogue against Kling's photo-driven animation for a given script, without separate contracts.
+- **Prepaid per-second USD.** One balance, no per-minute plan tiers or seat licenses to forecast.
+- **Production plumbing included.** Idempotency keys, a queue, task state and signed webhooks, already built.
+
+If a stock avatar library, a slide-based script editor, or 140-language template TTS is the actual requirement, keep a Synthesia account for that specific job. For everything else — narrated spoken video from a script, or animating a presenter photo — Kling, Veo 3 and Seedance behind one key cover it, and you can compare all three without rewriting your integration each time.
+
+<SignupCTA />
