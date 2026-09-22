@@ -40,6 +40,7 @@ import soraApiAlternative from './sora-api-alternative.mdx?raw';
 import qwenImageApiAlternative from './qwen-image-api-alternative.mdx?raw';
 import heygenApiAlternative from './heygen-api-alternative.mdx?raw';
 import synthesiaApiAlternative from './synthesia-api-alternative.mdx?raw';
+import adobeFireflyApiAlternative from './adobe-firefly-api-alternative.mdx?raw';
 
 export interface RawPost {
   slug: string;
@@ -83,4 +84,5 @@ export const rawPosts: RawPost[] = [
   { slug: 'qwen-image-api-alternative', raw: qwenImageApiAlternative },
   { slug: 'heygen-api-alternative', raw: heygenApiAlternative },
   { slug: 'synthesia-api-alternative', raw: synthesiaApiAlternative },
+  { slug: 'adobe-firefly-api-alternative', raw: adobeFireflyApiAlternative },
 ];
