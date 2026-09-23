@@ -41,6 +41,7 @@ import qwenImageApiAlternative from './qwen-image-api-alternative.mdx?raw';
 import heygenApiAlternative from './heygen-api-alternative.mdx?raw';
 import synthesiaApiAlternative from './synthesia-api-alternative.mdx?raw';
 import adobeFireflyApiAlternative from './adobe-firefly-api-alternative.mdx?raw';
+import segmindApiAlternative from './segmind-api-alternative.mdx?raw';
 
 export interface RawPost {
   slug: string;
@@ -85,4 +86,5 @@ export const rawPosts: RawPost[] = [
   { slug: 'heygen-api-alternative', raw: heygenApiAlternative },
   { slug: 'synthesia-api-alternative', raw: synthesiaApiAlternative },
   { slug: 'adobe-firefly-api-alternative', raw: adobeFireflyApiAlternative },
+  { slug: 'segmind-api-alternative', raw: segmindApiAlternative },
 ];
