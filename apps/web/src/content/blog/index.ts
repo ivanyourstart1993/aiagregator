@@ -43,6 +43,7 @@ import synthesiaApiAlternative from './synthesia-api-alternative.mdx?raw';
 import adobeFireflyApiAlternative from './adobe-firefly-api-alternative.mdx?raw';
 import segmindApiAlternative from './segmind-api-alternative.mdx?raw';
 import novitaAiAlternative from './novita-ai-alternative.mdx?raw';
+import imageEditingApi from './image-editing-api.mdx?raw';
 
 export interface RawPost {
   slug: string;
@@ -89,4 +90,5 @@ export const rawPosts: RawPost[] = [
   { slug: 'adobe-firefly-api-alternative', raw: adobeFireflyApiAlternative },
   { slug: 'segmind-api-alternative', raw: segmindApiAlternative },
   { slug: 'novita-ai-alternative', raw: novitaAiAlternative },
+  { slug: 'image-editing-api', raw: imageEditingApi },
 ];

@@ -1,0 +1,105 @@
+---
+title: "Image Editing API: Edits & Inpainting with One Key"
+description: "Edit an existing image over one REST API — Nano Banana image_edit and gpt-image-1 masked inpainting behind one API key, prepaid USD billing, real curl requests."
+date: "2026-09-25"
+updated: "2026-09-25"
+tags: ["Image generation", "Editing"]
+primaryKeyword: "Image editing API (edits and inpainting)"
+funnel: "MOFU"
+author:
+  name: "Aigenway"
+relatedDocs:
+  - label: "Methods"
+    href: "/docs/methods"
+  - label: "Getting started"
+    href: "/docs/getting-started"
+  - label: "Nano Banana API"
+    href: "/blog/nano-banana-api"
+  - label: "GPT Image 1 API"
+    href: "/blog/gpt-image-1-api"
+ogImage: "/blog/image-editing-api.jpg"
+---
+
+Most "generate an image" APIs stop at text-to-image — editing an existing photo (retouch a background, swap an object, inpaint a masked region) usually means a different provider, a different SDK, or both. On Aigenway, `image_edit` is just another method on the same `provider`/`model`/`method` contract: one source image, one instruction prompt, one API key, whether the model behind it is Google's Nano Banana or OpenAI's gpt-image-1.
+
+## Two editing models, one method name
+
+Both `google_banana` and `openai_image` expose `image_edit` alongside their `text_to_image` method, so switching providers mid-project is a one-line change, not a new integration. Confirm the exact model codes live on your account before you build against either — providers ship and retire versions on their own schedule:
+
+```bash
+curl "https://api.aigenway.com/v1/methods?provider=google_banana" \
+  -H "Authorization: Bearer sk_live_..."
+
+curl "https://api.aigenway.com/v1/methods?provider=openai_image" \
+  -H "Authorization: Bearer sk_live_..."
+```
+
+Each response lists the current `model` codes, which methods they support, and per-image pricing on your account right now.
+
+## Edit with an instruction prompt (Nano Banana)
+
+Nano Banana's `image_edit` takes a single source image plus a plain-language instruction — no mask required. Pass the image URL in `input_images` and describe exactly what should change and what should stay the same:
+
+```bash
+curl -X POST https://api.aigenway.com/v1/generations \
+  -H "Authorization: Bearer sk_live_..." \
+  -H "Idempotency-Key: $(uuidgen)" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "provider": "google_banana",
+    "model": "gemini-3.1-flash-image-preview",
+    "method": "image_edit",
+    "params": {
+      "prompt": "remove the parked car in the background, keep everything else unchanged",
+      "input_images": ["https://example.com/street-photo.jpg"]
+    }
+  }'
+```
+
+Nano Banana is built around a single reference image per request — it does not accept a separate mask, so the prompt itself has to carry the scope of the edit ("only the background," "keep the subject's pose and lighting").
+
+<SignupCTA
+  title="Try image editing on your own photo"
+  description="Create a free account, copy your API key, and run the curl above against a real image URL — $5 in free credit to start, prepaid USD billing, one key for every editing model."
+/>
+
+## Masked inpainting (gpt-image-1)
+
+gpt-image-1 supports the same `image_edit` method but adds an optional PNG mask, which is what makes it an inpainting tool rather than just an instruction-follower — the transparent region of the mask marks exactly where the model is allowed to draw, and everything outside it is left untouched pixel-for-pixel:
+
+```bash
+curl -X POST https://api.aigenway.com/v1/generations \
+  -H "Authorization: Bearer sk_live_..." \
+  -H "Idempotency-Key: $(uuidgen)" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "provider": "openai_image",
+    "model": "gpt-image-1",
+    "method": "image_edit",
+    "params": {
+      "prompt": "fill the masked area with a wooden bookshelf",
+      "input_images": ["https://example.com/living-room.png"],
+      "mask": "https://example.com/living-room-mask.png",
+      "resolution": "1024x1024"
+    }
+  }'
+```
+
+The mask must match the source image's dimensions, with alpha transparency marking the editable region. Without a mask, gpt-image-1 still edits the whole image from the prompt alone, same as Nano Banana — the mask is what buys you a hard-edged, region-locked result.
+
+## Picking a model for the job
+
+- **No mask, fast iteration** — Nano Banana's instruction-only `image_edit` is the quicker loop when the change is describable in a sentence ("swap the shirt color to navy").
+- **Precise region control** — gpt-image-1's mask support is the better fit for product photos, UI mockups, or any edit where the untouched pixels have to stay bit-identical.
+- **Both return a task, not an inline image.** Poll `GET /v1/generations/{task_id}` or set a `callback_url` to get a webhook the moment the edit finishes — the task shape is identical across every model on the gateway, so the polling or webhook code you write once works for both. Full contract in the [task lifecycle](/docs/task-lifecycle) and [webhooks](/docs/webhooks) docs.
+
+## Why one gateway beats a provider-only account
+
+- **No separate GCP or OpenAI account.** No per-provider API key to provision, no separate invoice to reconcile — sign up once and call the endpoint.
+- **One integration, every editing model.** The same `provider`/`model`/`method`/`params` shape that edits with Nano Banana also drives gpt-image-1, and every future editing model added to the gateway.
+- **Real USD billing.** A prepaid balance replaces per-provider invoicing; check what's left from the API at any time.
+- **Idempotency and webhooks included.** Retry-safe requests and signed callbacks are already built into the task contract, not something you bolt on per provider.
+
+Pull the current model codes from `/v1/methods`, pick instruction-only or masked editing based on how precise the change needs to be, and ship — the request shape doesn't change either way.
+
+<SignupCTA />
