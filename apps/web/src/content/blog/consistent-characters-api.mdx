@@ -1,0 +1,111 @@
+---
+title: "Generate Consistent Characters via API"
+description: "Keep a character on-model across generations with reference-image prompting on Nano Banana and gpt-image-1 — one API key, real curl requests, prepaid USD billing."
+date: "2026-09-26"
+updated: "2026-09-26"
+tags: ["Image generation", "Characters"]
+primaryKeyword: "Generate consistent characters via API"
+funnel: "MOFU"
+author:
+  name: "Aigenway"
+relatedDocs:
+  - label: "Methods"
+    href: "/docs/methods"
+  - label: "Task lifecycle"
+    href: "/docs/task-lifecycle"
+  - label: "Image editing API"
+    href: "/blog/image-editing-api"
+ogImage: "/blog/consistent-characters-api.jpg"
+---
+
+Generate the same character in a new pose, outfit, or scene and most image models drift — a different face, a slightly different hairstyle, a costume that's close but not quite right. Keeping a character on-model across a run of generations is a prompting and reference-image problem, not a different product, and it works the same way whether the model behind the call is Nano Banana or gpt-image-1: one `provider`/`model`/`method` contract, one API key.
+
+## Why characters drift, and what fixes it
+
+Text-to-image models regenerate the whole scene from the prompt every time, so anything not pinned down — face shape, exact clothing, color palette — is free to vary. Two levers pull it back on-model:
+
+- **A reference image.** Passing the character's existing portrait into `input_images` on an `image_edit` call anchors the model to that specific face and outfit instead of re-imagining one from text alone.
+- **A locked prompt template.** Keep the character description (face, hair, outfit, art style) identical across calls and vary only the scene or pose — the less that changes in the prompt, the less that drifts in the output.
+
+## Generate the reference character
+
+Start with one clean `text_to_image` generation that nails the character — this becomes the reference you reuse for every subsequent scene:
+
+```bash
+curl -X POST https://api.aigenway.com/v1/generations \
+  -H "Authorization: Bearer sk_live_..." \
+  -H "Idempotency-Key: $(uuidgen)" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "provider": "google_banana",
+    "model": "gemini-3.1-flash-image-preview",
+    "method": "text_to_image",
+    "params": {
+      "prompt": "portrait of a young female courier with short red hair, freckles, olive-green jacket, flat studio lighting, neutral background",
+      "aspect_ratio": "1:1"
+    }
+  }'
+```
+
+Confirm the live model codes for whichever provider you build against with `GET https://api.aigenway.com/v1/methods?provider=google_banana` (swap in `openai_image` for gpt-image-1) — don't hardcode a version string you haven't seen on your own account.
+
+<SignupCTA
+  title="Generate your first reference character"
+  description="Create a free account, copy your API key, and run the curl above — $5 in free credit to start, prepaid USD billing, one key for every image model."
+/>
+
+## Reuse the reference across new scenes
+
+Once you have the reference image's URL, every new scene is an `image_edit` call that passes it back in as `input_images` with a prompt that changes only the setting or action, not the character:
+
+```bash
+curl -X POST https://api.aigenway.com/v1/generations \
+  -H "Authorization: Bearer sk_live_..." \
+  -H "Idempotency-Key: $(uuidgen)" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "provider": "google_banana",
+    "model": "gemini-3.1-flash-image-preview",
+    "method": "image_edit",
+    "params": {
+      "prompt": "same courier, now running across a rain-soaked rooftop at night, same face, hair, and jacket, cinematic lighting",
+      "input_images": ["https://cdn.example.com/courier-reference.jpg"]
+    }
+  }'
+```
+
+Repeating "same face, hair, and jacket" in the prompt is not filler — instruction-following editors like Nano Banana treat it as a hard constraint on what must stay fixed while the rest of the scene changes freely. gpt-image-1 takes the identical request shape via `openai_image`/`gpt-image-1`, so a run of characters across both models is one conditional, not two integrations.
+
+## Batch a full scene set without re-describing the character
+
+Because every call in the set shares the same `input_images` reference, generating ten scenes for one character is ten `image_edit` requests that differ only in the `prompt` field — script it as a loop over scene descriptions, keep the reference URL and the character-lock phrase constant, and let the task IDs come back independently:
+
+```bash
+for scene in "at a market stall" "climbing a fire escape" "sitting by a window at dusk"; do
+  curl -X POST https://api.aigenway.com/v1/generations \
+    -H "Authorization: Bearer sk_live_..." \
+    -H "Idempotency-Key: $(uuidgen)" \
+    -H "Content-Type: application/json" \
+    -d "{
+      \"provider\": \"google_banana\",
+      \"model\": \"gemini-3.1-flash-image-preview\",
+      \"method\": \"image_edit\",
+      \"params\": {
+        \"prompt\": \"same courier, same face, hair, and jacket, ${scene}\",
+        \"input_images\": [\"https://cdn.example.com/courier-reference.jpg\"]
+      }
+    }"
+done
+```
+
+Each call returns a task, not an inline image — poll `GET /v1/generations/{task_id}` or set a `callback_url` to collect the finished asset per scene. The task shape is identical across every model on the gateway, so the polling or webhook code you write for this character set works unchanged when you point the same loop at a video model later. Full contract in the [task lifecycle](/docs/task-lifecycle) docs.
+
+## Why one gateway beats a single-provider workflow
+
+- **Compare consistency models directly.** Nano Banana and gpt-image-1 both take a reference image on the same `image_edit` method — swap the `provider`/`model` pair to A/B which one holds a face steadier across your specific character, no second SDK required.
+- **One key, one prepaid balance.** No separate GCP project for Nano Banana and no separate OpenAI billing for gpt-image-1 — one account funds both.
+- **Idempotency and webhooks are already there.** Retry a batch safely with the same `Idempotency-Key`, and get scenes delivered by webhook as they finish instead of polling in a hot loop.
+
+Lock the character description, keep the reference image constant, and vary only the scene in the prompt — that's the whole trick, and it's the same trick across every model on the gateway.
+
+<SignupCTA />
