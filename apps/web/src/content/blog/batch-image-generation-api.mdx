@@ -1,0 +1,155 @@
+---
+title: "Batch Image Generation API: Concurrency and Cost Control"
+description: "Generate images at scale with one task contract: idempotency keys, bounded concurrency, webhook collection, and a balance check before you queue the batch."
+date: "2026-09-27"
+updated: "2026-09-27"
+tags: ["Image generation", "Scale"]
+primaryKeyword: "Batch image generation API"
+funnel: "MOFU"
+author:
+  name: "Aigenway"
+relatedDocs:
+  - label: "Idempotency"
+    href: "/docs/idempotency"
+  - label: "Webhooks"
+    href: "/docs/webhooks"
+  - label: "Task lifecycle"
+    href: "/docs/task-lifecycle"
+  - label: "Async tasks and webhooks guide"
+    href: "/blog/async-tasks-webhooks-guide"
+ogImage: "/blog/batch-image-generation-api.jpg"
+---
+
+Generating one image on demand and generating a thousand product shots overnight are different engineering problems: the second one needs safe retries, a concurrency ceiling so you don't get throttled, a way to collect results without a thread per task, and a cost check before you commit the budget. Aigenway runs every image model behind the same task contract, so the batch harness you write once works for every provider you point it at.
+
+## One task shape, looped over your batch
+
+Each item in a batch is the same request you'd send for a single image — `provider`, `model`, `method`, `params` — posted to `/v1/generations`. The gateway hands back a task, not a finished file, so your loop submits fast and collects later instead of blocking per item:
+
+```bash
+curl -X POST https://api.aigenway.com/v1/generations \
+  -H "Authorization: Bearer sk_live_..." \
+  -H "Idempotency-Key: $(uuidgen)" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "provider": "google",
+    "model": "nano-banana",
+    "method": "text_to_image",
+    "params": {
+      "prompt": "matte ceramic mug, studio lighting, white background, product photo",
+      "aspect_ratio": "1:1"
+    }
+  }'
+```
+
+```json
+{
+  "task_id": "cmomwuy0m000qbr0371src20a",
+  "status": "pending",
+  "provider": "google",
+  "model": "nano-banana",
+  "method": "text_to_image",
+  "created_at": "2026-09-27T09:12:03.000Z"
+}
+```
+
+Don't hardcode a `model` string from a batch script written months ago — list what your account can actually call with `GET https://api.aigenway.com/v1/methods?provider=google` and read the code from there, since providers rev their lineup on their own schedule.
+
+<SignupCTA
+  title="Run your first batch"
+  description="Create a free account, get $5 in free credit, and submit a loop of ten images against one endpoint before you scale it to a thousand."
+/>
+
+## Idempotency keys make retries in a loop safe
+
+A batch of a thousand submits will hit at least one flaky connection — a timeout on your side after the request already reached the gateway, a proxy that drops the response mid-flight. Without a stable key, retrying that submit means paying for and rendering a duplicate image. Generate one `Idempotency-Key` per batch item (not per HTTP attempt) and reuse it on every retry of that same item:
+
+```javascript
+import { randomUUID } from 'node:crypto';
+
+async function submitItem(item, apiKey) {
+  const idempotencyKey = item.idempotencyKey ?? (item.idempotencyKey = randomUUID());
+  const res = await fetch('https://api.aigenway.com/v1/generations', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      'Idempotency-Key': idempotencyKey,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      provider: item.provider,
+      model: item.model,
+      method: 'text_to_image',
+      params: item.params,
+    }),
+  });
+  return res.json();
+}
+```
+
+Resend the same key after a timeout and you get back the original task instead of a second render — the retry is free. This is also what makes a batch safe to resume: if your process crashes halfway through a thousand-item run, replay the whole list with the same stored keys and already-submitted items just return their existing task.
+
+## Bound concurrency and back off on 429
+
+Firing a thousand submits at once doesn't make the batch finish faster — it just moves the queue from your process to the gateway's, and past a point the gateway returns `429` with `rate_limit_exceeded` instead of accepting more work. Cap how many requests are in flight at once and let a small worker pool drain the queue instead of a naive `Promise.all` over every item:
+
+```javascript
+async function runBatch(items, apiKey, concurrency = 5) {
+  const queue = [...items];
+  const results = [];
+
+  async function worker() {
+    while (queue.length) {
+      const item = queue.shift();
+      try {
+        results.push(await submitItem(item, apiKey));
+      } catch (err) {
+        if (err.status === 429) {
+          queue.push(item); // retry later, same idempotency key
+          await new Promise((r) => setTimeout(r, 2000));
+        } else {
+          throw err;
+        }
+      }
+    }
+  }
+
+  await Promise.all(Array.from({ length: concurrency }, worker));
+  return results;
+}
+```
+
+Start with a conservative worker count, watch for `429`s in your logs, and raise it until you find the ceiling rather than guessing a number upfront — the right concurrency depends on your account and the models you're calling, not a fixed constant. Because every retry reuses the item's stored `Idempotency-Key`, backing off and resubmitting after a `429` never risks a duplicate charge.
+
+## Collect a thousand results with one webhook instead of a thousand polls
+
+Polling `GET /v1/tasks/<task_id>` per item works for ten images; for a thousand it means a thousand open loops. Pass the same `callback_url` on every submit in the batch and let the gateway push each result to your endpoint as it finishes, in whatever order the providers actually complete them:
+
+```bash
+curl -X POST https://api.aigenway.com/v1/generations \
+  -H "Authorization: Bearer sk_live_..." \
+  -H "Idempotency-Key: $(uuidgen)" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "provider": "google",
+    "model": "nano-banana",
+    "method": "text_to_image",
+    "params": { "prompt": "matte ceramic mug, studio lighting, white background" },
+    "callback_url": "https://your-app.example.com/webhooks/aigenway"
+  }'
+```
+
+Each delivery carries `X-Aggregator-Task-Id` and a `X-Aggregator-Signature` HMAC you verify before trusting the body — the same contract documented on the [webhooks](/docs/webhooks) page and the [async tasks guide](/blog/async-tasks-webhooks-guide). Key your handler off `task_id` (map it back to your batch item when you submit) and make it idempotent, since a delivery can be retried if your endpoint doesn't return `2xx` fast enough.
+
+## Check the balance before you queue, not after it's gone
+
+A batch of a thousand images can burn through a budget in minutes if a prompt or model choice is wrong. Aigenway keeps a prepaid USD balance readable with a plain `GET`, so a batch script can check funds against an estimated cost before it submits item one instead of finding out mid-run:
+
+```bash
+curl https://api.aigenway.com/v1/balance \
+  -H "Authorization: Bearer sk_live_..."
+```
+
+Every settled task also reports its own `charged_amount` in micro-USD, so summing that field across a batch's completed tasks gives you an exact spend for the run — no separate credits ledger or per-model rate card to reconcile against a monthly invoice. If a submit would push you under what the batch needs, the gateway rejects it with `insufficient_balance` up front rather than letting the run fail halfway through on task 600.
+
+<SignupCTA />

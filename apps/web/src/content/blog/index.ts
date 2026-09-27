@@ -45,6 +45,7 @@ import segmindApiAlternative from './segmind-api-alternative.mdx?raw';
 import novitaAiAlternative from './novita-ai-alternative.mdx?raw';
 import imageEditingApi from './image-editing-api.mdx?raw';
 import consistentCharactersApi from './consistent-characters-api.mdx?raw';
+import batchImageGenerationApi from './batch-image-generation-api.mdx?raw';
 
 export interface RawPost {
   slug: string;
@@ -93,4 +94,5 @@ export const rawPosts: RawPost[] = [
   { slug: 'novita-ai-alternative', raw: novitaAiAlternative },
   { slug: 'image-editing-api', raw: imageEditingApi },
   { slug: 'consistent-characters-api', raw: consistentCharactersApi },
+  { slug: 'batch-image-generation-api', raw: batchImageGenerationApi },
 ];
