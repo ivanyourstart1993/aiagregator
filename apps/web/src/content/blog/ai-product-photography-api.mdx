@@ -1,0 +1,132 @@
+---
+title: "AI Product Photography API: Backgrounds, Variants, Scale"
+description: "Generate and edit e-commerce product shots via API — swap backgrounds, batch color variants, and keep the product consistent across a catalog with one key."
+date: "2026-09-28"
+updated: "2026-09-28"
+tags: ["Image generation", "E-commerce"]
+primaryKeyword: "AI product photography API"
+funnel: "BOFU"
+author:
+  name: "Aigenway"
+relatedDocs:
+  - label: "Methods"
+    href: "/docs/methods"
+  - label: "Idempotency"
+    href: "/docs/idempotency"
+  - label: "Batch image generation API"
+    href: "/blog/batch-image-generation-api"
+  - label: "Image editing API"
+    href: "/blog/image-editing-api"
+ogImage: "/blog/ai-product-photography-api.jpg"
+---
+
+A product catalog with five hundred SKUs and three background variants each is fifteen hundred photos — a reshoot budget most teams don't have. Aigenway puts studio-shot generation and background-swap editing behind the same `provider`/`model`/`method` contract, so turning one raw product photo into a full set of on-brand, catalog-ready images is a loop over an API, not a photo studio booking.
+
+## What the gateway gives you for a catalog
+
+Two methods cover most product photography workflows: `text_to_image` for building a clean studio shot from a prompt, and `image_edit` for swapping the background or cleaning up an existing photo while keeping the product itself untouched. Both are exposed the same way across providers — confirm the exact model codes your account can call before you build against one:
+
+```bash
+curl "https://api.aigenway.com/v1/methods?provider=google_banana" \
+  -H "Authorization: Bearer sk_live_..."
+```
+
+The response lists live `model` codes, supported methods, and per-image pricing on your account — don't hardcode a version string from a blog post or an old script.
+
+## Swap the background on a real product photo
+
+Shoot the product once against a plain backdrop, then use `image_edit` to place it against whatever background the listing needs — white for the marketplace feed, lifestyle for the storefront banner — without re-lighting or re-shooting:
+
+```bash
+curl -X POST https://api.aigenway.com/v1/generations \
+  -H "Authorization: Bearer sk_live_..." \
+  -H "Idempotency-Key: $(uuidgen)" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "provider": "google_banana",
+    "model": "gemini-3.1-flash-image-preview",
+    "method": "image_edit",
+    "params": {
+      "prompt": "replace the background with a seamless pure white studio backdrop, keep the product, its shadow, and reflections unchanged",
+      "input_images": ["https://cdn.example.com/products/mug-raw.jpg"]
+    }
+  }'
+```
+
+The response is a task, not an inline file:
+
+```json
+{
+  "task_id": "cmomx1a2b000rcr0481tcv31b",
+  "status": "pending",
+  "provider": "google_banana",
+  "model": "gemini-3.1-flash-image-preview",
+  "method": "image_edit",
+  "created_at": "2026-09-28T10:04:11.000Z"
+}
+```
+
+Naming what must stay fixed — "keep the product, its shadow, and reflections unchanged" — is what stops an instruction-following editor from redrawing the product along with the backdrop.
+
+<SignupCTA
+  title="Swap your first product background"
+  description="Create a free account, copy your API key, and run the curl above against one of your own product photos — $5 in free credit to start, prepaid USD billing."
+/>
+
+## Batch color and angle variants without reshooting
+
+A single reference shot and a loop of `image_edit` calls covers most variant requests a catalog manager makes — a different color, a different crop, a different backdrop — without touching a camera. Keep the reference image and the "don't change this" clause constant, and vary only what the variant actually changes:
+
+```bash
+for variant in "matte black finish" "brushed steel finish" "cream white finish"; do
+  curl -X POST https://api.aigenway.com/v1/generations \
+    -H "Authorization: Bearer sk_live_..." \
+    -H "Idempotency-Key: $(uuidgen)" \
+    -H "Content-Type: application/json" \
+    -d "{
+      \"provider\": \"google_banana\",
+      \"model\": \"gemini-3.1-flash-image-preview\",
+      \"method\": \"image_edit\",
+      \"params\": {
+        \"prompt\": \"same mug shape, same studio lighting and camera angle, change the finish to ${variant}\",
+        \"input_images\": [\"https://cdn.example.com/products/mug-white-bg.jpg\"]
+      }
+    }"
+done
+```
+
+Each iteration reuses a fresh `Idempotency-Key`, so a flaky connection mid-batch retries safely instead of risking a duplicate render and a duplicate charge — the same pattern covered in the [batch image generation](/blog/batch-image-generation-api) and [consistent characters](/blog/consistent-characters-api) posts applies directly to product variants.
+
+## Collect a catalog-scale run by webhook, not by polling
+
+Once a batch is past a few dozen items, polling `GET /v1/generations/{task_id}` per image turns into a lot of open loops. Pass a `callback_url` on every submit in the run and let the gateway push each finished image to your endpoint as it completes:
+
+```bash
+curl -X POST https://api.aigenway.com/v1/generations \
+  -H "Authorization: Bearer sk_live_..." \
+  -H "Idempotency-Key: $(uuidgen)" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "provider": "google_banana",
+    "model": "gemini-3.1-flash-image-preview",
+    "method": "image_edit",
+    "params": {
+      "prompt": "replace the background with a soft neutral gray studio backdrop, keep the product unchanged",
+      "input_images": ["https://cdn.example.com/products/mug-raw.jpg"]
+    },
+    "callback_url": "https://your-app.example.com/webhooks/aigenway"
+  }'
+```
+
+Each delivery carries an `X-Aggregator-Task-Id` you map back to the SKU and variant that requested it, plus an `X-Aggregator-Signature` HMAC to verify before you write the result to your catalog. The task shape doesn't change between a ten-image test run and a thousand-image catalog refresh — the full contract is in the [task lifecycle](/docs/task-lifecycle) docs.
+
+## Why one gateway beats a provider-only account
+
+- **One contract for shooting and editing.** `text_to_image` builds a studio shot from scratch, `image_edit` swaps backgrounds or produces variants from an existing photo — same `provider`/`model`/`method` request either way.
+- **Swap providers without rewriting the pipeline.** If a different model holds product geometry more faithfully or renders a truer white backdrop, changing `provider`/`model` is a config edit, not a new SDK integration.
+- **Prepaid USD billing, one balance.** No per-provider invoice to reconcile against a catalog run — check `GET /v1/balance` before queuing a large batch and read exact spend per task off `charged_amount` afterward.
+- **Idempotency and webhooks are already built in.** Retry-safe submits and signed callbacks come with the task contract, not as something you add per provider.
+
+Shoot the product once, keep the "don't change this" clause in every prompt, and let the loop produce the backgrounds and variants the catalog actually needs.
+
+<SignupCTA />
