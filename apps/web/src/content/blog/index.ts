@@ -47,6 +47,7 @@ import imageEditingApi from './image-editing-api.mdx?raw';
 import consistentCharactersApi from './consistent-characters-api.mdx?raw';
 import batchImageGenerationApi from './batch-image-generation-api.mdx?raw';
 import aiProductPhotographyApi from './ai-product-photography-api.mdx?raw';
+import aiVideoForAdsApi from './ai-video-for-ads-api.mdx?raw';
 
 export interface RawPost {
   slug: string;
@@ -97,4 +98,5 @@ export const rawPosts: RawPost[] = [
   { slug: 'consistent-characters-api', raw: consistentCharactersApi },
   { slug: 'batch-image-generation-api', raw: batchImageGenerationApi },
   { slug: 'ai-product-photography-api', raw: aiProductPhotographyApi },
+  { slug: 'ai-video-for-ads-api', raw: aiVideoForAdsApi },
 ];

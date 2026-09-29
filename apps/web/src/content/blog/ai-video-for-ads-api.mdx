@@ -1,0 +1,158 @@
+---
+title: "AI Video for Ads via API: Text-to-Video & Image-to-Video Clips"
+description: "Produce short ad clips programmatically with Kling, Veo and Seedance — text-to-video for concepts, image-to-video from product stills, one API key."
+date: "2026-09-29"
+updated: "2026-09-29"
+tags: ["Video generation", "Marketing"]
+primaryKeyword: "AI video for ads via API"
+funnel: "MOFU"
+author:
+  name: "Aigenway"
+relatedDocs:
+  - label: "Kling video guide"
+    href: "/docs/guides/kling-video"
+  - label: "Webhooks"
+    href: "/docs/webhooks"
+  - label: "Veo 3 vs Kling vs Seedance"
+    href: "/blog/veo-3-vs-kling-vs-seedance"
+  - label: "AI product photography API"
+    href: "/blog/ai-product-photography-api"
+ogImage: "/blog/ai-video-for-ads-api.jpg"
+---
+
+A performance marketing team testing ten hooks across three aspect ratios needs thirty clips, not one hero video — a budget and timeline no production shoot fits. Aigenway puts Kling, Veo and Seedance behind the same `provider`/`model`/`method` contract, so generating ad variants from a text brief or an existing product still is a script you run, not a shoot you book.
+
+## What an ad pipeline needs from a video API
+
+Ad clips have constraints a general demo reel doesn't: a fixed duration to match a placement, a specific `aspect_ratio` per platform (`9:16` for Reels and TikTok, `1:1` for feed, `16:9` for YouTube pre-roll), and a turnaround fast enough to iterate on a hook before the campaign launches. Every model on the gateway takes the same `duration` and `aspect_ratio` params regardless of provider, so the constraint lives in your request, not in provider-specific glue code. Confirm the live model codes and per-second pricing on your account before you build against one:
+
+```bash
+curl "https://api.aigenway.com/v1/methods?provider=kling" \
+  -H "Authorization: Bearer sk_live_..."
+```
+
+Don't hardcode a version string from this post — providers rev their lineup on their own schedule, and `/v1/methods` is the ground truth for what your account can actually call.
+
+## Animate a product still into a vertical ad
+
+Most ad creative starts with an asset you already have: a product photo, a packshot, a brand still. `image_to_video` takes that image and a motion prompt and returns a short clip framed for the placement you need — no reshoot, no stock footage:
+
+```bash
+curl -X POST https://api.aigenway.com/v1/generations \
+  -H "Authorization: Bearer sk_live_..." \
+  -H "Idempotency-Key: $(uuidgen)" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "provider": "kling",
+    "model": "kling-v2-master",
+    "method": "image_to_video",
+    "params": {
+      "prompt": "slow push-in on the product, soft studio light shifting, subtle steam rising, cinematic ad look",
+      "input_image": "https://cdn.example.com/products/bottle-still.jpg",
+      "duration": 5,
+      "aspect_ratio": "9:16"
+    }
+  }'
+```
+
+The response is a task, not a finished file — video render is never instant:
+
+```json
+{
+  "task_id": "cmomx7b3c000scr04h2q9d81f",
+  "status": "pending",
+  "provider": "kling",
+  "model": "kling-v2-master",
+  "method": "image_to_video",
+  "created_at": "2026-09-29T09:12:03.000Z"
+}
+```
+
+<SignupCTA
+  title="Turn a product still into your first ad clip"
+  description="Create a free account, copy your API key, and animate a product photo with the request above — $5 in free credit to start, prepaid USD billing."
+/>
+
+## Generate a concept spot from just a brief
+
+When there's no still to start from — a new product, an abstract concept, a scene nobody has shot — `text_to_video` builds the clip directly from a prompt. Same endpoint, same task contract, just a different `method` and no `input_image`:
+
+```bash
+curl -X POST https://api.aigenway.com/v1/generations \
+  -H "Authorization: Bearer sk_live_..." \
+  -H "Idempotency-Key: $(uuidgen)" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "provider": "seedance",
+    "model": "seedance-1-pro",
+    "method": "text_to_video",
+    "params": {
+      "prompt": "a runner laces up at dawn on an empty city street, energetic, handheld camera feel, product logo visible on the shoe",
+      "duration": 5,
+      "aspect_ratio": "16:9"
+    }
+  }'
+```
+
+Seedance's lower cost-per-second makes it a reasonable default for early-concept passes where you're testing whether an idea works at all before committing to a higher-fidelity render on Kling or Veo — switching between them later is a one-line change to `provider`/`model`, not a rewrite.
+
+## Batch hook and aspect-ratio variants for A/B testing
+
+Ad testing lives on variants: the same core idea across several hooks, several first frames, several crop ratios. Loop the same `params` shape over the axis you're testing and give each submit its own `Idempotency-Key` so a retry on a flaky connection can't double-charge a variant:
+
+```bash
+for ratio in "9:16" "1:1" "16:9"; do
+  curl -X POST https://api.aigenway.com/v1/generations \
+    -H "Authorization: Bearer sk_live_..." \
+    -H "Idempotency-Key: $(uuidgen)" \
+    -H "Content-Type: application/json" \
+    -d "{
+      \"provider\": \"kling\",
+      \"model\": \"kling-v2-master\",
+      \"method\": \"image_to_video\",
+      \"params\": {
+        \"prompt\": \"slow push-in on the product, soft studio light shifting, cinematic ad look\",
+        \"input_image\": \"https://cdn.example.com/products/bottle-still.jpg\",
+        \"duration\": 5,
+        \"aspect_ratio\": \"${ratio}\"
+      }
+    }"
+done
+```
+
+Swap the loop variable for a hook line embedded in the prompt instead of the aspect ratio, or nest both, and the same pattern produces a full test matrix from one product still — the identical batching approach used for [product photo variants](/blog/ai-product-photography-api) applies directly to ad creative.
+
+## Collect finished clips by webhook, not by polling
+
+A real test matrix is dozens of renders running concurrently — polling each one is wasted requests and added latency. Pass a `callback_url` on every submit and let the gateway push the finished clip to your endpoint the moment it's ready:
+
+```bash
+curl -X POST https://api.aigenway.com/v1/generations \
+  -H "Authorization: Bearer sk_live_..." \
+  -H "Idempotency-Key: $(uuidgen)" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "provider": "veo",
+    "model": "veo-3",
+    "method": "text_to_video",
+    "params": {
+      "prompt": "product hero shot, bright kitchen counter, morning light through a window",
+      "duration": 5,
+      "aspect_ratio": "16:9"
+    },
+    "callback_url": "https://your-app.example.com/webhooks/aigenway"
+  }'
+```
+
+Each delivery carries an `X-Aggregator-Task-Id` you map back to the variant that requested it, and an `X-Aggregator-Signature` HMAC to verify before you pull the clip into your ad account. The webhook payload shape is identical no matter which of the three models rendered it — see the [webhooks](/docs/webhooks) docs for the full contract and the signature check.
+
+## Why one gateway beats separate Kling, Veo and Seedance accounts
+
+- **One contract across three models.** `text_to_video` and `image_to_video` take the same `params` shape whether the provider is Kling, Veo or Seedance — testing all three on one brief is a config change, not three integrations.
+- **Match cost to the stage.** Run cheap, fast Seedance passes for early concept testing, then re-render the winning hook on Kling or Veo for the version that actually ships.
+- **Prepaid USD billing, one balance.** No separate credit pack per provider to forecast against a campaign budget — check `GET /v1/balance` before queuing a large test matrix.
+- **Idempotency and webhooks built in.** Retry-safe submits and signed callbacks come with the task contract, not as something you bolt on per vendor.
+
+Shoot or generate the still once, loop the variants you actually need to test, and let the webhook — not a polling loop — tell you when the matrix is ready to review.
+
+<SignupCTA />
