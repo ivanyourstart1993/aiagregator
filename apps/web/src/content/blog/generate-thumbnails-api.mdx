@@ -1,0 +1,131 @@
+---
+title: "Generate Video Thumbnails with an API: Prompts and Sizing"
+description: "Auto-generate on-brand video thumbnails from a still frame or a prompt — aspect ratios per platform, text-safe composition, and a batch pattern for a whole catalog."
+date: "2026-09-30"
+updated: "2026-09-30"
+tags: ["Image generation", "Thumbnails"]
+primaryKeyword: "Generate video thumbnails with an API"
+funnel: "MOFU"
+author:
+  name: "Aigenway"
+relatedDocs:
+  - label: "Methods"
+    href: "/docs/methods"
+  - label: "Idempotency"
+    href: "/docs/idempotency"
+  - label: "Batch image generation API"
+    href: "/blog/batch-image-generation-api"
+  - label: "Image editing API"
+    href: "/blog/image-editing-api"
+ogImage: "/blog/generate-thumbnails-api.jpg"
+---
+
+A thumbnail is the one frame of a video most people ever see, and hand-designing one per upload doesn't scale past a handful of videos a week. Aigenway puts thumbnail generation behind the same `provider`/`model`/`method` contract as every other image call, so a video pipeline can produce an on-brand, correctly-sized thumbnail for every upload without a design queue in the way.
+
+## Two ways to get a thumbnail: from scratch or from a frame
+
+`text_to_image` builds a thumbnail from a prompt alone — useful when you have a title and topic but no usable frame yet. `image_edit` takes an extracted frame (or a rough screenshot) and restyles it — sharper contrast, a cleaner background, room left for a title overlay — while keeping the subject recognizable. Both run through the same request shape across providers; confirm the exact model codes your account can call before hardcoding one:
+
+```bash
+curl "https://api.aigenway.com/v1/methods?provider=google_banana" \
+  -H "Authorization: Bearer sk_live_..."
+```
+
+The response lists live `model` codes, the methods each one supports, and per-image pricing on your account — a version string from a blog post or an old script can go stale the moment a provider revs its lineup.
+
+## Generate a thumbnail from a title and topic
+
+When there's no frame worth using yet — a podcast episode, a webinar recording, an explainer that's still rendering — generate the thumbnail directly from a prompt describing the subject, mood, and where the title text will sit:
+
+```bash
+curl -X POST https://api.aigenway.com/v1/generations \
+  -H "Authorization: Bearer sk_live_..." \
+  -H "Idempotency-Key: $(uuidgen)" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "provider": "google_banana",
+    "model": "gemini-3.1-flash-image-preview",
+    "method": "text_to_image",
+    "params": {
+      "prompt": "YouTube thumbnail for a product review video, bold high-contrast lighting, subject centered-left, clean uncluttered background, empty space on the right third for title text, no text or logos rendered",
+      "aspect_ratio": "16:9"
+    }
+  }'
+```
+
+```json
+{
+  "task_id": "cmomxg9k1000scr04a9r0z55f",
+  "status": "pending",
+  "provider": "google_banana",
+  "model": "gemini-3.1-flash-image-preview",
+  "method": "text_to_image",
+  "created_at": "2026-09-30T09:41:02.000Z"
+}
+```
+
+The "no text or logos rendered" instruction matters: image models rendering their own title text tends to come out misspelled or off-brand, so it's better to generate a clean plate and composite your own typography on top afterward.
+
+<SignupCTA
+  title="Generate your first thumbnail"
+  description="Create a free account, copy your API key, and turn one video title into a thumbnail with the curl above — $5 in free credit to start, prepaid USD billing."
+/>
+
+## Restyle an extracted frame instead of starting from a blank prompt
+
+If you already pull a candidate frame out of the video (via `ffmpeg` or your encoder's own thumbnail hook), `image_edit` can push it toward something more clickable without changing what's actually in the shot:
+
+```bash
+curl -X POST https://api.aigenway.com/v1/generations \
+  -H "Authorization: Bearer sk_live_..." \
+  -H "Idempotency-Key: $(uuidgen)" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "provider": "google_banana",
+    "model": "gemini-3.1-flash-image-preview",
+    "method": "image_edit",
+    "params": {
+      "prompt": "boost contrast and color saturation, blur and darken the background slightly, keep the subject and their expression exactly as shown, leave the left third of the frame clear for a title overlay",
+      "input_images": ["https://cdn.example.com/videos/ep42-frame-0312.jpg"]
+    }
+  }'
+```
+
+Naming what must stay fixed — "keep the subject and their expression exactly as shown" — is what stops an instruction-following editor from redrawing the face along with the lighting.
+
+## Match aspect ratio and size to where the thumbnail actually runs
+
+A thumbnail generated at the wrong aspect ratio gets center-cropped by whatever platform renders it, which is how a carefully composed shot loses its subject off one edge. Set `aspect_ratio` per destination instead of generating one size and cropping after the fact:
+
+- **16:9** — YouTube, most video players, Open Graph video cards
+- **9:16** — Shorts, Reels, TikTok cover frames
+- **1:1** — in-feed video posts on square-first layouts
+
+```bash
+curl -X POST https://api.aigenway.com/v1/generations \
+  -H "Authorization: Bearer sk_live_..." \
+  -H "Idempotency-Key: $(uuidgen)" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "provider": "google_banana",
+    "model": "gemini-3.1-flash-image-preview",
+    "method": "text_to_image",
+    "params": {
+      "prompt": "vertical short-form video cover, subject filling the lower two-thirds, bright bold colors, empty space above the subject for title text",
+      "aspect_ratio": "9:16"
+    }
+  }'
+```
+
+For a catalog with multiple destinations per video, submit one request per `aspect_ratio` with a fresh `Idempotency-Key` each — the same batch pattern covered in the [batch image generation](/blog/batch-image-generation-api) post applies directly here, and a `callback_url` on each request lets the gateway push finished thumbnails to your encoder pipeline instead of you polling per video.
+
+## Why one gateway beats picking a single thumbnail model
+
+- **Same contract for prompt-built and frame-based thumbnails.** `text_to_image` and `image_edit` share the `provider`/`model`/`method` shape, so a pipeline that generates from a title and one that restyles a real frame reuse the same client code.
+- **Swap models without rewriting the pipeline.** If a different model holds faces more faithfully at 9:16 or renders cleaner negative space for title overlays, changing `provider`/`model` is a config edit, not a new integration.
+- **Sized right the first time.** `aspect_ratio` is a request parameter, not a manual crop step after generation — one prompt per destination format instead of one master image force-fit into three layouts.
+- **Prepaid USD billing, one balance.** No per-provider invoice to reconcile against a thumbnail run — check `GET /v1/balance` before queuing a batch and read exact spend per task off `charged_amount` afterward.
+
+Extract a frame or write a prompt, pick the `aspect_ratio` the destination actually needs, and let the loop produce a thumbnail per upload instead of a design queue.
+
+<SignupCTA />
