@@ -49,6 +49,7 @@ import batchImageGenerationApi from './batch-image-generation-api.mdx?raw';
 import aiProductPhotographyApi from './ai-product-photography-api.mdx?raw';
 import aiVideoForAdsApi from './ai-video-for-ads-api.mdx?raw';
 import generateThumbnailsApi from './generate-thumbnails-api.mdx?raw';
+import pollVsWebhookGeneration from './poll-vs-webhook-generation.mdx?raw';
 
 export interface RawPost {
   slug: string;
@@ -101,4 +102,5 @@ export const rawPosts: RawPost[] = [
   { slug: 'ai-product-photography-api', raw: aiProductPhotographyApi },
   { slug: 'ai-video-for-ads-api', raw: aiVideoForAdsApi },
   { slug: 'generate-thumbnails-api', raw: generateThumbnailsApi },
+  { slug: 'poll-vs-webhook-generation', raw: pollVsWebhookGeneration },
 ];

@@ -1,0 +1,87 @@
+---
+title: "Poll vs Webhook for Async AI Generation Jobs"
+description: "Decide whether to poll or use signed webhooks for long image and video jobs, then make either path survive retries, missed deliveries, and duplicate events."
+date: "2026-10-01"
+updated: "2026-10-01"
+tags: ["AI API", "Webhooks"]
+primaryKeyword: "Poll vs webhook for async generation"
+funnel: "MOFU"
+author:
+  name: "Aigenway"
+relatedDocs:
+  - { label: "Webhooks", href: "/docs/webhooks" }
+  - { label: "Task lifecycle", href: "/docs/task-lifecycle" }
+  - { label: "Idempotency", href: "/docs/idempotency" }
+  - { label: "Errors", href: "/docs/errors" }
+ogImage: "/blog/poll-vs-webhook-generation.jpg"
+---
+
+Every image and video job on Aigenway runs async: you submit, you get a task back, and the result shows up later. The question isn't whether to poll or use a webhook in the abstract — it's which one survives *your* deployment, and what happens when a poll request times out or a webhook never arrives. Both failure modes are routine, not edge cases, for jobs that run minutes instead of milliseconds.
+
+## Pick by where your code runs, not by preference
+
+Webhooks need a public, always-listening endpoint. If your worker is a serverless function, a CLI tool, or anything behind a NAT with no inbound route, you can't receive a `callback_url` push at all — poll `GET /v1/tasks/<task_id>` instead. If you already run a long-lived backend with a stable domain, a webhook saves you from holding a connection or a cron job open for however long a video render takes, which can be minutes for the slower video models. The decision is infrastructure-shaped, not a matter of which pattern feels more modern:
+
+- **Poll** — scripts, serverless/Lambda-style functions, local dev, anything without a reachable endpoint, or low volume where a few extra requests don't matter.
+- **Webhook** — a backend that's already up, high volume (polling N concurrent jobs multiplies request count by N), or a UI that needs to update the instant a job settles rather than on the next poll tick.
+
+Nothing stops you from mixing strategies per job type inside the same account — poll for an admin script, webhook for the production upload pipeline — since both read the same task object underneath.
+
+```bash
+curl -X POST https://api.aigenway.com/v1/generations \
+  -H "Authorization: Bearer sk_live_..." \
+  -H "Idempotency-Key: $(uuidgen)" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "provider": "kling",
+    "model": "kling-v2-master",
+    "method": "text_to_video",
+    "params": { "prompt": "a lighthouse beam sweeping over fog", "duration": 5 },
+    "callback_url": "https://your-app.example.com/webhooks/aigenway"
+  }'
+```
+
+Omit `callback_url` and the exact same task becomes poll-only — the gateway doesn't push anything you didn't ask for. Confirm the `model` code your account can actually call with `GET https://api.aigenway.com/v1/methods?provider=kling` rather than hardcoding one from a blog post, since providers rev their lineups independently of this guide.
+
+<SignupCTA
+  title="Test both patterns on a real job"
+  description="Create a free account, get $5 in free credit, and run the same task through a poll loop and a webhook to see which fits your stack."
+/>
+
+## Reliability on the poll side: backoff, not a tight loop
+
+A poll loop fails quietly in two ways: hammering the endpoint on a fixed short interval, and giving up too early on a job that's still legitimately running. Use exponential backoff with a cap — start at 2–3 seconds, double up to a ceiling around 30–60 seconds — and keep polling until the task leaves `pending`/`processing`, not until some arbitrary request count:
+
+```javascript
+async function waitForTask(taskId, token) {
+  let delay = 2000;
+  while (true) {
+    const res = await fetch(`https://api.aigenway.com/v1/tasks/${taskId}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const task = await res.json();
+    if (task.status === 'succeeded' || task.status === 'failed') return task;
+    await new Promise((r) => setTimeout(r, delay));
+    delay = Math.min(delay * 1.5, 30000);
+  }
+}
+```
+
+A dropped connection mid-submit is the other failure mode, and it's why `Idempotency-Key` matters even on the poll path: resend the original request with the same key after a timeout and you get the same task back instead of paying for a second render you can't be sure the first one didn't also complete.
+
+## Reliability on the webhook side: retries and duplicate deliveries
+
+A webhook delivery can fail for reasons that have nothing to do with your job — your endpoint was deploying, a load balancer blipped, DNS hiccuped. The gateway treats anything other than a `2xx` response as a failed delivery and retries on a backoff, which means your handler will sometimes receive the same `X-Aggregator-Task-Id` more than once. Build for that from the start instead of discovering it in production:
+
+1. **Verify before trusting.** Check `X-Aggregator-Signature` (HMAC-SHA256 over the raw body) before reading the payload — see the [webhooks doc](/docs/webhooks) for the exact scheme.
+2. **Dedupe on `task_id`.** Store processed task IDs (or use them as a database unique key) and short-circuit a repeat delivery before it re-triggers downstream work like sending a second email or charging a second notification credit.
+3. **Return `2xx` fast, process after.** Acknowledge receipt immediately and do slow work (resizing, re-hosting, notifying a user) in a background job — a handler that's slow to respond looks like a failed delivery to the sender and triggers a retry you didn't need.
+4. **Assume a webhook can simply never arrive.** Networks partition; endpoints go down for longer than the retry window covers. Don't treat "no webhook yet" as proof a job is still running.
+
+## The hybrid pattern for jobs you can't afford to lose
+
+For anything business-critical — a paid render a customer is waiting on — register `callback_url` for the fast path and also poll on a long interval (every few minutes) as a safety net. The webhook handles the common case with low latency; the poll catches the rare case where delivery genuinely never happened, without you having to detect "missing webhook" as a special condition. Both paths read the identical task object from `GET /v1/tasks/<task_id>`, documented on the [task lifecycle page](/docs/task-lifecycle), so the reconciliation logic is just "check status, process once, exit" regardless of which signal fired first. The only extra piece is the same dedupe-by-`task_id` you already built for duplicate webhook deliveries — it covers "poll and webhook both fired for the same job" for free.
+
+What you don't have to rebuild per model: the task states, the error shape, and the webhook signature scheme are identical across every provider and method on the gateway, from a five-second image edit to a multi-minute video render. Pick poll or webhook (or both) once per code path, not once per vendor SDK.
+
+<SignupCTA />
