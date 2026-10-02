@@ -1,0 +1,115 @@
+---
+title: "Imagen 4 vs Flux: Which One to Call From Your API"
+description: "Imagen 4 is hosted here with one API key and prepaid billing; FLUX is not. Compare quality, latency and cost, and get FLUX-style output through the gateway."
+date: "2026-10-02"
+updated: "2026-10-02"
+tags: ["Image generation", "Comparison"]
+primaryKeyword: "Imagen 4 vs Flux"
+funnel: "MOFU"
+author:
+  name: "Aigenway"
+relatedDocs:
+  - label: "Methods"
+    href: "/docs/methods"
+  - label: "Getting started"
+    href: "/docs/getting-started"
+  - label: "Google Imagen 4 API"
+    href: "/blog/imagen-4-api"
+  - label: "Flux API alternative"
+    href: "/blog/flux-api-alternative"
+ogImage: "/blog/imagen-4-vs-flux.jpg"
+---
+
+Imagen 4 and FLUX get compared constantly because both chase the same brief — photoreal, prompt-accurate images fast — but only one of them sits behind this gateway. Imagen 4 is live here on one API key and prepaid USD billing; Black Forest Labs' FLUX is not hosted on this platform at all. Here's how they actually differ, and how to get FLUX-shaped results anyway.
+
+## What's actually available where
+
+Imagen 4 is Google's flagship text-to-image model, including a higher-fidelity Ultra tier, and it runs here under the `google_banana` provider alongside every other image model on the account. FLUX is Black Forest Labs' own model family, served through their own API and a short list of partners they license it to directly — this gateway isn't one of them, and we're not going to dress up a different model as FLUX to pretend otherwise. If your evaluation genuinely requires FLUX's exact weights, Black Forest Labs is the only correct place to get them.
+
+Confirm what's live on your account before writing any model code into production:
+
+```bash
+curl "https://api.aigenway.com/v1/methods?provider=google_banana" \
+  -H "Authorization: Bearer sk_live_..."
+```
+
+That returns the current Imagen 4 (and Imagen 4 Ultra) `model` codes, the `method`s each supports, and per-image pricing on your account right now — Google revises version strings on its own schedule, so don't hardcode one from a blog post.
+
+## Quality and prompt adherence
+
+FLUX earned its reputation on tight prompt adherence — it renders what you asked for, including legible text, without much re-rolling — plus strong photorealism at speed. Imagen 4 competes on the same axis from Google's side: it's the strongest camera-real, photoreal output on this gateway, and Imagen 4 Ultra pushes detail and instruction-following further at the cost of some latency. Neither one is a pixel-for-pixel substitute for the other — if "looks like a real photo" is what you valued in FLUX, Imagen 4 is the closer match of the two; if it was specifically FLUX's open-weight tier or its exact aesthetic, nothing here reproduces that exactly.
+
+```bash
+curl -X POST https://api.aigenway.com/v1/generations \
+  -H "Authorization: Bearer sk_live_..." \
+  -H "Idempotency-Key: $(uuidgen)" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "provider": "google_banana",
+    "model": "imagen-4.0-ultra-generate-001",
+    "params": {
+      "prompt": "a product shot of a matte black wireless earbud case on a marble surface, studio softbox lighting, shallow depth of field, sharp focus on the logo",
+      "aspect_ratio": "1:1"
+    },
+    "method": "text_to_image"
+  }'
+```
+
+<SignupCTA
+  title="Run Imagen 4 on your own FLUX-style prompt"
+  description="Create a free account, copy your API key, and test the request above against Imagen 4 — $5 in free credit, prepaid USD billing, no GCP project required."
+/>
+
+## Latency and cost: what you can actually compare
+
+Latency and per-image cost for FLUX live entirely on Black Forest Labs' infrastructure and pricing page — we have no visibility into either and won't quote numbers we can't verify on your behalf. What we can give you is a real figure for Imagen 4 on your own account, before you spend anything, via the estimate endpoint:
+
+```bash
+curl -X POST https://api.aigenway.com/v1/estimate \
+  -H "Authorization: Bearer sk_live_..." \
+  -H "Content-Type: application/json" \
+  -d '{
+    "provider": "google_banana",
+    "model": "imagen-4.0-generate",
+    "method": "text_to_image",
+    "params": {
+      "prompt": "a weathered lighthouse on a rocky cliff at dusk, dramatic clouds, photorealistic",
+      "aspect_ratio": "16:9"
+    }
+  }'
+```
+
+If your decision genuinely hinges on FLUX's numbers, get a quote directly from Black Forest Labs and compare it against the `/v1/estimate` response above on identical prompts — that's a fair comparison; anything quoting FLUX pricing on someone else's page usually isn't.
+
+## Getting FLUX-shaped results through the gateway
+
+If what you actually need is the category of output FLUX is known for — rather than FLUX specifically — Imagen 4 isn't your only option here. Nano Banana (Gemini image) matches FLUX's instruction-following when a brief has several constraints the model has to obey, and gpt-image-1 covers the legible-text-in-image case FLUX also gets cited for. All of them, including Imagen 4, return a task in the identical shape, so testing more than one costs a changed `model` string, not a new integration:
+
+```bash
+curl -X POST https://api.aigenway.com/v1/generations \
+  -H "Authorization: Bearer sk_live_..." \
+  -H "Idempotency-Key: $(uuidgen)" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "provider": "openai_image",
+    "model": "gpt-image-1",
+    "method": "text_to_image",
+    "params": {
+      "prompt": "a storefront sign reading OPEN 24 HOURS in neon script above a corner bakery, dusk lighting",
+      "size": "1024x1024"
+    }
+  }'
+```
+
+Poll `GET /v1/generations/{task_id}` or set a `callback_url` on either request and let a webhook deliver the result — the task fields and signature are identical regardless of which model produced it. Full contract in the [task lifecycle](/docs/task-lifecycle) and [webhooks](/docs/webhooks) docs.
+
+## Why run the comparison here instead of two accounts
+
+- **One real model, honestly labeled.** Imagen 4 runs through Google's own supported path — no quiet substitution, no "FLUX-compatible" model wearing someone else's name.
+- **One API key for the alternatives.** Imagen 4, Nano Banana and gpt-image-1 all sit behind the same `provider`/`model`/`method`/`params` shape, so a side-by-side test is a changed string, not a second SDK.
+- **Prepaid USD billing.** One balance, real dollars, no separate invoice to reconcile against a Black Forest Labs account.
+- **Idempotency and webhooks included.** Retry-safe requests and signed callbacks are already part of the task contract for every model on the gateway.
+
+Pull the live Imagen 4 codes from `/v1/methods`, run your actual prompt, and decide from your own output whether it covers the ground you wanted FLUX for — and go to Black Forest Labs directly for anything that specifically has to be FLUX.
+
+<SignupCTA />
