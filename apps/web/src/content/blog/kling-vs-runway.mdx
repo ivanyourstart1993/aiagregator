@@ -1,0 +1,92 @@
+---
+title: "Kling vs Runway for Image-to-Video: i2v, Motion, Cost"
+description: "Kling is on the gateway behind one API key; Runway isn't. How the two compare on image-to-video quality, motion control and cost per second."
+date: "2026-10-03"
+updated: "2026-10-03"
+tags: ["Video generation", "Comparison"]
+primaryKeyword: "Kling vs Runway for image-to-video"
+funnel: "MOFU"
+author:
+  name: "Aigenway"
+relatedDocs:
+  - label: "Kling video guide"
+    href: "/docs/guides/kling-video"
+  - label: "Task lifecycle"
+    href: "/docs/task-lifecycle"
+  - label: "Methods"
+    href: "/docs/methods"
+ogImage: "/blog/kling-vs-runway.jpg"
+---
+
+If you're animating a still image and weighing Kling against Runway, the honest answer is that they're not symmetric choices: Kling is hosted behind the Aigenway gateway with per-second USD billing, Runway is not, and that one fact drives most of the rest of the comparison. Here's how the two actually compare on i2v quality, motion and cost — and how to reach Kling (plus Veo and Seedance) from the same key.
+
+## What each one is actually good at
+
+Runway's Gen-4 line is known for tight prompt adherence on stylized and VFX-heavy shots, and Act-One for performance-capture face transfer — a genuinely distinct feature nothing on this gateway reproduces exactly. Kling's strength sits elsewhere: fluid, physically plausible motion on image-to-video specifically, and a dedicated Motion Control mode that transfers a reference video's movement onto your character instead of hoping a text prompt describes the right motion. If your brief is "animate this product shot or character art believably," Kling is the stronger default; if it's "I need Act-One's exact face-swap trick," nothing here substitutes for that one feature, and you'd keep a Runway account for it.
+
+## The i2v request, side by side
+
+Because Kling sits on the gateway's shared task contract, the image-to-video call looks identical to every other model you'd run here — same fields Runway would ask for conceptually (an image, a motion prompt, a duration), just one consistent shape instead of a provider-specific SDK:
+
+```bash
+curl -X POST https://api.aigenway.com/v1/generations \
+  -H "Authorization: Bearer sk_live_..." \
+  -H "Idempotency-Key: $(uuidgen)" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "provider": "kling",
+    "model": "kling-v2-master",
+    "method": "image_to_video",
+    "params": {
+      "prompt": "slow push-in, rain streaking down the window behind her, cinematic",
+      "input_image": "https://example.com/scene.png",
+      "duration": 5
+    }
+  }'
+```
+
+Confirm the live `model` code for your account before hardcoding it — list what's active with `GET /v1/methods?provider=kling` rather than trusting a string from any blog post, this one included.
+
+<SignupCTA
+  title="Run your Runway brief through Kling"
+  description="Create a free account, get $5 in free credit, and test the same image-to-video prompt on Kling before committing to a Runway-only account."
+/>
+
+## Motion control vs text-only re-rolling
+
+This is where the comparison stops being close. Runway's text-prompt motion is strong but still a guess-and-check loop — you describe the camera move and re-roll until it lands. Kling's `motion_control` method takes a reference video plus your character image and transfers the reference's actual motion onto the character, which is a different category of control for repeatable choreography, mascot performances, or a dance/gesture you need to hit exactly:
+
+```bash
+curl -X POST https://api.aigenway.com/v1/generations \
+  -H "Authorization: Bearer sk_live_..." \
+  -H "Idempotency-Key: $(uuidgen)" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "provider": "kling",
+    "model": "kling-motion-control",
+    "method": "motion_control",
+    "params": {
+      "input_image": "https://example.com/character.png",
+      "reference_video": "https://example.com/dance-reference.mp4"
+    }
+  }'
+```
+
+Nothing on the gateway claims to replicate Act-One's face transfer, but if the actual requirement is reusable, predictable motion rather than a specific face-swap effect, Motion Control covers more ground than re-rolling a Runway prompt. Details and parameter limits are in the [Kling video guide](/docs/guides/kling-video).
+
+## Cost per second and billing model
+
+Runway runs on its own credit packs, which you buy and forecast in advance; Kling on this gateway runs on prepaid USD billed per second of output, read directly from the API instead of estimated from a credits dashboard. Kling also spans multiple tiers — a Standard tier for drafts up through Master for cinematic fidelity — so you can match spend to the shot instead of paying a flagship rate for every clip. Exact per-second pricing shifts as providers update their lineups, so pull current numbers from `/v1/methods` before budgeting a production run rather than relying on a fixed table here. If cost predictability and per-request pricing you can query programmatically matter more than a single Runway-exclusive feature, that alone tips the comparison toward the gateway.
+
+## Where this leaves Veo and Seedance
+
+Kling isn't the only i2v option once you're off Runway — the same gateway, same key, same task contract also reaches Veo 3 (native audio generated with the picture) and Seedance (fast, cheap iteration for drafts and volume). Switching providers mid-project is a one-line change to `provider`/`model`, not a rewrite:
+
+```bash
+curl "https://api.aigenway.com/v1/methods?provider=veo" \
+  -H "Authorization: Bearer sk_live_..."
+```
+
+The response, status values and webhook signature are identical across Kling, Veo and Seedance, which is the part a Runway-only account can't offer: one integration that lets you compare image-to-video output across three independently-trained models on your own footage, not a demo reel. See the [task lifecycle](/docs/task-lifecycle) docs for the full async flow.
+
+<SignupCTA />
