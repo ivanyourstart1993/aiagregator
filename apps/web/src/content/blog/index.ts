@@ -52,6 +52,7 @@ import generateThumbnailsApi from './generate-thumbnails-api.mdx?raw';
 import pollVsWebhookGeneration from './poll-vs-webhook-generation.mdx?raw';
 import imagen4VsFlux from './imagen-4-vs-flux.mdx?raw';
 import klingVsRunway from './kling-vs-runway.mdx?raw';
+import veo3VsSora from './veo-3-vs-sora.mdx?raw';
 
 export interface RawPost {
   slug: string;
@@ -107,4 +108,5 @@ export const rawPosts: RawPost[] = [
   { slug: 'poll-vs-webhook-generation', raw: pollVsWebhookGeneration },
   { slug: 'imagen-4-vs-flux', raw: imagen4VsFlux },
   { slug: 'kling-vs-runway', raw: klingVsRunway },
+  { slug: 'veo-3-vs-sora', raw: veo3VsSora },
 ];
