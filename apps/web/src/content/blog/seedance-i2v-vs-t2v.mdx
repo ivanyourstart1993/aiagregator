@@ -1,0 +1,93 @@
+---
+title: "Seedance Image-to-Video vs Text-to-Video: Which to Use"
+description: "Seedance image-to-video vs text-to-video compared on quality, control and cost — plus the task contract that makes switching between them a one-line change."
+date: "2026-10-05"
+updated: "2026-10-05"
+tags: ["Video generation", "Seedance"]
+primaryKeyword: "Seedance image-to-video vs text-to-video"
+funnel: "MOFU"
+author:
+  name: "Aigenway"
+relatedDocs:
+  - label: "Task lifecycle"
+    href: "/docs/task-lifecycle"
+  - label: "Methods"
+    href: "/docs/methods"
+  - label: "Seedance API"
+    href: "/blog/seedance-api"
+ogImage: "/blog/seedance-i2v-vs-t2v.jpg"
+---
+
+Seedance ships both `text_to_video` and `image_to_video` behind the same endpoint, so the real question isn't which method is "better" — it's which input gives the model less to guess at for your shot. Text-to-video invents a scene from a prompt; image-to-video animates a frame you already control. Here's how to pick, and what changes (and doesn't) in the request.
+
+## What each method is actually good for
+
+Text-to-video is the right call when no reference frame exists yet — concept exploration, a scene described in a script, b-roll you're generating from scratch. The model owns composition, lighting and subject appearance, which means more variance between runs: the same prompt can land a usable shot on one seed and a malformed one on the next. Image-to-video flips that trade-off. Feed it a product render, a character design, or a frame pulled from a previous generation, and Seedance only has to decide motion — camera move, subject animation — while composition, lighting and identity stay locked to the source image. If brand consistency or a specific product shot matters more than generative variety, i2v is the safer default; if you don't have a usable still yet, t2v is how you get one.
+
+## The same request, two methods
+
+Both calls hit `https://api.aigenway.com/v1/generations` with the identical envelope — `provider`, `model`, `method`, `params` — so the only difference between text-to-video and image-to-video is the `method` field and an added `input_image`:
+
+```bash
+curl -X POST https://api.aigenway.com/v1/generations \
+  -H "Authorization: Bearer sk_live_..." \
+  -H "Idempotency-Key: $(uuidgen)" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "provider": "seedance",
+    "model": "seedance-1-pro",
+    "method": "text_to_video",
+    "params": {
+      "prompt": "a vintage car drives along a coastal road at golden hour, camera tracking alongside",
+      "duration": 5,
+      "aspect_ratio": "16:9"
+    }
+  }'
+```
+
+Confirm the live `model` codes and current per-second pricing for your account before hardcoding anything — list what's active with `GET https://api.aigenway.com/v1/methods?provider=seedance` rather than trusting a string from this post.
+
+<SignupCTA
+  title="Test i2v against t2v on the same shot"
+  description="Create a free account, get $5 in free credit, and run both Seedance methods on one brief to see which gives you the shot you actually need."
+/>
+
+## Swapping to image-to-video is a one-line change
+
+Same endpoint, same auth, same idempotency pattern — only `method` changes and `input_image` gets added:
+
+```bash
+curl -X POST https://api.aigenway.com/v1/generations \
+  -H "Authorization: Bearer sk_live_..." \
+  -H "Idempotency-Key: $(uuidgen)" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "provider": "seedance",
+    "model": "seedance-1-pro",
+    "method": "image_to_video",
+    "params": {
+      "prompt": "camera tracks alongside as the car continues down the road",
+      "input_image": "https://example.com/vintage-car-frame.png",
+      "duration": 5
+    }
+  }'
+```
+
+Because the shape doesn't change, you can run both methods on the same brief and compare outputs without maintaining two integrations — useful when you're not sure up front which one will nail the shot.
+
+## Quality and cost: where they actually diverge
+
+Image-to-video generally renders more consistent results per attempt, because locking composition and subject to a source frame removes the biggest source of variance in text-to-video — you're not asking the model to also invent what things look like. That consistency doesn't mean i2v is free: a weak or ambiguous source frame produces weak motion, and a photo with occluded or implausible depth cues can make Seedance guess badly at how parts of the scene should move. Cost per second is typically similar between the two methods on a given tier — you're paying for render time and resolution, not the input type — but iteration cost differs: a bad t2v draft usually means re-rolling with a different seed or prompt; a bad i2v draft often means fixing the source image first, which is a cheaper problem to solve since you can inspect and crop it before spending on a render.
+
+## The task and webhook flow is identical either way
+
+Both methods return a task in `queued` or `processing` state, not a finished clip — poll `GET /v1/generations/{task_id}` or set a `callback_url` and receive the signed webhook when it's done. Nothing about the async flow, status values or payload shape changes based on which method you called:
+
+```bash
+curl "https://api.aigenway.com/v1/methods?provider=seedance" \
+  -H "Authorization: Bearer sk_live_..."
+```
+
+That call also confirms which tiers support which methods on your account — details are in the [task lifecycle](/docs/task-lifecycle) docs. Since the contract is shared across every model on the gateway, a pipeline built around Seedance i2v/t2v keeps working if you later add Kling or Veo for a different shot.
+
+<SignupCTA />
