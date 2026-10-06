@@ -54,6 +54,7 @@ import imagen4VsFlux from './imagen-4-vs-flux.mdx?raw';
 import klingVsRunway from './kling-vs-runway.mdx?raw';
 import veo3VsSora from './veo-3-vs-sora.mdx?raw';
 import seedanceI2vVsT2v from './seedance-i2v-vs-t2v.mdx?raw';
+import bestImageToVideoApi from './best-image-to-video-api.mdx?raw';
 
 export interface RawPost {
   slug: string;
@@ -111,4 +112,5 @@ export const rawPosts: RawPost[] = [
   { slug: 'kling-vs-runway', raw: klingVsRunway },
   { slug: 'veo-3-vs-sora', raw: veo3VsSora },
   { slug: 'seedance-i2v-vs-t2v', raw: seedanceI2vVsT2v },
+  { slug: 'best-image-to-video-api', raw: bestImageToVideoApi },
 ];
