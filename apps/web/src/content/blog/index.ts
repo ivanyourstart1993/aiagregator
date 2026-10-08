@@ -56,6 +56,7 @@ import veo3VsSora from './veo-3-vs-sora.mdx?raw';
 import seedanceI2vVsT2v from './seedance-i2v-vs-t2v.mdx?raw';
 import bestImageToVideoApi from './best-image-to-video-api.mdx?raw';
 import bestAiImageApi2026 from './best-ai-image-api-2026.mdx?raw';
+import bestTextToVideoApi2026 from './best-text-to-video-api-2026.mdx?raw';
 
 export interface RawPost {
   slug: string;
@@ -115,4 +116,5 @@ export const rawPosts: RawPost[] = [
   { slug: 'seedance-i2v-vs-t2v', raw: seedanceI2vVsT2v },
   { slug: 'best-image-to-video-api', raw: bestImageToVideoApi },
   { slug: 'best-ai-image-api-2026', raw: bestAiImageApi2026 },
+  { slug: 'best-text-to-video-api-2026', raw: bestTextToVideoApi2026 },
 ];
