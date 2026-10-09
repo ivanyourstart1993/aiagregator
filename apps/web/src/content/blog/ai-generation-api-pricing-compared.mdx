@@ -1,0 +1,87 @@
+---
+title: "AI Generation API Pricing Compared: Per-Unit Billing"
+description: "How image, video and text generation APIs actually bill — per-image, per-second, per-token — and what prepaid USD gets you that a credit-pack system doesn't."
+date: "2026-10-09"
+updated: "2026-10-09"
+tags: ["AI API", "Pricing"]
+primaryKeyword: "AI generation API pricing compared"
+funnel: "MOFU"
+author:
+  name: "Aigenway"
+relatedDocs:
+  - label: "Pricing"
+    href: "/pricing"
+  - label: "Methods"
+    href: "/docs/methods"
+  - label: "Cheapest AI image generation API"
+    href: "/blog/cheapest-ai-image-api"
+ogImage: "/blog/ai-generation-api-pricing-compared.jpg"
+---
+
+AI generation API pricing compared across providers turns out to mean comparing three different billing units, not one: image models bill per output, video models bill per second rendered, and text/LLM calls bill per token. None of that maps cleanly onto a "credits" number a provider invents on top. Here's how the actual units work, and what a prepaid USD balance gets you that a credit pack doesn't.
+
+## Three billing units, not one price list
+
+Every generation request gets metered in whatever unit matches its output, and that unit is set by the model category, not by the vendor:
+
+- **Per-image.** Image models charge a fixed (or tier-dependent) amount per successful generation — the tier is usually a `quality` or `mode` parameter, so the same model can have two or three different per-image prices depending on what you pass.
+- **Per-second.** Video models charge by rendered duration, so an 8-second clip costs roughly twice a 4-second one at the same resolution — `duration` in the request body is the line item on your invoice.
+- **Per-token.** Text and multimodal LLM calls charge by input and output tokens, usually at different rates, the same as any LLM API you've already integrated.
+
+The practical effect: a "cheap" video model and a "cheap" image model aren't comparable numbers, and a flat per-request price only exists for providers that round everything to one unit regardless of what you actually used. Pull the current unit price for whichever model you're budgeting rather than assume it matches a different category:
+
+```bash
+curl "https://api.aigenway.com/v1/methods?provider=kling" \
+  -H "Authorization: Bearer sk_live_..."
+```
+
+That call returns every `model` and `method` combination live on the account, with the current per-unit price for each — the only number worth budgeting against, since providers revise their own price lists on their own schedule.
+
+## A priced request: see the cost on the task itself
+
+Every model shares the same task contract, so checking the real cost of a run means sending the request and reading the price off the response rather than estimating from a rate card:
+
+```bash
+curl -X POST https://api.aigenway.com/v1/generations \
+  -H "Authorization: Bearer sk_live_..." \
+  -H "Idempotency-Key: $(uuidgen)" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "provider": "kling",
+    "model": "kling-v2-master",
+    "method": "text_to_video",
+    "params": {
+      "prompt": "a lighthouse beam sweeps across a foggy harbor at dusk",
+      "duration": 5
+    }
+  }'
+```
+
+`Idempotency-Key` protects you from double-billing on a dropped connection — resend the same key and you get the same task back, not a second charge for a second render. The response carries the task's `status` and, once it settles, the amount debited from your balance — the actual number, not a published estimate.
+
+<SignupCTA
+  title="See the real per-unit price before you build"
+  description="Create a free account, get $5 in free credit, and run a request against any model — the cost lands on your balance in USD, no credit-to-dollar conversion to do in your head."
+/>
+
+## Prepaid USD vs. credit packs: what each actually gets you
+
+Credit systems exist to obscure a unit conversion the provider doesn't want to publish plainly: you buy credits in fixed packs, each model consumes a different, often-changing number of credits per unit, and the pack you bought six weeks ago is quietly repriced in credits-per-generation the next time the provider adjusts margins. Reading your real spend means converting credits back to dollars by hand, per model, every time.
+
+A prepaid USD balance skips that translation layer entirely:
+
+- **The ledger is already in the currency you budget in.** A request costs a dollar amount, not a credit count you have to look up a conversion table for.
+- **Top-ups aren't locked to a pack size.** Add what you need; unused balance doesn't expire at a pack boundary.
+- **Price changes show up as a price change, not a credit-cost change.** If a provider revises what a model costs, the gateway's `/v1/methods` response reflects it directly in USD — no decoding a new credits-per-unit ratio.
+
+This matters most the moment you're running more than one model: five providers' credit systems means five conversion tables to keep current; one USD balance means one number to watch.
+
+## Why one gateway beats five separate billing relationships
+
+- **One balance, every category.** The same prepaid USD draws down for per-image, per-second and per-token requests across every provider on the account — no separate billing login per vendor.
+- **Live pricing, not a stale table.** `/v1/methods` returns current unit pricing per model on your own account, so a snapshot in any blog post — including this one — is never the number to budget against.
+- **One task contract regardless of unit.** `provider`/`model`/`method`/`params` in, a task with cost and status out, whether the model bills per image, per second or per token — switching models to compare pricing is a config change, not a new integration.
+
+Pricing moves as providers update their own lineups; the gateway doesn't smooth that over, it just reports it in one unit and one ledger instead of five. Check `/v1/methods` before you commit a budget, and let the task response — not a rate card — tell you what a given run actually cost.
+
+<SignupCTA />

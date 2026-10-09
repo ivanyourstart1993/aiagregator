@@ -34,6 +34,7 @@ import nanoBananaVsGptImageVsImagen from './nano-banana-vs-gpt-image-vs-imagen.m
 import dalle3VsGptImage1 from './dalle-3-vs-gpt-image-1.mdx?raw';
 import cheapestAiVideoApi from './cheapest-ai-video-api.mdx?raw';
 import cheapestAiImageApi from './cheapest-ai-image-api.mdx?raw';
+import aiGenerationApiPricingCompared from './ai-generation-api-pricing-compared.mdx?raw';
 import asyncTasksWebhooksGuide from './async-tasks-webhooks-guide.mdx?raw';
 import oneApiForAiImageVideoText from './one-api-for-ai-image-video-text.mdx?raw';
 import soraApiAlternative from './sora-api-alternative.mdx?raw';
@@ -117,4 +118,5 @@ export const rawPosts: RawPost[] = [
   { slug: 'best-image-to-video-api', raw: bestImageToVideoApi },
   { slug: 'best-ai-image-api-2026', raw: bestAiImageApi2026 },
   { slug: 'best-text-to-video-api-2026', raw: bestTextToVideoApi2026 },
+  { slug: 'ai-generation-api-pricing-compared', raw: aiGenerationApiPricingCompared },
 ];
