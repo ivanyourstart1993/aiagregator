@@ -1,0 +1,97 @@
+---
+title: "Prepaid AI API with No Subscription: Pay-As-You-Go in USD"
+description: "No monthly plan, no per-provider account, no credit pack. Top up a USD balance, spend per request, and read what's left straight from the API. $5 free to start."
+date: "2026-10-10"
+updated: "2026-10-10"
+tags: ["AI API", "Pricing"]
+primaryKeyword: "Prepaid AI API with no subscription"
+funnel: "BOFU"
+author:
+  name: "Aigenway"
+relatedDocs:
+  - label: "Pricing"
+    href: "/pricing"
+  - label: "Getting started"
+    href: "/docs/getting-started"
+  - label: "Methods"
+    href: "/docs/methods"
+  - label: "AI generation API pricing compared"
+    href: "/blog/ai-generation-api-pricing-compared"
+ogImage: "/blog/prepaid-ai-api-no-subscription.jpg"
+---
+
+A prepaid AI API with no subscription means exactly that: no monthly plan to commit to, no seat count, no "included quota" that resets whether you used it or not. You top up a USD balance once, spend it per request across every model on the account, and check what's left with a plain API call instead of a billing-portal login. Start with $5 in free credit — no card required to see the first request land.
+
+## No plan, no tier, no seat — just a balance
+
+Subscription pricing on an AI platform almost always means picking a tier sized for your *peak* month and paying that rate every month, including the ones you barely use. A prepaid balance removes the tier entirely: there's no "Pro" plan gating which models you can call or how many requests you get before an overage charge kicks in. You add funds, and every model — image, video, or text, across every provider on the gateway — draws down against that same balance at its own per-unit rate. There's no plan to upgrade when you need a model that happens to live on a higher tier, because there are no tiers:
+
+```bash
+curl "https://api.aigenway.com/v1/methods?provider=kling" \
+  -H "Authorization: Bearer sk_live_..."
+```
+
+That call lists every `model` and `method` live on your account with its current per-unit price — the number to budget against, since it's your balance and today's pricing, not a plan's fine print.
+
+## Read the balance from code, not a billing dashboard
+
+The point of "no subscription" is wasted if checking what's left still means logging into a dashboard by hand. The gateway exposes the balance as a plain `GET`, so a script can check funds before it queues a job the same way it checks any other API response:
+
+```bash
+curl https://api.aigenway.com/v1/balance \
+  -H "Authorization: Bearer sk_live_..."
+```
+
+```json
+{
+  "success": true,
+  "available": "487",
+  "reserved": "13",
+  "bonus_available": "0",
+  "total": "500",
+  "currency": "USD"
+}
+```
+
+`available` is what you can spend right now; `reserved` is funds held against tasks already in flight. No credits, no conversion table — the numbers are already in the currency you budget in, and `currency` says so explicitly in case you're ever unsure.
+
+## One task contract, billed per request, no minimums
+
+Every generation call shares the same envelope — `provider`, `model`, `method`, `params` — and the response carries the task's status plus, once it settles, the amount actually debited for that one run. There's no monthly minimum spend to hit and no "unused request" to lose if you don't call the API for a week:
+
+```bash
+curl -X POST https://api.aigenway.com/v1/generations \
+  -H "Authorization: Bearer sk_live_..." \
+  -H "Idempotency-Key: $(uuidgen)" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "provider": "google_banana",
+    "model": "gemini-3.1-flash-image-preview",
+    "method": "text_to_image",
+    "params": {
+      "prompt": "a single potted fern on a sunlit windowsill",
+      "aspect_ratio": "1:1"
+    }
+  }'
+```
+
+`Idempotency-Key` makes a dropped connection safe to retry — resend the same key and you get the same task back, not a second charge for a second render against your balance.
+
+<SignupCTA
+  title="Try it on $5 of free credit"
+  description="Create a free account, get $5 in free credit, and run the request above — no subscription, no card on file, just a USD balance you can read from the API."
+/>
+
+## No per-provider account to keep funded
+
+Running several models without a gateway usually means a separate account, a separate API key, and a separate billing page per provider — each with its own minimum top-up, its own credit expiry policy, and its own dashboard to check before a batch job. One prepaid balance on the gateway replaces all of that:
+
+- **One top-up, every model.** The same USD balance pays for image, video, and text requests across every provider on the account — no routing funds to five separate billing relationships first.
+- **Nothing expires on a cycle.** There's no monthly reset and no "unused allowance" clawed back at the end of a billing period — balance sits until you spend it.
+- **Scale down for free.** A quiet week costs nothing beyond what you actually called; there's no seat or plan fee ticking in the background regardless of usage.
+
+## Why "no subscription" matters once you're past the demo
+
+A subscription is a bet that your usage will match the tier you picked; a prepaid balance means usage and cost track exactly, request by request, forever. That's the difference that shows up on a finance review: nothing to cancel, nothing to downgrade, no "we're paying for capacity we're not using" conversation, because the capacity was never something you bought up front. Top up what you need, spend it across whichever models fit the job this week, and let `/v1/balance` — not an invoice — tell you where you stand.
+
+<SignupCTA />
