@@ -59,6 +59,7 @@ import bestImageToVideoApi from './best-image-to-video-api.mdx?raw';
 import bestAiImageApi2026 from './best-ai-image-api-2026.mdx?raw';
 import bestTextToVideoApi2026 from './best-text-to-video-api-2026.mdx?raw';
 import prepaidAiApiNoSubscription from './prepaid-ai-api-no-subscription.mdx?raw';
+import freeAiImageApi from './free-ai-image-api.mdx?raw';
 
 export interface RawPost {
   slug: string;
@@ -121,4 +122,5 @@ export const rawPosts: RawPost[] = [
   { slug: 'best-text-to-video-api-2026', raw: bestTextToVideoApi2026 },
   { slug: 'prepaid-ai-api-no-subscription', raw: prepaidAiApiNoSubscription },
   { slug: 'ai-generation-api-pricing-compared', raw: aiGenerationApiPricingCompared },
+  { slug: 'free-ai-image-api', raw: freeAiImageApi },
 ];
