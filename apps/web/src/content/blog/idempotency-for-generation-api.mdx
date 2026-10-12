@@ -1,0 +1,83 @@
+---
+title: "Idempotency Keys for a Generation API"
+description: "A dropped connection shouldn't mean a second bill. Here's how the Idempotency-Key header on Aigenway makes retries safe for every provider and model."
+date: "2026-10-12"
+updated: "2026-10-12"
+tags: ["Reliability", "AI API"]
+primaryKeyword: "Idempotency keys for a generation API"
+funnel: "MOFU"
+author:
+  name: "Aigenway"
+relatedDocs:
+  - label: "Idempotency"
+    href: "/docs/idempotency"
+  - label: "Task lifecycle"
+    href: "/docs/task-lifecycle"
+  - label: "Errors"
+    href: "/docs/errors"
+  - label: "Async tasks and webhooks"
+    href: "/blog/async-tasks-webhooks-guide"
+ogImage: "/blog/idempotency-for-generation-api.jpg"
+---
+
+A generation call can take anywhere from a few seconds to several minutes, which is exactly long enough for a client timeout, a flaky proxy, or a retried request to fire twice. Without protection, "fire twice" means two renders and two charges for one video you only wanted once. The `Idempotency-Key` header on `POST /v1/generations` fixes this: the same key replays the same result instead of starting a second job.
+
+## Why generation APIs need this more than most
+
+A typical REST write — update a user's email, add a cart item — finishes in milliseconds, so a client-side retry after a timeout rarely overlaps with a still-running first attempt. Generation is different: `text_to_video` or `image_to_video` tasks stay in `pending`/`processing` for a long window, so a naive retry-on-timeout strategy is almost guaranteed to land while the original request is still being charged and processed. Idempotency keys turn "did my first request actually go through?" from a guess into a deterministic lookup, scoped to `public_api.generations` so the same key can't collide across unrelated endpoints.
+
+## Send the header on every submit
+
+Generate a key client-side — a UUIDv4, or a business identifier like `order_id:attempt_number` — and attach it to the request. Allowed characters are `A–Z`, `a–z`, `0–9`, `_`, `:`, and `-`, length 1–255:
+
+```bash
+curl -X POST https://api.aigenway.com/v1/generations \
+  -H "Authorization: Bearer sk_live_..." \
+  -H "Idempotency-Key: order-4821-attempt-1" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "provider": "kling",
+    "model": "kling-v2-master",
+    "method": "text_to_video",
+    "params": {
+      "prompt": "a lantern drifting down a river at dusk",
+      "duration": 5
+    }
+  }'
+```
+
+```json
+{
+  "task_id": "cmomwuy0m000qbr0371src20a",
+  "status": "pending",
+  "provider": "kling",
+  "model": "kling-v2-master",
+  "method": "text_to_video",
+  "created_at": "2026-10-12T09:12:03.000Z"
+}
+```
+
+Don't hardcode `model` codes from a blog post — list what your account can actually call with `GET https://api.aigenway.com/v1/methods?provider=kling`, since providers rev their lineups on their own schedule.
+
+<SignupCTA
+  title="Retry safely, bill once"
+  description="Create a free account, get $5 in free credit, and replay the same Idempotency-Key against a flaky connection to see the same task_id come back."
+/>
+
+## The three outcomes of reusing a key
+
+What happens next depends on the state of the original request, not just whether you reused the key:
+
+- **Same key, same body, original request finished** — you get the cached response back verbatim: same `task_id`, same HTTP status, no new task and no new charge. This is the retry-after-timeout case, and it's the one you'll hit most often.
+- **Same key, same body, original request still in flight** — you get a `409 idempotency_key_in_use` error. The first request hasn't resolved yet, so there's nothing to replay; back off 1–2 seconds and retry rather than hammering the endpoint in a tight loop.
+- **Same key, different body** — you get `409 idempotency_key_mismatch`. The gateway refuses to guess whether you meant to replay or to submit something new, so generate a fresh key instead of debugging why your "retry" returned the wrong prompt's result.
+
+## TTL, scope, and where the key should live
+
+Cached responses are retained for 24 hours after the task completes; the in-flight guard that triggers `idempotency_key_in_use` lasts 30 seconds. After 24 hours the same key can technically be reused, but treat that as an edge case, not a plan — issue a new key per logical attempt. Persist the key in your own database at the moment you create the task, keyed to whatever you're protecting (an order, a job row, a queue message), so a retry — whether triggered by your code, a load balancer, or a user double-clicking a button — can look up and reuse the exact key instead of inventing a new one and accidentally paying twice. Never put secrets in the key itself; it gets logged on both sides.
+
+## One retry strategy for every provider and model
+
+Because `Idempotency-Key` is enforced at the gateway layer rather than per-provider, the same retry logic works whether `provider` is `kling`, `google_banana`, `openai`, or anything else live on `/v1/methods` — you write one wrapper around `POST /v1/generations` that attaches a key and handles the three outcomes above, and it covers every model you'll ever call through the account. That's one less thing to re-implement per vendor SDK, and it composes directly with the [async task lifecycle](/blog/async-tasks-webhooks-guide): submit with an idempotency key, then poll or get a webhook, with retries safe at every step of the chain.
+
+<SignupCTA />
