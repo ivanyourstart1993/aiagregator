@@ -1,0 +1,131 @@
+---
+title: "Handling Rate Limits on AI Generation APIs"
+description: "429s are normal at volume. Here's how to read rate-limit headers, back off with jitter, and queue image/video jobs so throttling never drops one."
+date: "2026-10-13"
+updated: "2026-10-13"
+tags: ["AI API", "Reliability"]
+primaryKeyword: "Handling rate limits on AI generation APIs"
+funnel: "MOFU"
+author:
+  name: "Aigenway"
+relatedDocs:
+  - label: "Errors"
+    href: "/docs/errors"
+  - label: "Idempotency"
+    href: "/docs/idempotency"
+  - label: "Task lifecycle"
+    href: "/docs/task-lifecycle"
+  - label: "Batch image generation API"
+    href: "/blog/batch-image-generation-api"
+ogImage: "/blog/rate-limits-ai-api.jpg"
+---
+
+A `429` from a generation API isn't a bug in your code — it's the provider telling you to slow down, and every provider enforces its own limit, its own headers, and its own retry semantics. Handling that well is what separates a batch job that finishes on schedule from one that silently drops half its items. On Aigenway, there's exactly one rate limit to handle no matter which model you call, which turns "learn each provider's throttling quirks" into "write one backoff function."
+
+## Read the headers before you hit the wall
+
+Every response from `/v1/generations` carries `X-RateLimit-Limit`, `X-RateLimit-Remaining`, and `X-RateLimit-Reset` (a Unix timestamp), so you can see how close you are to the ceiling without waiting for a failure:
+
+```bash
+curl -i https://api.aigenway.com/v1/generations \
+  -H "Authorization: Bearer sk_live_..." \
+  -H "Idempotency-Key: $(uuidgen)" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "provider": "kling",
+    "model": "kling-v2-master",
+    "method": "text_to_video",
+    "params": { "prompt": "a lantern drifting down a river at dusk", "duration": 5 }
+  }'
+```
+
+```
+X-RateLimit-Limit: 60
+X-RateLimit-Remaining: 12
+X-RateLimit-Reset: 1760352060
+```
+
+The gateway tracks both a per-minute and a per-day window per API key and reports whichever is tighter. List the models you can actually call with `GET https://api.aigenway.com/v1/methods?provider=kling` — the limit numbers above are illustrative, and your account's real per-minute and per-day ceilings are visible in these headers on every response, not fixed constants to hardcode.
+
+<SignupCTA
+  title="See your real limits, not a guess"
+  description="Create a free account, get $5 in free credit, and check X-RateLimit-Remaining on your own requests before you build a backoff loop around made-up numbers."
+/>
+
+## When you do get throttled, the response tells you exactly how long to wait
+
+Exceed either window and you get `429` with a `Retry-After` header in seconds and a body that repeats the same numbers in JSON, so you don't have to parse headers in a server-side job that doesn't see them easily:
+
+```json
+{
+  "code": "rate_limit_exceeded",
+  "message": "Rate limit exceeded.",
+  "details": {
+    "limit": 60,
+    "windowSeconds": 60,
+    "retryAfterSeconds": 38
+  }
+}
+```
+
+Treat `retryAfterSeconds` as the floor, not a suggestion to undercut. The one thing you should never do on a `429` is generate a new `Idempotency-Key` and resubmit immediately — reuse the same key the retry will eventually need, since the request never ran and there's nothing to double-charge.
+
+## Exponential backoff with jitter, keyed off the real signal
+
+A fixed delay works until ten workers hit the same limit at once and all retry on the same tick, re-triggering the throttle together. Back off exponentially from a small base, add random jitter so retries spread out, and cap the ceiling so a long outage doesn't turn into a multi-minute stall per item:
+
+```javascript
+async function submitWithBackoff(body, apiKey, attempt = 0) {
+  const res = await fetch('https://api.aigenway.com/v1/generations', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      'Idempotency-Key': body.idempotencyKey,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(body.payload),
+  });
+
+  if (res.status === 429) {
+    const retryAfter = Number(res.headers.get('Retry-After') ?? 1);
+    const backoff = Math.min(retryAfter * 1000, 2 ** attempt * 1000);
+    const jitter = Math.random() * 0.3 * backoff;
+    await new Promise((r) => setTimeout(r, backoff + jitter));
+    return submitWithBackoff(body, apiKey, attempt + 1);
+  }
+
+  if (!res.ok) throw new Error(`generation failed: ${res.status}`);
+  return res.json();
+}
+```
+
+This is the whole retry contract for every provider and model on the gateway — `kling`, `google_banana`, `openai`, anything live on `/v1/methods` — because the `429` shape and the `Idempotency-Key` guarantee are enforced once, at the gateway layer, instead of per vendor SDK.
+
+## Queue and bound concurrency so you rarely see a 429 at all
+
+Backoff handles the throttle after it happens; a bounded worker pool keeps you from causing it in the first place. Push every job into a queue and drain it with a fixed number of concurrent workers instead of firing a batch with `Promise.all`:
+
+```javascript
+async function drainQueue(jobs, apiKey, concurrency = 5) {
+  const queue = [...jobs];
+  const results = [];
+
+  async function worker() {
+    while (queue.length) {
+      const job = queue.shift();
+      results.push(await submitWithBackoff(job, apiKey));
+    }
+  }
+
+  await Promise.all(Array.from({ length: concurrency }, worker));
+  return results;
+}
+```
+
+Start with a low `concurrency` and raise it while watching `X-RateLimit-Remaining` on real responses, rather than guessing a number that happens to work today and breaks the day your volume doubles. A queue also gives you a natural place to prioritize — interactive requests from a user-facing feature can jump ahead of an overnight batch job without either one starving the rate limit budget.
+
+## One limit instead of N providers' worth
+
+Call providers directly and you inherit a different rate-limit contract per vendor: different header names, different window lengths, some returning `Retry-After` in seconds and others in a timestamp, a few with no header at all and just a terse error message. Every one of those differences is a special case your retry code has to detect and branch on. Routing through Aigenway collapses that into the single `429` shape and header set shown above, consistent whether you're calling an image model or a video model, which means the backoff function and the worker pool you write once cover every provider you add later — pairing directly with [idempotency keys](/docs/idempotency) so a retry after a throttle is always safe to replay.
+
+<SignupCTA />
