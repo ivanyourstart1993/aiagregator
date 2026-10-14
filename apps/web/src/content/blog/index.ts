@@ -62,6 +62,7 @@ import prepaidAiApiNoSubscription from './prepaid-ai-api-no-subscription.mdx?raw
 import freeAiImageApi from './free-ai-image-api.mdx?raw';
 import idempotencyForGenerationApi from './idempotency-for-generation-api.mdx?raw';
 import rateLimitsAiApi from './rate-limits-ai-api.mdx?raw';
+import estimateCostBeforeGenerating from './estimate-cost-before-generating.mdx?raw';
 
 export interface RawPost {
   slug: string;
@@ -127,4 +128,5 @@ export const rawPosts: RawPost[] = [
   { slug: 'free-ai-image-api', raw: freeAiImageApi },
   { slug: 'idempotency-for-generation-api', raw: idempotencyForGenerationApi },
   { slug: 'rate-limits-ai-api', raw: rateLimitsAiApi },
+  { slug: 'estimate-cost-before-generating', raw: estimateCostBeforeGenerating },
 ];

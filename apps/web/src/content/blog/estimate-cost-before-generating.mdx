@@ -1,0 +1,110 @@
+---
+title: "Estimate Generation Cost Before You Spend"
+description: "POST /v1/estimate prices a request before you submit it, no charge or reservation — the response shape, the billing unit, and the bundle gotchas that move the price."
+date: "2026-10-14"
+updated: "2026-10-14"
+tags: ["AI API", "Pricing"]
+primaryKeyword: "Estimate generation cost before you spend"
+funnel: "MOFU"
+author:
+  name: "Aigenway"
+relatedDocs:
+  - label: "Pricing"
+    href: "/pricing"
+  - label: "Methods"
+    href: "/docs/methods"
+  - label: "Getting started"
+    href: "/docs/getting-started"
+  - label: "AI generation API pricing compared"
+    href: "/blog/ai-generation-api-pricing-compared"
+ogImage: "/blog/estimate-cost-before-generating.jpg"
+---
+
+Estimate generation cost before you spend by calling `POST /v1/estimate` with the exact `provider`/`model`/`method`/`params` you're about to submit — it prices the request against your account's live rates and tells you whether your balance covers it, without charging anything or starting a task. That turns "will this request blow the budget?" from a guess you make before `POST /v1/generations` into a number you check first.
+
+## What /v1/estimate actually returns
+
+`/v1/estimate` takes the same body shape as `/v1/generations` — `provider`, `model`, `method`, `params`, optionally `mode` and `coupon` — and prices it without creating a task:
+
+- **`pricing.final_price`** — what this exact request would cost right now, after any coupon discount, as an integer in the account's smallest price unit (not fractional dollars — more on that below).
+- **`pricing.price_type`** — how the model bills: `per_request`, `per_image`, `per_second`, or a per-token variant. This tells you which `params` field actually moves the price.
+- **`pricing.bundle_key`** — a stable identifier for this exact provider/model/method/params combination. Two estimate calls with the same bundle inputs return the same key, so you can cache a quoted price client-side instead of re-querying for an unchanged form state.
+- **`pricing.components`** — the raw per-unit rates (`basePriceUnits`, `perSecondUnits`, `perImageUnits`, per-token rates) that `final_price` was computed from, useful if you want to show a per-second or per-image breakdown in your own UI rather than one lump number.
+- **`balance.enough_balance`** — a boolean so you don't have to subtract `final_price` from `balance.available` yourself to know whether the call will be admitted.
+
+## A concrete call, before you commit to the real one
+
+Price a text-to-image request exactly as you'd submit it, just against `/v1/estimate` instead of `/v1/generations`:
+
+```bash
+curl -X POST https://api.aigenway.com/v1/estimate \
+  -H "Authorization: Bearer sk_live_..." \
+  -H "Content-Type: application/json" \
+  -d '{
+    "provider": "google_banana",
+    "model": "gemini-3.1-flash-image-preview",
+    "method": "text_to_image",
+    "params": { "prompt": "a cat" }
+  }'
+```
+
+```json
+{
+  "success": true,
+  "provider": "google_banana",
+  "model": "gemini-3.1-flash-image-preview",
+  "method": "text_to_image",
+  "pricing": {
+    "price_type": "per_image",
+    "final_price": "3900000",
+    "discount": "0",
+    "reserved_amount": "3900000",
+    "currency": "USD",
+    "pricing_rule_id": "pr_...",
+    "bundle_key": "google_banana:gemini-3.1-flash-image-preview:text_to_image:default",
+    "components": { "basePriceUnits": null, "perImageUnits": "3900000", "inputPerTokenUnits": null, "outputPerTokenUnits": null }
+  },
+  "balance": { "available": "500000000", "reserved": "0", "enough_balance": true, "currency": "USD" }
+}
+```
+
+Those numbers are illustrative, not a published rate — pull the real per-unit price for a model with `GET https://api.aigenway.com/v1/methods?provider=google_banana` rather than hardcoding what this post shows. Note the unit: price fields are integers in nano-dollars (10⁻⁸ USD, i.e. divide by 100,000,000 for a USD amount), the same ledger unit used everywhere else in the account — not cents, and not a provider-specific credit.
+
+If `balance.enough_balance` comes back `true`, submit the same body to `POST /v1/generations` with an `Idempotency-Key` to actually run it:
+
+```bash
+curl -X POST https://api.aigenway.com/v1/generations \
+  -H "Authorization: Bearer sk_live_..." \
+  -H "Idempotency-Key: $(uuidgen)" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "provider": "google_banana",
+    "model": "gemini-3.1-flash-image-preview",
+    "method": "text_to_image",
+    "params": { "prompt": "a cat" }
+  }'
+```
+
+<SignupCTA
+  title="Price it before you run it"
+  description="Create a free account, get $5 in free credit, and call /v1/estimate against your own account's live rates before a single generation touches your balance."
+/>
+
+## Bundle gotchas: the params that move the price
+
+`final_price` isn't a flat per-model number — it's computed from `bundle_key` plus whatever's in `params`, and a few fields change the math in ways that are easy to miss:
+
+- **`imagesCount` / `n` multiplies a per-image price.** Request three images in one call and `final_price` is roughly 3× the single-image rate, not a discount for batching.
+- **`durationSeconds` multiplies a per-second video price**, and `videosCount` multiplies again on top of that — a 10-second clip with `videosCount: 2` is priced as 20 seconds of render, not two separate 10-second line items.
+- **`mode` can resolve to a different bundle entirely.** A "fast" vs. "quality" mode on the same model is frequently a different `bundle_key` with a different `perImageUnits` or `perSecondUnits`, not a multiplier on the same base price — always re-estimate after changing `mode`, don't assume it scales linearly from the default.
+- **`coupon` previews the discount but doesn't commit it.** Pass the same `coupon` code you intend to use at generation time into `/v1/estimate` to see `pricing.discount` applied to `final_price` — the preview doesn't consume or lock the coupon, so you can estimate with several codes before picking one.
+
+## It's a quote, not a hold
+
+`/v1/estimate` doesn't reserve funds, create a task, or touch your balance — `reserved_amount` in the response is informational, showing what *would* be reserved if you proceeded, not an actual hold on your account. That means two things worth designing around: a price you got back a minute ago can be stale if the provider's rate changed in between (re-estimate right before you submit, don't cache across a long user-facing form), and a `balance.enough_balance: true` on the estimate doesn't guarantee `POST /v1/generations` admits the request — a concurrent call against the same balance can spend it first. Treat the estimate as "safe to show the user a price," not "safe to skip handling an insufficient-balance error on the real call."
+
+## One estimate endpoint for every provider and model
+
+Call providers directly and pricing a request means reading a different rate card per vendor, in whatever unit and currency that vendor picked, before you can show a user a number. `/v1/estimate` takes the identical `provider`/`model`/`method`/`params` shape as `/v1/generations`, so the same "quote then submit" flow — one function, one response shape, one currency — works whether you're pricing `google_banana` image generation or a `kling` video render. Build the cost-preview screen once against this contract and every model you add later, from any provider live on `/v1/methods`, slots into it without a second pricing integration.
+
+<SignupCTA />
