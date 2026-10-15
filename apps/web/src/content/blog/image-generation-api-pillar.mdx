@@ -1,0 +1,112 @@
+---
+title: "Image Generation API: Models, Methods, and Billing"
+description: "Every hosted image model, the text_to_image and image_edit methods, and how prepaid USD billing prices each call — one API key, one task contract for all of it."
+date: "2026-10-15"
+updated: "2026-10-15"
+tags: ["Image generation", "Gateway"]
+primaryKeyword: "Image generation API: models, methods, billing"
+funnel: "TOFU"
+author:
+  name: "Aigenway"
+relatedDocs:
+  - label: "Methods"
+    href: "/docs/methods"
+  - label: "Getting started"
+    href: "/docs/getting-started"
+  - label: "Pricing"
+    href: "/pricing"
+  - label: "Best AI image API in 2026"
+    href: "/blog/best-ai-image-api-2026"
+ogImage: "/blog/image-generation-api-pillar.jpg"
+---
+
+An image generation API call on Aigenway always has the same four fields — `provider`, `model`, `method`, `params` — no matter which model renders the image or what it charges per call. This page is the map: which models are live, which methods they expose (`text_to_image`, `image_edit`), and how the prepaid USD billing actually prices a request, with links out to the deeper guide for each model, task, and comparison.
+
+## The models and providers behind the image endpoint
+
+Two providers carry image generation today: `google_banana` hosts Google's Nano Banana and Imagen 4 family, and `openai_image` hosts OpenAI's gpt-image-1 and DALL·E 3. Each provider exposes several `model` codes under it — Nano Banana and Imagen 4 are different `model` values on the same `google_banana` provider, same for gpt-image-1 and DALL·E 3 under `openai_image`. Providers ship and retire model versions on their own schedule, so don't hardcode a code from a blog post; list what's live on your account right now:
+
+```bash
+curl "https://api.aigenway.com/v1/methods?provider=google_banana" \
+  -H "Authorization: Bearer sk_live_..."
+
+curl "https://api.aigenway.com/v1/methods?provider=openai_image" \
+  -H "Authorization: Bearer sk_live_..."
+```
+
+Each response lists the current `model` codes, the `method` values each one supports, and the per-unit price for your account — the real source of truth, not a snapshot that goes stale the day a provider ships an update. For a head-to-head of what each model is actually good at, see [best AI image API in 2026](/blog/best-ai-image-api-2026) and [Nano Banana vs gpt-image vs Imagen 4](/blog/nano-banana-vs-gpt-image-vs-imagen).
+
+## The two methods: text_to_image and image_edit
+
+Every image model on the gateway answers to one of two `method` values. `text_to_image` takes a `prompt` (and model-specific extras like `aspect_ratio`) and renders from nothing:
+
+```bash
+curl -X POST https://api.aigenway.com/v1/generations \
+  -H "Authorization: Bearer sk_live_..." \
+  -H "Idempotency-Key: $(uuidgen)" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "provider": "google_banana",
+    "model": "imagen-4.0-ultra-generate-001",
+    "method": "text_to_image",
+    "params": {
+      "prompt": "a matte black wireless earbud case on a marble surface, studio softbox lighting",
+      "aspect_ratio": "1:1"
+    }
+  }'
+```
+
+`image_edit` takes an existing image plus an instruction and returns a modified one — only `google_banana` and `openai_image` expose it today, not every model under those providers supports it, so check the `method` list for the specific `model` you picked rather than assuming. Swap `method` to `image_edit`, add `input_images`, and the same request shape, headers, and `Idempotency-Key` carry over. The full walkthrough, including gpt-image-1's masked inpainting, is on the [image editing API](/blog/image-editing-api) page.
+
+<SignupCTA
+  title="Call any image model with your own prompt"
+  description="Create a free account, get $5 in free credit, and run text_to_image or image_edit against Nano Banana, Imagen 4, gpt-image-1, or DALL·E 3."
+/>
+
+## Async by default: the task you get back
+
+Neither method returns a finished image inline — `POST /v1/generations` hands back a task that moves through `pending` → `processing` → `succeeded` or `failed`, the same state machine for every model on the gateway:
+
+```json
+{
+  "task_id": "cmomwuy0m000qbr0371src20a",
+  "status": "pending",
+  "provider": "google_banana",
+  "model": "imagen-4.0-ultra-generate-001",
+  "method": "text_to_image",
+  "created_at": "2026-10-15T09:12:03.000Z"
+}
+```
+
+Poll `GET /v1/tasks/{task_id}` or set a `callback_url` on the submit and let a signed webhook deliver the result instead — either path ends with the same `result` object once `status` is `succeeded`. `result.url` is a signed link that expires; download it rather than treating it as permanent storage. Full state machine on the [task lifecycle](/docs/task-lifecycle) page, and the poll-vs-webhook trade-off on [poll vs. webhook generation](/blog/poll-vs-webhook-generation).
+
+## How billing actually prices an image call
+
+Image models bill `per_image` in nano-dollars (10⁻⁸ USD — divide by 100,000,000 for a USD amount), the same ledger unit used across every provider on the gateway, not a per-vendor credit pack. `imagesCount` (or a model's equivalent `n` param) multiplies that per-image rate directly — three images in one call costs roughly 3× the single-image price, not a batch discount. Price a request before you spend on it with `POST /v1/estimate`, which takes the identical body as `/v1/generations` and returns `pricing.final_price` plus `balance.enough_balance` without charging anything or starting a task:
+
+```bash
+curl -X POST https://api.aigenway.com/v1/estimate \
+  -H "Authorization: Bearer sk_live_..." \
+  -H "Content-Type: application/json" \
+  -d '{
+    "provider": "openai_image",
+    "model": "gpt-image-1",
+    "method": "text_to_image",
+    "params": { "prompt": "a cat", "imagesCount": 1 }
+  }'
+```
+
+The per-unit rate itself lives on `/v1/methods` for your account, not in this post — see [estimate generation cost before you spend](/blog/estimate-cost-before-generating) for the full response shape and the bundle gotchas that move the number, and [AI generation API pricing compared](/blog/ai-generation-api-pricing-compared) for how image pricing stacks up against video and text.
+
+## Why route image generation through one gateway
+
+A provider-direct integration for one image model works fine until a second one joins the brief. One gateway account replaces that churn with:
+
+- **One key for every image model.** `google_banana` and `openai_image` share the same `Authorization: Bearer sk_live_...` header and request shape — no separate GCP project or OpenAI account to provision.
+- **One contract for text-to-image and editing.** `method` is the only thing that changes between generating from scratch and editing an existing photo; the envelope, the task states, and the webhook format don't.
+- **One prepaid USD balance.** Top up in dollars, spend in nano-dollars, check what's left with `GET /v1/balance` — no per-provider credits ledger to reconcile before you can forecast spend.
+- **One price-check step before every call.** `/v1/estimate` works identically across models, so a cost-preview screen built for one image model covers every model you add later.
+
+Start from `/v1/methods` for the live model codes, then work through the model-specific guides — [Nano Banana](/blog/nano-banana-api), [Imagen 4](/blog/imagen-4-api), [gpt-image-1](/blog/gpt-image-1-api), [DALL·E 3](/blog/dalle-3-api) — for the params each one actually uses.
+
+<SignupCTA />
