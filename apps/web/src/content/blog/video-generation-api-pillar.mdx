@@ -1,0 +1,135 @@
+---
+title: "Video Generation API: Models, Methods, and Billing"
+description: "Every hosted video model — Veo, Kling, Seedance — the text_to_video and image_to_video methods, async webhooks, and how prepaid billing prices each second."
+date: "2026-10-16"
+updated: "2026-10-16"
+tags: ["Video generation", "Gateway"]
+primaryKeyword: "Video generation API: models, methods, billing"
+funnel: "TOFU"
+author:
+  name: "Aigenway"
+relatedDocs:
+  - label: "Methods"
+    href: "/docs/methods"
+  - label: "Task lifecycle"
+    href: "/docs/task-lifecycle"
+  - label: "Kling video guide"
+    href: "/docs/guides/kling-video"
+  - label: "Veo 3 vs Kling vs Seedance"
+    href: "/blog/veo-3-vs-kling-vs-seedance"
+ogImage: "/blog/video-generation-api-pillar.jpg"
+---
+
+A video generation call on Aigenway always has the same four fields — `provider`, `model`, `method`, `params` — whether it's Veo 3 rendering with native audio or Seedance churning out a batch of cheap drafts. This page is the map: which providers are live, what `text_to_video` and `image_to_video` actually take, how the async task and webhook flow works, and how prepaid USD billing prices a clip, with links out to the model-specific guides.
+
+## The providers and models behind the video endpoint
+
+Three providers carry video generation today: `veo` (Google's Veo 3, native audio), `kling` (motion control and character consistency), and `seedance` (speed and cost at volume). Each exposes its own `model` codes and some charge per-second while params like `duration` or `aspect_ratio` vary slightly by model, so don't hardcode a code or price from a blog post — list what's live on your account right now:
+
+```bash
+curl "https://api.aigenway.com/v1/methods?provider=veo" \
+  -H "Authorization: Bearer sk_live_..."
+
+curl "https://api.aigenway.com/v1/methods?provider=kling" \
+  -H "Authorization: Bearer sk_live_..."
+
+curl "https://api.aigenway.com/v1/methods?provider=seedance" \
+  -H "Authorization: Bearer sk_live_..."
+```
+
+Each response lists the current `model` codes, the `method` values each one supports, and the per-unit price for your account. For a head-to-head of what each is actually good at, see [Veo 3 vs Kling vs Seedance](/blog/veo-3-vs-kling-vs-seedance) and [the cheapest AI video API](/blog/cheapest-ai-video-api).
+
+## text_to_video: a clip from a prompt
+
+`text_to_video` takes a `prompt` plus model-specific extras like `duration` and `aspect_ratio`, and renders a clip from nothing:
+
+```bash
+curl -X POST https://api.aigenway.com/v1/generations \
+  -H "Authorization: Bearer sk_live_..." \
+  -H "Idempotency-Key: $(uuidgen)" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "provider": "kling",
+    "model": "kling-v2-master",
+    "method": "text_to_video",
+    "params": {
+      "prompt": "a lighthouse beam sweeping over a stormy coastline at night",
+      "duration": 5,
+      "aspect_ratio": "16:9"
+    }
+  }'
+```
+
+Swap `provider`/`model` for `veo`/`veo-3` or `seedance`/`seedance-1-pro` (confirmed via `/v1/methods`) and the same request shape, headers, and `Idempotency-Key` carry over unchanged — the request envelope doesn't care which model renders it.
+
+<SignupCTA
+  title="Render your first clip"
+  description="Create a free account, get $5 in free credit, and run text_to_video against Veo 3, Kling, or Seedance with the request above."
+/>
+
+## image_to_video and the async task you get back
+
+`image_to_video` takes an existing image plus a motion-focused prompt and animates it — swap `method` to `image_to_video`, add `input_image`, and drop the scene description for something about the motion itself:
+
+```bash
+curl -X POST https://api.aigenway.com/v1/generations \
+  -H "Authorization: Bearer sk_live_..." \
+  -H "Idempotency-Key: $(uuidgen)" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "provider": "seedance",
+    "model": "seedance-1-pro",
+    "method": "image_to_video",
+    "params": {
+      "prompt": "camera pulls back slowly, product rotates gently",
+      "input_image": "https://example.com/product-shot.png",
+      "duration": 5
+    }
+  }'
+```
+
+Neither method returns a finished clip inline — video renders take longer than an image call, so `POST /v1/generations` always hands back a task that moves through `pending` → `processing` → `succeeded` or `failed`:
+
+```json
+{
+  "task_id": "cmomwuy0m000qbr0371src20a",
+  "status": "pending",
+  "provider": "seedance",
+  "model": "seedance-1-pro",
+  "method": "image_to_video",
+  "created_at": "2026-10-16T09:12:03.000Z"
+}
+```
+
+Poll `GET /v1/tasks/{task_id}` or set a `callback_url` on the submit and let a signed webhook deliver the result when it's ready instead of holding a connection open for a multi-minute render — either path ends with the same `result` object once `status` is `succeeded`. `result.url` is a signed link that expires; download it rather than treating it as permanent storage. Full state machine on the [task lifecycle](/docs/task-lifecycle) page, the full webhook payload and signature on [async tasks and webhooks](/blog/async-tasks-webhooks-guide), and the trade-off between the two on [poll vs. webhook generation](/blog/poll-vs-webhook-generation).
+
+## How billing actually prices a video call
+
+Video models typically bill `per_second` in nano-dollars (10⁻⁸ USD — divide by 100,000,000 for a USD amount), the same ledger unit used across every provider on the gateway, not a per-vendor credit pack. `duration` multiplies that per-second rate directly — a 10-second clip costs roughly 2× a 5-second clip on the same model, not a flat per-render fee. Price a request before you spend on it with `POST /v1/estimate`, which takes the identical body as `/v1/generations` and returns `pricing.final_price` plus `balance.enough_balance` without charging anything or starting a render:
+
+```bash
+curl -X POST https://api.aigenway.com/v1/estimate \
+  -H "Authorization: Bearer sk_live_..." \
+  -H "Content-Type: application/json" \
+  -d '{
+    "provider": "veo",
+    "model": "veo-3",
+    "method": "text_to_video",
+    "params": { "prompt": "a drone shot over a canyon at sunrise", "duration": 8 }
+  }'
+```
+
+The per-unit rate itself lives on `/v1/methods` for your account, not in this post — see [estimate generation cost before you spend](/blog/estimate-cost-before-generating) for the full response shape, and [AI generation API pricing compared](/blog/ai-generation-api-pricing-compared) for how video pricing stacks up against image and text.
+
+## Why route video generation through one gateway
+
+A provider-direct integration for one video model works fine until the brief needs native audio, motion control, or a cheaper draft tier the first model doesn't offer. One gateway account replaces that churn with:
+
+- **One key for Veo, Kling, and Seedance.** They share the same `Authorization: Bearer sk_live_...` header and request shape — no separate GCP project or vendor account per model.
+- **One contract for text-to-video and image-to-video.** `method` is the only thing that changes between rendering from a prompt and animating a still; the envelope, task states, and webhook format don't.
+- **One async flow regardless of render time.** The same `pending` → `processing` → `succeeded` task and the same webhook signature cover a 5-second Seedance draft and an 8-second Veo 3 render with audio.
+- **One prepaid USD balance.** Top up in dollars, spend in nano-dollars, check what's left with `GET /v1/balance` — no per-provider credits ledger to reconcile before forecasting a video budget.
+
+Start from `/v1/methods` for the live model codes, then work through the model-specific guides — [Kling](/blog/kling-api), [Seedance](/blog/seedance-api), [Veo 3](/blog/veo-3-api) — for the params each one actually uses.
+
+<SignupCTA />
