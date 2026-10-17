@@ -65,6 +65,7 @@ import rateLimitsAiApi from './rate-limits-ai-api.mdx?raw';
 import estimateCostBeforeGenerating from './estimate-cost-before-generating.mdx?raw';
 import imageGenerationApiPillar from './image-generation-api-pillar.mdx?raw';
 import videoGenerationApiPillar from './video-generation-api-pillar.mdx?raw';
+import textToImageApi from './text-to-image-api.mdx?raw';
 
 export interface RawPost {
   slug: string;
@@ -133,4 +134,5 @@ export const rawPosts: RawPost[] = [
   { slug: 'estimate-cost-before-generating', raw: estimateCostBeforeGenerating },
   { slug: 'image-generation-api-pillar', raw: imageGenerationApiPillar },
   { slug: 'video-generation-api-pillar', raw: videoGenerationApiPillar },
+  { slug: 'text-to-image-api', raw: textToImageApi },
 ];

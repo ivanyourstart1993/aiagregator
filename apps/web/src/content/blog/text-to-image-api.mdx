@@ -1,0 +1,113 @@
+---
+title: "Text to Image API: One Request Shape, Pick the Model"
+description: "Call every hosted text-to-image model — Nano Banana, Imagen 4, gpt-image-1, DALL·E 3 — through one request shape. Swap a model string, not your integration."
+date: "2026-10-17"
+updated: "2026-10-17"
+tags: ["Image generation", "Text-to-image"]
+primaryKeyword: "Text to image API"
+funnel: "MOFU"
+author:
+  name: "Aigenway"
+relatedDocs:
+  - { label: "Methods", href: "/docs/methods" }
+  - { label: "Getting started", href: "/docs/getting-started" }
+  - { label: "Image generation API: models, methods, billing", href: "/blog/image-generation-api-pillar" }
+  - { label: "Best AI image API in 2026", href: "/blog/best-ai-image-api-2026" }
+---
+
+A text to image API call on Aigenway is one `POST` with four fields — `provider`, `model`, `method`, `params` — no matter which model turns the prompt into pixels. Every hosted image model answers to the same `text_to_image` method, so picking a different model for a different brief is a one-line string change, not a new integration.
+
+## Which models answer to text_to_image
+
+Two providers host text-to-image models today: `google_banana` carries Google's Nano Banana and Imagen 4 family, `openai_image` carries OpenAI's gpt-image-1 and DALL·E 3. Each provider exposes several `model` codes, and providers add or retire versions on their own schedule — don't copy a model string out of a blog post and hardcode it. List what's live on your account instead:
+
+```bash
+curl "https://api.aigenway.com/v1/methods?provider=google_banana" \
+  -H "Authorization: Bearer sk_live_..."
+
+curl "https://api.aigenway.com/v1/methods?provider=openai_image" \
+  -H "Authorization: Bearer sk_live_..."
+```
+
+Each response returns the current `model` codes under that provider, confirms `text_to_image` is in the `method` list for each one, and shows the per-image price on your account — the actual source of truth, since prices and model codes both move.
+
+## The request: a prompt in, a task out
+
+`text_to_image` takes a `prompt` and model-specific extras like `aspect_ratio`, and returns a task rather than a finished image inline:
+
+```bash
+curl -X POST https://api.aigenway.com/v1/generations \
+  -H "Authorization: Bearer sk_live_..." \
+  -H "Idempotency-Key: $(uuidgen)" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "provider": "google_banana",
+    "model": "imagen-4.0-ultra-generate-001",
+    "method": "text_to_image",
+    "params": {
+      "prompt": "a matte black wireless earbud case on a marble surface, studio softbox lighting",
+      "aspect_ratio": "1:1"
+    }
+  }'
+```
+
+The response is a `task_id` and a `status` of `pending` — the same envelope every model on the gateway returns for `text_to_image`, which is what makes swapping models later a non-event for the rest of your pipeline.
+
+<SignupCTA
+  title="Call any text-to-image model with your own prompt"
+  description="Create a free account, get $5 in free credit, and run the same prompt against Nano Banana, Imagen 4, gpt-image-1, or DALL·E 3."
+/>
+
+## Picking a model is a string, not a migration
+
+Because `provider`, `method`, and the request envelope don't change between models, choosing which one renders a given prompt is just swapping two values:
+
+```bash
+curl -X POST https://api.aigenway.com/v1/generations \
+  -H "Authorization: Bearer sk_live_..." \
+  -H "Idempotency-Key: $(uuidgen)" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "provider": "openai_image",
+    "model": "gpt-image-1",
+    "method": "text_to_image",
+    "params": {
+      "prompt": "a matte black wireless earbud case on a marble surface, studio softbox lighting",
+      "imagesCount": 1
+    }
+  }'
+```
+
+Same prompt, same headers, same `text_to_image` method — only `provider` and `model` moved. That's the practical payoff of a category page like this one: route a prompt to Nano Banana for a product shot one day and to gpt-image-1 for a mockup with legible text the next, without touching the client that calls `/v1/generations`. Model-specific `params` (aspect ratio options, image count caps) still differ, so check `/v1/methods` for the exact list a given `model` accepts before you rely on one.
+
+## Async by default: poll or let a webhook deliver it
+
+No `text_to_image` call returns a finished image synchronously. The task moves through `pending` → `processing` → `succeeded` or `failed`, and you either poll `GET /v1/tasks/{task_id}` for that transition or set a `callback_url` on the original request and let a signed webhook push the result instead:
+
+```json
+{
+  "task_id": "cmomwuy0m000qbr0371src20a",
+  "status": "succeeded",
+  "provider": "google_banana",
+  "model": "imagen-4.0-ultra-generate-001",
+  "method": "text_to_image",
+  "result": {
+    "url": "https://cdn.aigenway.com/out/cmomwuy0m000qbr0371src20a.png"
+  }
+}
+```
+
+`result.url` is a signed, expiring link — download it rather than treating it as permanent storage. The full state machine is on the [task lifecycle](/docs/task-lifecycle) page; the trade-off between the two delivery paths is covered in [poll vs. webhook generation](/blog/poll-vs-webhook-generation).
+
+## Why one API beats one model's API
+
+Building directly against a single provider's text-to-image endpoint works until the next brief needs a different model's strengths. One gateway account instead gives you:
+
+- **One key for every text-to-image model.** `google_banana` and `openai_image` share the same `Authorization: Bearer sk_live_...` header — no separate GCP project or OpenAI account per model.
+- **One method, every model.** `text_to_image` means the same thing regardless of which `model` string you pass, so the request-building code is written once.
+- **One prepaid USD balance.** Top up in dollars, spend in nano-dollars, check `GET /v1/balance` any time — no per-provider credit packs to track separately.
+- **Price-check before you commit.** `POST /v1/estimate` takes the identical body as `/v1/generations` and returns the price without charging anything or starting a task, so a cost preview built for one model covers every model you add later.
+
+Start from `/v1/methods` for the live model codes, then read the model-specific guides — [Nano Banana](/blog/nano-banana-api), [Imagen 4](/blog/imagen-4-api), [gpt-image-1](/blog/gpt-image-1-api), [DALL·E 3](/blog/dalle-3-api) — for the exact `params` each one accepts.
+
+<SignupCTA />
